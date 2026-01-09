@@ -6,20 +6,25 @@ type TgUser = {
   username?: string;
 };
 
-function sha256(data: string | Buffer) {
-  return crypto.createHash("sha256").update(data).digest();
-}
-
-function hmacSha256(key: Buffer, data: string) {
+function hmacSha256Hex(key: Buffer | string, data: string) {
   return crypto.createHmac("sha256", key).update(data).digest("hex");
 }
 
-export function verifyTelegramInitData(initData: string, botToken: string):
+function hmacSha256Buf(key: Buffer | string, data: string) {
+  return crypto.createHmac("sha256", key).update(data).digest();
+}
+
+// Telegram Mini Apps validation (WebAppData):
+// secret_key = HMAC_SHA256("WebAppData", bot_token)
+// check_hash = HMAC_SHA256(secret_key, data_check_string)
+export function verifyTelegramInitData(
+  initData: string,
+  botToken: string
+):
   | { ok: true; user: TgUser; auth_date: string | null }
   | { ok: false; reason: string } {
-  if (!initData || typeof initData !== "string") {
-    return { ok: false, reason: "EMPTY_INITDATA" };
-  }
+  if (!initData || typeof initData !== "string") return { ok: false, reason: "EMPTY_INITDATA" };
+  if (!botToken) return { ok: false, reason: "EMPTY_BOT_TOKEN" };
 
   let params: URLSearchParams;
   try {
@@ -31,7 +36,6 @@ export function verifyTelegramInitData(initData: string, botToken: string):
   const hash = params.get("hash");
   if (!hash) return { ok: false, reason: "NO_HASH" };
 
-  // собираем data_check_string (все поля кроме hash)
   const pairs: string[] = [];
   for (const [k, v] of params.entries()) {
     if (k === "hash") continue;
@@ -40,9 +44,8 @@ export function verifyTelegramInitData(initData: string, botToken: string):
   pairs.sort();
   const dataCheckString = pairs.join("\n");
 
-  // secret_key = SHA256(botToken)
-  const secretKey = sha256(botToken);
-  const calcHash = hmacSha256(secretKey, dataCheckString);
+  const secretKey = hmacSha256Buf("WebAppData", botToken);
+  const calcHash = hmacSha256Hex(secretKey, dataCheckString);
 
   if (calcHash !== hash) {
     return { ok: false, reason: "BAD_HASH" };
@@ -59,9 +62,7 @@ export function verifyTelegramInitData(initData: string, botToken: string):
   }
 
   const idNum = Number(userObj?.id);
-  if (!Number.isFinite(idNum) || idNum <= 0) {
-    return { ok: false, reason: "NO_USER_ID" };
-  }
+  if (!Number.isFinite(idNum) || idNum <= 0) return { ok: false, reason: "NO_USER_ID" };
 
   return {
     ok: true,
