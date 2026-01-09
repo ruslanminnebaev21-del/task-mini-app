@@ -74,7 +74,7 @@ export default function HomePage() {
       zIndex: 2,
     } as React.CSSProperties,
 
-    // decorative orbs (like the picture vibe)
+    // decorative orbs
     orb: {
       position: "absolute",
       width: 420,
@@ -89,7 +89,8 @@ export default function HomePage() {
     orbA: {
       left: -160,
       top: 260,
-      background: "radial-gradient(circle at 35% 35%, rgba(0,0,0,0.18), rgba(0,0,0,0.05) 55%, transparent 70%)",
+      background:
+        "radial-gradient(circle at 35% 35%, rgba(0,0,0,0.18), rgba(0,0,0,0.05) 55%, transparent 70%)",
       transform: "rotate(10deg)",
     } as React.CSSProperties,
 
@@ -126,7 +127,7 @@ export default function HomePage() {
 
     row: { display: "flex", gap: 10, alignItems: "center" } as React.CSSProperties,
 
-    // inputs - pill, soft inset
+    // inputs
     input: {
       width: "100%",
       padding: "12px 14px",
@@ -212,6 +213,7 @@ export default function HomePage() {
       userSelect: "none",
       whiteSpace: "nowrap",
       height: 36,
+      color: "#111",
     } as React.CSSProperties,
 
     dot: {
@@ -269,7 +271,6 @@ export default function HomePage() {
       margin: "0 0 12px",
     } as React.CSSProperties,
 
-    // chips
     chip: {
       display: "inline-flex",
       alignItems: "center",
@@ -281,7 +282,6 @@ export default function HomePage() {
       fontSize: 12,
     } as React.CSSProperties,
 
-    // task item
     taskItem: {
       borderRadius: 20,
       padding: 14,
@@ -292,7 +292,6 @@ export default function HomePage() {
       WebkitBackdropFilter: "blur(12px)",
     } as React.CSSProperties,
 
-    // modal overlay + card
     overlay: {
       position: "fixed",
       inset: 0,
@@ -315,75 +314,14 @@ export default function HomePage() {
       backdropFilter: "blur(14px)",
       WebkitBackdropFilter: "blur(14px)",
     } as React.CSSProperties,
-
-    // skeleton
-    skel: {
-      borderRadius: 999,
-      background:
-        "linear-gradient(90deg, rgba(0,0,0,0.05) 0%, rgba(0,0,0,0.09) 40%, rgba(0,0,0,0.05) 80%)",
-      backgroundSize: "240% 100%",
-      animation: "skelShimmer 1.15s ease-in-out infinite",
-    } as React.CSSProperties,
   };
 
-  function SkeletonLine({
-    w,
-    h,
-    r,
-    style,
-  }: {
-    w: number | string;
-    h: number;
-    r?: number;
-    style?: React.CSSProperties;
-  }) {
-    return (
-      <div
-        style={{
-          ...ui.skel,
-          width: w,
-          height: h,
-          borderRadius: r ?? 999,
-          ...style,
-        }}
-      />
-    );
-  }
-
-  function SkeletonTaskCard() {
-    return (
-      <div style={{ ...ui.taskItem }}>
-        <div style={{ display: "flex", gap: 12, alignItems: "flex-start" }}>
-          <div
-            style={{
-              ...ui.skel,
-              width: 18,
-              height: 18,
-              borderRadius: 6,
-              marginTop: 3,
-              animationDuration: "1.05s",
-            }}
-          />
-          <div style={{ flex: 1, display: "grid", gap: 10 }}>
-            <SkeletonLine w="72%" h={16} r={10} />
-            <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-              <SkeletonLine w={110} h={26} r={999} style={{ animationDuration: "1.25s" }} />
-              <SkeletonLine w={70} h={26} r={999} style={{ animationDuration: "1.25s" }} />
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  function SkeletonTasksList() {
-    return (
-      <div style={{ display: "grid", gap: 12, marginTop: 2 }}>
-        <SkeletonTaskCard />
-        <SkeletonTaskCard />
-        <SkeletonTaskCard />
-      </div>
-    );
+  function dotStyle(isActive: boolean): React.CSSProperties {
+    return {
+      ...ui.dot,
+      background: isActive ? "#22c55e" : "#bdbdbd",
+      boxShadow: isActive ? "0 0 0 3px rgba(34,197,94,0.04)" : "0 0 0 3px rgba(0,0,0,0.04)",
+    };
   }
 
   async function authIfPossible() {
@@ -580,14 +518,6 @@ export default function HomePage() {
 
   return (
     <div style={ui.shell}>
-      {/* local keyframes for skeleton */}
-      <style>{`
-        @keyframes skelShimmer {
-          0% { background-position: 0% 0%; }
-          100% { background-position: 140% 0%; }
-        }
-      `}</style>
-
       <div style={{ ...ui.orb, ...ui.orbA }} />
       <div style={{ ...ui.orb, ...ui.orbB }} />
 
@@ -613,7 +543,6 @@ export default function HomePage() {
 
         {/* Tabs at top */}
         <div style={ui.tabWrap}>
-          {/* + before "Все задачи" */}
           <button
             type="button"
             onClick={openCreateProject}
@@ -628,39 +557,17 @@ export default function HomePage() {
             +
           </button>
 
-          {/* All tasks */}
-          <button
-            type="button"
-            onClick={() => setActiveProjectId(null)}
-            style={{
-              ...ui.tabBadge,
-              background: isAllTasks ? "#111" : "rgba(255,255,255,0.62)",
-              color: isAllTasks ? "#fff" : "#111",
-              borderColor: isAllTasks ? "rgba(0,0,0,0.18)" : "rgba(0,0,0,0.08)",
-              boxShadow: isAllTasks ? "0 18px 34px rgba(0,0,0,0.22)" : ui.tabBadge.boxShadow,
-            }}
-          >
-            <span style={{ ...ui.dot, background: isAllTasks ? "#22c55e" : "#bdbdbd" }} />
+          {/* All tasks tab (не меняем фон/текст, только точка) */}
+          <button type="button" onClick={() => setActiveProjectId(null)} style={ui.tabBadge}>
+            <span style={dotStyle(isAllTasks)} />
             Все задачи
           </button>
 
           {projects.map((p) => {
             const isActive = activeProjectId === p.id;
             return (
-              <button
-                key={p.id}
-                type="button"
-                onClick={() => setActiveProjectId(p.id)}
-                style={{
-                  ...ui.tabBadge,
-                  background: isActive ? "#111" : "rgba(255,255,255,0.62)",
-                  color: isActive ? "#fff" : "#111",
-                  borderColor: isActive ? "rgba(0,0,0,0.18)" : "rgba(0,0,0,0.08)",
-                  boxShadow: isActive ? "0 18px 34px rgba(0,0,0,0.22)" : ui.tabBadge.boxShadow,
-                }}
-                title={p.name}
-              >
-                <span style={{ ...ui.dot, background: isActive ? "#22c55e" : "#bdbdbd" }} />
+              <button key={p.id} type="button" onClick={() => setActiveProjectId(p.id)} style={ui.tabBadge} title={p.name}>
+                <span style={dotStyle(isActive)} />
                 {p.name}
               </button>
             );
@@ -733,11 +640,13 @@ export default function HomePage() {
         <section style={{ ...ui.card, marginTop: 14 }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 10 }}>
             <div style={ui.sectionTitle}>Список</div>
-            <div style={ui.muted}>{loadingTasks ? "Обновляю…" : `${tasks.length} шт.`}</div>
+            <div style={ui.muted}>{loadingTasks ? "Загружаю…" : `${tasks.length} шт.`}</div>
           </div>
 
-          {!ready || loadingTasks ? (
-            <SkeletonTasksList />
+          {!ready ? (
+            <div style={{ opacity: 0.7 }}>Загружаю…</div>
+          ) : loadingTasks ? (
+            <div style={{ opacity: 0.7 }}>Загружаю задачи…</div>
           ) : tasks.length === 0 ? (
             <div style={{ opacity: 0.7 }}>Пока пусто.</div>
           ) : (
