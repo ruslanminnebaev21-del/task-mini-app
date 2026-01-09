@@ -4,60 +4,78 @@ import { supabaseAdmin } from "@/lib/supabaseAdmin";
 import { verifyTelegramInitData } from "@/lib/telegram";
 
 export async function POST(req: Request) {
-  const { initData } = await req.json();
+  try {
+    const { initData } = await req.json();
 
-  const botToken = process.env.TELEGRAM_BOT_TOKEN!;
-  const verified = verifyTelegramInitData(initData, botToken);
+    // 1. Проверяем, есть ли токен в env
+    const botToken = process.env.TELEGRAM_BOT_TOKEN;
+    if (!botToken) {
+      return NextResponse.json(
+        { ok: false, reason: "NO_BOT_TOKEN_IN_ENV" },
+        { status: 500 }
+      );
+    }
 
-  if (!verified.ok) {
-    return NextResponse.json({ ok: false, reason: verified.reason }, { status: 401 });
-  }
+    // 2. Проверяем, принимает ли Telegram этот токен
+    const meRes = await fetch(`https://api.telegram.org/bot${botToken}/getMe`);
+    if (!meRes.ok) {
+      const txt = await meRes.text();
+      return NextResponse.json(
+        {
+          ok: false,
+          reason: "BOT_TOKEN_REJECTED_BY_TELEGRAM",
+          details: txt.slice(0, 200),
+        },
+        { status: 401 }
+      );
+    }
 
-  const tg = verified.user;
+    // 3. Проверяем подпись initData
+    const tgUser = verifyTelegramInitData(initData, botToken);
 
-  // ищем пользователя по telegram_id
-  const { data: existing } = await supabaseAdmin
-    .from("users")
-    .select("id, telegram_id")
-    .eq("telegram_id", tg.id)
-    .maybeSingle();
-
-  let userId = existing?.id;
-
-  // если нет, создаём
-  if (!userId) {
-    const { data: created, error } = await supabaseAdmin
+    // 4. Создаём/находим пользователя
+    const { data: user, error } = await supabaseAdmin
       .from("users")
-      .insert({
-        telegram_id: tg.id,
-        first_name: tg.first_name ?? null,
-        username: tg.username ?? null,
-      })
-      .select("id")
+      .upsert(
+        {
+          tg_id: tgUser.id,
+          username: tgUser.username || null,
+          first_name: tgUser.first_name || null,
+        },
+        { onConflict: "tg_id" }
+      )
+      .select()
       .single();
 
     if (error) {
-      return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
+      return NextResponse.json(
+        { ok: false, reason: "DB_ERROR", error: error.message },
+        { status: 500 }
+      );
     }
 
-    userId = created.id;
+    // 5. Создаём сессию
+    const token = jwt.sign(
+      { uid: user.id },
+      process.env.APP_JWT_SECRET!,
+      { expiresIn: "30d" }
+    );
+
+    const res = NextResponse.json({ ok: true });
+
+    // важно для Telegram webview
+    res.cookies.set("session", token, {
+      httpOnly: true,
+      sameSite: "none",
+      secure: true,
+      path: "/",
+    });
+
+    return res;
+  } catch (e: any) {
+    return NextResponse.json(
+      { ok: false, reason: "AUTH_ERROR", error: String(e?.message || e) },
+      { status: 500 }
+    );
   }
-
-  // делаем свою сессию (JWT)
-  const token = jwt.sign(
-    { userId, telegramId: tg.id },
-    process.env.APP_JWT_SECRET!,
-    { expiresIn: "30d" }
-  );
-
-  const res = NextResponse.json({ ok: true });
-
-  // кладём сессию в cookie
-  res.cookies.set("session", token, {
-    httpOnly: true,
-    sameSite: "none",
-    secure: true,
-    path: "/",
-  });
-  return res;
 }
