@@ -23,8 +23,22 @@ export default function HomePage() {
   const [title, setTitle] = useState("");
   const [dueDate, setDueDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [hint, setHint] = useState<string | null>(null);
+  const [tgInfo, setTgInfo] = useState({ hasTg: false, initLen: 0 });
   
   async function authIfPossible() {
+
+  // @ts-ignore
+  const tg = typeof window !== "undefined" ? window.Telegram?.WebApp : null;
+  const initData = tg?.initData || "";
+
+  setTgInfo({ hasTg: !!tg, initLen: initData.length });
+
+  if (!initData) {
+    setHint("initData пустой. Значит Telegram не отдал данные, сессия не создастся.");
+    setReady(true);
+    return;
+  }
+
   const initData = getInitDataSafe();
 
   if (!initData) {
@@ -64,9 +78,18 @@ export default function HomePage() {
     }
   }
 
-  useEffect(() => {
-    authIfPossible().then(() => loadToday());
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => {// @ts-ignore
+ 	 const tg = typeof window !== "undefined" ? window.Telegram?.WebApp : null;
+
+ 	 if (tg) {
+ 	   try {
+ 	     tg.ready();
+ 	     tg.expand();
+ 	   } catch {}
+	  }
+
+  	authIfPossible().then(() => loadToday());
+  	// eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   async function addTask() {
@@ -111,6 +134,10 @@ export default function HomePage() {
           {hint}
         </div>
       )}
+	
+	<div style={{ fontSize: 12, opacity: 0.7, marginBottom: 12 }}>
+  		debug: hasTg={String(tgInfo.hasTg)} initLen={tgInfo.initLen}
+	</div>
 
       <section style={{ padding: 12, border: "1px solid #ddd", borderRadius: 12, marginBottom: 12 }}>
         <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
