@@ -32,17 +32,17 @@ export async function POST(req: Request) {
 
     // создаём/находим пользователя в нашей базе
     const { data: user, error } = await supabaseAdmin
-      .from("users")
-      .upsert(
-        {
-          tg_id: tgUser.id,
-          username: tgUser.username || null,
-          first_name: tgUser.first_name || null,
-        },
-        { onConflict: "tg_id" }
-      )
-      .select()
-      .single();
+ 	 .from("users")
+ 	 .upsert(
+ 	   {
+ 	     telegram_id: tgUser.id,
+ 	     username: tgUser.username || null,
+ 	     first_name: tgUser.first_name || null,
+	    },
+	    { onConflict: "telegram_id" }
+	  )
+ 	 .select()
+	  .single();
 
     if (error) {
       return NextResponse.json(
