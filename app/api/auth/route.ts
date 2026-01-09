@@ -31,17 +31,18 @@ export async function POST(req: Request) {
     const tgUser = ver.user;
 
     // создаём/находим пользователя в нашей базе
-    const { data: user, error } = await supabaseAdmin
- 	 .from("users")
- 	 .upsert(
- 	   {
- 	     telegram_id: tgUser.id,
- 	     username: tgUser.username || null,
- 	     first_name: tgUser.first_name || null,
+	const { data: user, error } = await supabaseAdmin
+	  .from("users")
+	  .upsert(
+	    {
+	      tg_id: tgUser.id,
+	      telegram_id: tgUser.id,
+	      username: tgUser.username || null,
+	      first_name: tgUser.first_name || null,
 	    },
-	    { onConflict: "telegram_id" }
+	    { onConflict: "tg_id" }
 	  )
- 	 .select()
+	  .select()
 	  .single();
 
     if (error) {
