@@ -134,32 +134,33 @@ export default function HomePage() {
   }
 
   // ЭТО ТО, ЧЕГО У ТЕБЯ НЕ ХВАТАЛО
-  async function openCreateProject() {
-    if (creatingProject) return;
+ async function openCreateProject() {
+  try {
+    const name = prompt("Название проекта?");
+    if (!name || !name.trim()) return;
 
-    const name = window.prompt("Название проекта?");
-    if (!name) return;
+    const r = await fetch("/api/projects", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ name: name.trim() }),
+    });
 
-    setCreatingProject(true);
-    try {
-      const r = await fetch("/api/projects", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({ name: name.trim() }),
-      });
+    const j = await r.json().catch(() => ({} as any));
 
-      const j = await r.json().catch(() => ({} as any));
+    if (!r.ok || !j.ok) {
+      setHint(`Не смог создать проект: ${j.reason || r.status}${j.error ? " | " + j.error : ""}`);
+      return;
+    }
 
-      if (!r.ok || !j.ok) {
-        if (j.reason === "NO_SESSION") {
-          setHint("Сессии нет. Открой мини-апп кнопкой у бота (Web App).");
-          return;
-        }
-        setHint(j.error || j.reason || "Не смог создать проект");
-        return;
-      }
+    setHint(null);
 
+    // Временно: просто перезагрузим страницу, чтобы увидеть изменения (потом сделаем красиво через state)
+    window.location.reload();
+  } catch (e: any) {
+    setHint(`Создание проекта упало: ${String(e?.message || e)}`);
+  }
+}
       // добавляем локально и выбираем новый проект
       const created: Project | null = j.project || null;
       if (created?.id) {
@@ -246,23 +247,19 @@ export default function HomePage() {
           <div style={{ opacity: 0.7 }}>Загружаю проекты…</div>
         ) : projects.length === 0 ? (
           <button
-            type="button"
-            onClick={openCreateProject}
-            disabled={creatingProject}
-            style={{
-              width: "100%",
-              padding: "14px 12px",
-              borderRadius: 12,
-              border: "1px solid #ccc",
-              cursor: creatingProject ? "default" : "pointer",
-              opacity: creatingProject ? 0.6 : 1,
-              background: "transparent",
-              fontSize: 18,
-              fontWeight: 600,
-            }}
-          >
-            Создать проект
-          </button>
+  type="button"
+  onClick={openCreateProject}
+  style={{
+    width: "100%",
+    padding: "14px 12px",
+    borderRadius: 12,
+    border: "1px solid #ddd",
+    background: "#fff",
+    cursor: "pointer",
+  }}
+>
+  Создать проект
+</button>
         ) : (
           <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
             <select
