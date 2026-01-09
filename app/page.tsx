@@ -7,7 +7,7 @@ type Task = {
   title: string;
   due_date: string | null;
   done: boolean;
-  project_id: number | null;
+  project_id?: number | null;
 };
 
 type Project = {
@@ -21,18 +21,21 @@ function getTelegramWebApp() {
   return typeof window !== "undefined" ? window.Telegram?.WebApp : null;
 }
 
+function fmtDate(d: string) {
+  // d: YYYY-MM-DD
+  const [y, m, day] = d.split("-").map((x) => Number(x));
+  if (!y || !m || !day) return d;
+  return `${day.toString().padStart(2, "0")}.${m.toString().padStart(2, "0")}.${y}`;
+}
+
 export default function HomePage() {
   const [ready, setReady] = useState(false);
   const [hint, setHint] = useState<string | null>(null);
-
-  // debug
-  const [tgInfo, setTgInfo] = useState({ hasTg: false, initLen: 0 });
 
   // projects
   const [projects, setProjects] = useState<Project[]>([]);
   const [activeProjectId, setActiveProjectId] = useState<number | null>(null);
   const [loadingProjects, setLoadingProjects] = useState(false);
-
   const [creatingProject, setCreatingProject] = useState(false);
   const [showCreateProject, setShowCreateProject] = useState(false);
   const [newProjectName, setNewProjectName] = useState("");
@@ -48,11 +51,93 @@ export default function HomePage() {
     [projects, activeProjectId]
   );
 
+  const canAddTask = Boolean(activeProjectId && title.trim());
+
+  const ui = {
+    page: {
+      maxWidth: 720,
+      margin: "0 auto",
+      padding: 16,
+      fontFamily: "system-ui",
+      color: "#111",
+    } as React.CSSProperties,
+    card: {
+      border: "1px solid #e5e5e5",
+      borderRadius: 16,
+      padding: 14,
+      background: "#fff",
+    } as React.CSSProperties,
+    row: { display: "flex", gap: 10, alignItems: "center" } as React.CSSProperties,
+    input: {
+      width: "100%",
+      padding: "12px 12px",
+      borderRadius: 12,
+      border: "1px solid #d7d7d7",
+      outline: "none",
+      fontSize: 16,
+    } as React.CSSProperties,
+    select: {
+      width: "100%",
+      padding: "12px 12px",
+      borderRadius: 12,
+      border: "1px solid #d7d7d7",
+      outline: "none",
+      fontSize: 16,
+      background: "#fff",
+    } as React.CSSProperties,
+    btn: {
+      padding: "12px 14px",
+      borderRadius: 12,
+      border: "1px solid #d7d7d7",
+      background: "#111",
+      color: "#fff",
+      fontWeight: 700,
+      cursor: "pointer",
+      userSelect: "none",
+    } as React.CSSProperties,
+    btnGhost: {
+      padding: "12px 14px",
+      borderRadius: 12,
+      border: "1px solid #d7d7d7",
+      background: "#fff",
+      color: "#111",
+      fontWeight: 700,
+      cursor: "pointer",
+      userSelect: "none",
+    } as React.CSSProperties,
+    btnIcon: {
+      width: 44,
+      height: 44,
+      borderRadius: 12,
+      border: "1px solid #d7d7d7",
+      background: "#fff",
+      color: "#111",
+      fontWeight: 900,
+      fontSize: 18,
+      cursor: "pointer",
+      userSelect: "none",
+      display: "grid",
+      placeItems: "center",
+    } as React.CSSProperties,
+    muted: { fontSize: 12, opacity: 0.65 } as React.CSSProperties,
+    h1: { fontSize: 22, margin: "0 0 10px" } as React.CSSProperties,
+    h2: { fontSize: 14, margin: "0 0 10px", opacity: 0.75, fontWeight: 700 } as React.CSSProperties,
+    badge: {
+      display: "inline-flex",
+      alignItems: "center",
+      gap: 6,
+      padding: "6px 10px",
+      borderRadius: 999,
+      border: "1px solid #e5e5e5",
+      background: "#fafafa",
+      fontSize: 12,
+      opacity: 0.9,
+    } as React.CSSProperties,
+  };
+
   async function authIfPossible() {
     const tg = getTelegramWebApp();
     const initData = tg?.initData || "";
-
-    setTgInfo({ hasTg: !!tg, initLen: initData.length });
 
     if (tg) {
       try {
@@ -62,7 +147,7 @@ export default function HomePage() {
     }
 
     if (!initData) {
-      setHint("Открой это из Telegram как Web App (кнопкой у бота), тогда появится сохранение в облаке.");
+      setHint("Открой мини-апп кнопкой в боте, тогда появится сохранение.");
       setReady(true);
       return;
     }
@@ -76,7 +161,6 @@ export default function HomePage() {
       });
 
       const j = await r.json().catch(() => ({} as any));
-
       if (!r.ok || !j.ok) {
         setHint(`Auth не прошёл: ${j.reason || r.status}${j.error ? " | " + j.error : ""}`);
       } else {
@@ -105,13 +189,9 @@ export default function HomePage() {
       setProjects(list);
 
       if (list.length > 0) {
-        setActiveProjectId((prev) => {
-          if (prev && list.some((p) => p.id === prev)) return prev;
-          return list[0].id;
-        });
+        setActiveProjectId((prev) => (prev ? prev : list[0].id));
       } else {
         setActiveProjectId(null);
-        setTasks([]);
       }
     } catch (e: any) {
       setHint(`Не смог загрузить проекты: ${String(e?.message || e)}`);
@@ -121,30 +201,21 @@ export default function HomePage() {
   }
 
   async function loadTasks() {
-    // если проект не выбран, задачи не грузим и не показываем
-    if (!activeProjectId) {
-      setTasks([]);
-      return;
-    }
-
     setLoadingTasks(true);
     try {
       const url = new URL("/api/tasks", window.location.origin);
       url.searchParams.set("view", "today");
-      url.searchParams.set("project_id", String(activeProjectId)); // ВАЖНО
+      if (activeProjectId) url.searchParams.set("projectId", String(activeProjectId));
 
       const r = await fetch(url.toString(), { credentials: "include" });
       const j = await r.json().catch(() => ({} as any));
 
       if (j.ok) {
-        // на всякий случай дополнительно фильтруем на фронте
-        const list: Task[] = j.tasks || [];
-        setTasks(list.filter((t) => Number(t.project_id) === Number(activeProjectId)));
+        setTasks(j.tasks || []);
         return;
       }
 
       if (j.reason === "NO_SESSION") return;
-
       setHint(j.error || j.reason || "Не смог загрузить задачи");
     } catch (e: any) {
       setHint(`Ошибка загрузки задач: ${String(e?.message || e)}`);
@@ -174,19 +245,15 @@ export default function HomePage() {
       });
 
       const j = await r.json().catch(() => ({} as any));
-
       if (!r.ok || !j.ok) {
         setHint(`Ошибка создания проекта: ${j.reason || r.status}${j.error ? " | " + j.error : ""}`);
         return;
       }
 
-      const newId = Number(j.project?.id);
-      setShowCreateProject(false);
       setHint(null);
-
-      // Важно: сначала обновим список проектов, потом выставим активный
       await loadProjects();
-      if (Number.isFinite(newId) && newId > 0) setActiveProjectId(newId);
+      if (j.project?.id) setActiveProjectId(Number(j.project.id));
+      setShowCreateProject(false);
     } catch (e: any) {
       setHint(`Ошибка создания проекта: ${String(e?.message || e)}`);
     } finally {
@@ -209,7 +276,7 @@ export default function HomePage() {
       body: JSON.stringify({
         title: title.trim(),
         due_date: dueDate,
-        project_id: activeProjectId, // ВАЖНО
+        projectId: activeProjectId,
       }),
     });
 
@@ -222,7 +289,7 @@ export default function HomePage() {
     }
 
     if (j.reason === "NO_SESSION") {
-      setHint("Сессии нет. Открой мини-апп кнопкой у бота (Web App), тогда появится сохранение.");
+      setHint("Сессии нет. Открой мини-апп кнопкой у бота, тогда появится сохранение.");
       return;
     }
 
@@ -256,43 +323,68 @@ export default function HomePage() {
   }, [ready, activeProjectId]);
 
   return (
-    <main style={{ maxWidth: 680, margin: "0 auto", padding: 16, fontFamily: "system-ui" }}>
-      <h1 style={{ fontSize: 22, marginBottom: 12 }}>Сегодня</h1>
+    <main style={ui.page}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 10 }}>
+        <div>
+          <h1 style={ui.h1}>Задачи</h1>
+          <div style={ui.muted}>
+            {activeProject ? (
+              <span style={ui.badge}>
+                <span style={{ width: 6, height: 6, borderRadius: 999, background: "#111" }} />
+                {activeProject.name}
+              </span>
+            ) : (
+              <span style={ui.badge}>Нет проекта</span>
+            )}
+          </div>
+        </div>
+
+        <button
+          type="button"
+          onClick={() => loadTasks()}
+          disabled={loadingTasks || !activeProjectId}
+          style={{
+            ...ui.btnGhost,
+            opacity: loadingTasks || !activeProjectId ? 0.6 : 1,
+            cursor: loadingTasks || !activeProjectId ? "not-allowed" : "pointer",
+          }}
+          title="Обновить"
+        >
+          ↻
+        </button>
+      </div>
 
       {hint && (
-        <div style={{ padding: 12, border: "1px solid #ddd", borderRadius: 12, marginBottom: 10 }}>
-          {hint}
+        <div style={{ ...ui.card, marginTop: 12, borderColor: "#f0c36d", background: "#fffaf0" }}>
+          <div style={{ fontWeight: 700, marginBottom: 6 }}>Сообщение</div>
+          <div style={{ lineHeight: 1.35 }}>{hint}</div>
         </div>
       )}
 
-      <div style={{ fontSize: 12, opacity: 0.65, marginBottom: 12 }}>
-        debug: hasTg={String(tgInfo.hasTg)} initLen={tgInfo.initLen}
-      </div>
+      {/* Projects */}
+      <section style={{ ...ui.card, marginTop: 12 }}>
+        <div style={ui.h2}>Проект</div>
 
-      {/* Projects row */}
-      <section style={{ padding: 12, border: "1px solid #ddd", borderRadius: 12, marginBottom: 12 }}>
         {projects.length === 0 ? (
           <button
             type="button"
             onClick={openCreateProject}
             disabled={creatingProject || loadingProjects}
             style={{
+              ...ui.btn,
               width: "100%",
-              padding: "14px 12px",
-              borderRadius: 12,
-              cursor: creatingProject ? "not-allowed" : "pointer",
-              opacity: creatingProject ? 0.6 : 1,
-              fontSize: 18,
+              opacity: creatingProject || loadingProjects ? 0.6 : 1,
+              cursor: creatingProject || loadingProjects ? "not-allowed" : "pointer",
             }}
           >
             {creatingProject ? "Создаю..." : "Создать проект"}
           </button>
         ) : (
-          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+          <div style={ui.row}>
             <select
               value={activeProjectId ?? ""}
               onChange={(e) => setActiveProjectId(e.target.value ? Number(e.target.value) : null)}
-              style={{ flex: 1, padding: 10, borderRadius: 10, border: "1px solid #ccc" }}
+              style={ui.select}
             >
               {projects.map((p) => (
                 <option key={p.id} value={p.id}>
@@ -306,106 +398,123 @@ export default function HomePage() {
               onClick={openCreateProject}
               disabled={creatingProject}
               style={{
-                padding: "10px 14px",
-                borderRadius: 10,
-                cursor: creatingProject ? "not-allowed" : "pointer",
+                ...ui.btnIcon,
                 opacity: creatingProject ? 0.6 : 1,
-                fontWeight: 700,
+                cursor: creatingProject ? "not-allowed" : "pointer",
               }}
-              title="Создать проект"
+              title="Новый проект"
             >
               +
             </button>
           </div>
         )}
-
-        {projects.length > 0 && activeProject && (
-          <div style={{ marginTop: 10, fontSize: 12, opacity: 0.7 }}>
-            Текущий проект: <b>{activeProject.name}</b>
-          </div>
-        )}
       </section>
 
       {/* Add task */}
-      <section style={{ padding: 12, border: "1px solid #ddd", borderRadius: 12, marginBottom: 12 }}>
-        <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
+      <section style={{ ...ui.card, marginTop: 12 }}>
+        <div style={ui.h2}>Новая задача</div>
+
+        <div style={{ display: "grid", gap: 10 }}>
           <input
             value={title}
             onChange={(e) => setTitle(e.target.value)}
-            placeholder={activeProjectId ? "Добавить задачу…" : "Сначала создай проект…"}
+            placeholder={activeProjectId ? "Например: купить билеты, оплатить аренду…" : "Сначала создай проект…"}
             disabled={!activeProjectId}
             style={{
-              flex: 1,
-              padding: 10,
-              borderRadius: 10,
-              border: "1px solid #ccc",
+              ...ui.input,
               opacity: activeProjectId ? 1 : 0.6,
             }}
           />
-          <button
-            type="button"
-            disabled={!title.trim() || !activeProjectId}
-            onClick={addTask}
-            style={{
-              padding: "10px 12px",
-              borderRadius: 10,
-              cursor: !title.trim() || !activeProjectId ? "not-allowed" : "pointer",
-              opacity: !title.trim() || !activeProjectId ? 0.5 : 1,
-            }}
-          >
-            Добавить
-          </button>
-        </div>
 
-        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-          <span style={{ fontSize: 13, opacity: 0.8 }}>Дата</span>
-          <input
-            type="date"
-            value={dueDate}
-            onChange={(e) => setDueDate(e.target.value)}
-            disabled={!activeProjectId}
-            style={{
-              padding: 8,
-              borderRadius: 10,
-              border: "1px solid #ccc",
-              opacity: activeProjectId ? 1 : 0.6,
-            }}
-          />
+          <div style={ui.row}>
+            <input
+              type="date"
+              value={dueDate}
+              onChange={(e) => setDueDate(e.target.value)}
+              disabled={!activeProjectId}
+              style={{
+                ...ui.input,
+                padding: "10px 12px",
+                opacity: activeProjectId ? 1 : 0.6,
+              }}
+            />
+
+            <button
+              type="button"
+              onClick={addTask}
+              disabled={!canAddTask}
+              style={{
+                ...ui.btn,
+                opacity: canAddTask ? 1 : 0.5,
+                cursor: canAddTask ? "pointer" : "not-allowed",
+                whiteSpace: "nowrap",
+              }}
+            >
+              Добавить
+            </button>
+          </div>
         </div>
       </section>
 
       {/* Tasks */}
-      {!ready ? (
-        <div style={{ opacity: 0.7 }}>Загружаю…</div>
-      ) : !activeProjectId ? (
-        <div style={{ opacity: 0.7 }}>Сначала создай или выбери проект.</div>
-      ) : loadingTasks ? (
-        <div style={{ opacity: 0.7 }}>Загружаю задачи…</div>
-      ) : tasks.length === 0 ? (
-        <div style={{ opacity: 0.7 }}>Задач нет.</div>
-      ) : (
-        <ul style={{ listStyle: "none", padding: 0, margin: 0, display: "grid", gap: 8 }}>
-          {tasks.map((t) => (
-            <li key={t.id} style={{ padding: 12, border: "1px solid #ddd", borderRadius: 12 }}>
-              <label style={{ display: "flex", gap: 10, alignItems: "center" }}>
-                <input
-                  type="checkbox"
-                  checked={t.done}
-                  onChange={(e) => toggleDone(t.id, e.target.checked)}
-                />
-                <div style={{ display: "grid", gap: 4 }}>
-                  <span style={{ textDecoration: t.done ? "line-through" : "none", fontWeight: 600 }}>
-                    {t.title}
-                  </span>
-                  {t.due_date && <span style={{ fontSize: 12, opacity: 0.7 }}>до {t.due_date}</span>}
-                </div>
-              </label>
-            </li>
-          ))}
-        </ul>
-      )}
+      <section style={{ ...ui.card, marginTop: 12 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 10 }}>
+          <div style={ui.h2}>Список</div>
+          <div style={ui.muted}>
+            {loadingTasks ? "Загружаю…" : `${tasks.length} шт.`}
+          </div>
+        </div>
 
-      {/* Modal create project */}
+        {!ready ? (
+          <div style={{ opacity: 0.7 }}>Загружаю…</div>
+        ) : loadingTasks ? (
+          <div style={{ opacity: 0.7 }}>Загружаю задачи…</div>
+        ) : tasks.length === 0 ? (
+          <div style={{ opacity: 0.7 }}>Пока пусто.</div>
+        ) : (
+          <ul style={{ listStyle: "none", padding: 0, margin: 0, display: "grid", gap: 10 }}>
+            {tasks.map((t) => (
+              <li
+                key={t.id}
+                style={{
+                  border: "1px solid #e9e9e9",
+                  borderRadius: 14,
+                  padding: 12,
+                  background: t.done ? "#fafafa" : "#fff",
+                }}
+              >
+                <label style={{ display: "flex", gap: 12, alignItems: "flex-start" }}>
+                  <input
+                    type="checkbox"
+                    checked={t.done}
+                    onChange={(e) => toggleDone(t.id, e.target.checked)}
+                    style={{ width: 18, height: 18, marginTop: 2 }}
+                  />
+                  <div style={{ display: "grid", gap: 6, flex: 1 }}>
+                    <div
+                      style={{
+                        fontWeight: 700,
+                        lineHeight: 1.2,
+                        textDecoration: t.done ? "line-through" : "none",
+                        opacity: t.done ? 0.6 : 1,
+                      }}
+                    >
+                      {t.title}
+                    </div>
+
+                    <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                      {t.due_date && <span style={ui.badge}>до {fmtDate(t.due_date)}</span>}
+                      <span style={{ ...ui.badge, opacity: 0.55 }}>id #{t.id}</span>
+                    </div>
+                  </div>
+                </label>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+
+      {/* Modal */}
       {showCreateProject && (
         <div
           style={{
@@ -425,32 +534,31 @@ export default function HomePage() {
               width: "100%",
               maxWidth: 520,
               background: "#fff",
-              borderRadius: 16,
-              border: "1px solid #ddd",
+              borderRadius: 18,
+              border: "1px solid #e5e5e5",
               padding: 14,
             }}
             onClick={(e) => e.stopPropagation()}
           >
-            <div style={{ fontSize: 16, fontWeight: 700, marginBottom: 10 }}>Новый проект</div>
+            <div style={{ fontSize: 16, fontWeight: 900, marginBottom: 10 }}>Новый проект</div>
 
             <input
               value={newProjectName}
               onChange={(e) => setNewProjectName(e.target.value)}
-              placeholder="Например: Choup, ремонт, переезд…"
-              style={{ width: "100%", padding: 10, borderRadius: 10, border: "1px solid #ccc" }}
+              placeholder="Например: работа, дом, спорт…"
+              style={ui.input}
               autoFocus
             />
 
-            <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
+            <div style={{ display: "flex", gap: 10, marginTop: 12 }}>
               <button
                 type="button"
                 onClick={() => !creatingProject && setShowCreateProject(false)}
                 style={{
+                  ...ui.btnGhost,
                   flex: 1,
-                  padding: 10,
-                  borderRadius: 10,
-                  cursor: creatingProject ? "not-allowed" : "pointer",
                   opacity: creatingProject ? 0.6 : 1,
+                  cursor: creatingProject ? "not-allowed" : "pointer",
                 }}
               >
                 Отмена
@@ -461,16 +569,18 @@ export default function HomePage() {
                 onClick={createProject}
                 disabled={!newProjectName.trim() || creatingProject}
                 style={{
+                  ...ui.btn,
                   flex: 1,
-                  padding: 10,
-                  borderRadius: 10,
-                  cursor: !newProjectName.trim() || creatingProject ? "not-allowed" : "pointer",
                   opacity: !newProjectName.trim() || creatingProject ? 0.6 : 1,
-                  fontWeight: 700,
+                  cursor: !newProjectName.trim() || creatingProject ? "not-allowed" : "pointer",
                 }}
               >
                 {creatingProject ? "Создаю..." : "Создать"}
               </button>
+            </div>
+
+            <div style={{ ...ui.muted, marginTop: 10 }}>
+              Подсказка: короткие названия читаются лучше.
             </div>
           </div>
         </div>
