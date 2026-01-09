@@ -314,6 +314,15 @@ export default function HomePage() {
       backdropFilter: "blur(14px)",
       WebkitBackdropFilter: "blur(14px)",
     } as React.CSSProperties,
+
+    // skeleton (shimmer)
+    skel: {
+      borderRadius: 999,
+      background:
+        "linear-gradient(90deg, rgba(0,0,0,0.05) 0%, rgba(0,0,0,0.09) 40%, rgba(0,0,0,0.05) 80%)",
+      backgroundSize: "240% 100%",
+      animation: "skelShimmer 1.15s ease-in-out infinite",
+    } as React.CSSProperties,
   };
 
   function dotStyle(isActive: boolean): React.CSSProperties {
@@ -322,6 +331,66 @@ export default function HomePage() {
       background: isActive ? "#22c55e" : "#bdbdbd",
       boxShadow: isActive ? "0 0 0 3px rgba(34,197,94,0.04)" : "0 0 0 3px rgba(0,0,0,0.04)",
     };
+  }
+
+  function SkeletonLine({
+    w,
+    h,
+    r,
+    style,
+  }: {
+    w: number | string;
+    h: number;
+    r?: number;
+    style?: React.CSSProperties;
+  }) {
+    return (
+      <div
+        style={{
+          ...ui.skel,
+          width: w,
+          height: h,
+          borderRadius: r ?? 999,
+          ...style,
+        }}
+      />
+    );
+  }
+
+  function SkeletonTaskCard() {
+    return (
+      <div style={{ ...ui.taskItem }}>
+        <div style={{ display: "flex", gap: 12, alignItems: "flex-start" }}>
+          <div
+            style={{
+              ...ui.skel,
+              width: 18,
+              height: 18,
+              borderRadius: 6,
+              marginTop: 3,
+              animationDuration: "1.05s",
+            }}
+          />
+          <div style={{ flex: 1, display: "grid", gap: 10 }}>
+            <SkeletonLine w="72%" h={16} r={10} />
+            <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+              <SkeletonLine w={110} h={26} r={999} style={{ animationDuration: "1.25s" }} />
+              <SkeletonLine w={70} h={26} r={999} style={{ animationDuration: "1.25s" }} />
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  function SkeletonTasksList() {
+    return (
+      <div style={{ display: "grid", gap: 12, marginTop: 2 }}>
+        <SkeletonTaskCard />
+        <SkeletonTaskCard />
+        <SkeletonTaskCard />
+      </div>
+    );
   }
 
   async function authIfPossible() {
@@ -518,6 +587,14 @@ export default function HomePage() {
 
   return (
     <div style={ui.shell}>
+      {/* local keyframes for skeleton */}
+      <style>{`
+        @keyframes skelShimmer {
+          0% { background-position: 0% 0%; }
+          100% { background-position: 140% 0%; }
+        }
+      `}</style>
+
       <div style={{ ...ui.orb, ...ui.orbA }} />
       <div style={{ ...ui.orb, ...ui.orbB }} />
 
@@ -557,7 +634,6 @@ export default function HomePage() {
             +
           </button>
 
-          {/* All tasks tab (не меняем фон/текст, только точка) */}
           <button type="button" onClick={() => setActiveProjectId(null)} style={ui.tabBadge}>
             <span style={dotStyle(isAllTasks)} />
             Все задачи
@@ -566,7 +642,13 @@ export default function HomePage() {
           {projects.map((p) => {
             const isActive = activeProjectId === p.id;
             return (
-              <button key={p.id} type="button" onClick={() => setActiveProjectId(p.id)} style={ui.tabBadge} title={p.name}>
+              <button
+                key={p.id}
+                type="button"
+                onClick={() => setActiveProjectId(p.id)}
+                style={ui.tabBadge}
+                title={p.name}
+              >
                 <span style={dotStyle(isActive)} />
                 {p.name}
               </button>
@@ -640,13 +722,11 @@ export default function HomePage() {
         <section style={{ ...ui.card, marginTop: 14 }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 10 }}>
             <div style={ui.sectionTitle}>Список</div>
-            <div style={ui.muted}>{loadingTasks ? "Загружаю…" : `${tasks.length} шт.`}</div>
+            <div style={ui.muted}>{loadingTasks ? "Обновляю…" : `${tasks.length} шт.`}</div>
           </div>
 
-          {!ready ? (
-            <div style={{ opacity: 0.7 }}>Загружаю…</div>
-          ) : loadingTasks ? (
-            <div style={{ opacity: 0.7 }}>Загружаю задачи…</div>
+          {!ready || loadingTasks ? (
+            <SkeletonTasksList />
           ) : tasks.length === 0 ? (
             <div style={{ opacity: 0.7 }}>Пока пусто.</div>
           ) : (
