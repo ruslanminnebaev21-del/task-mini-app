@@ -18,25 +18,39 @@ async function getUidFromSession(): Promise<number | null> {
   }
 }
 
+function toNumOrNull(v: string | null) {
+  if (!v) return null;
+  const n = Number(v);
+  if (!Number.isFinite(n) || n <= 0) return null;
+  return n;
+}
+
+function todayStr() {
+  return new Date().toISOString().slice(0, 10);
+}
+
 export async function GET(req: Request) {
   const uid = await getUidFromSession();
   if (!uid) return NextResponse.json({ ok: false, reason: "NO_SESSION" }, { status: 401 });
 
   const url = new URL(req.url);
-  const view = url.searchParams.get("view") || "today";
+  const view = url.searchParams.get("view"); // "today" или null
+  const projectId = toNumOrNull(url.searchParams.get("projectId"));
 
   let q = supabaseAdmin
     .from("tasks")
-    .select("*")
-    .eq("user_id", uid)
-    .order("id", { ascending: false });
+    .select("id,title,due_date,done,project_id")
+    .eq("user_id", uid);
+
+  if (projectId) q = q.eq("project_id", projectId);
 
   if (view === "today") {
-    const today = new Date().toISOString().slice(0, 10);
-    q = q.eq("due_date", today);
+    q = q.gte("due_date", todayStr());
   }
 
-  const { data, error } = await q;
+  const { data, error } = await q
+    .order("due_date", { ascending: true })
+    .order("id", { ascending: true });
 
   if (error) {
     return NextResponse.json({ ok: false, reason: "DB_ERROR", error: error.message }, { status: 500 });
@@ -52,12 +66,19 @@ export async function POST(req: Request) {
   const body = await req.json().catch(() => ({} as any));
   const title = String(body?.title || "").trim();
   const due_date = body?.due_date ? String(body.due_date) : null;
+  const project_id = Number.isFinite(Number(body?.projectId)) ? Number(body.projectId) : null;
 
   if (!title) return NextResponse.json({ ok: false, reason: "NO_TITLE" }, { status: 400 });
 
   const { data, error } = await supabaseAdmin
     .from("tasks")
-    .insert({ user_id: uid, title, due_date, done: false })
+    .insert({
+      user_id: uid,
+      title,
+      due_date,
+      done: false,
+      project_id,
+    })
     .select()
     .single();
 

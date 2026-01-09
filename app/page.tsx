@@ -229,7 +229,33 @@ export default function HomePage() {
       {/* PROJECT SELECT */}
       <section style={{ padding: 12, border: "1px solid #ddd", borderRadius: 12, marginBottom: 12 }}>
         {projects.length === 0 ? (
-          <button onClick={createProject}>Создать проект</button>
+<button
+  type="button"
+  onClick={async () => {
+    const name = window.prompt("Название проекта?");
+    if (!name || !name.trim()) return;
+
+    const r = await fetch("/api/projects", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ name: name.trim() }),
+    });
+
+    const j = await r.json().catch(() => ({} as any));
+    alert(JSON.stringify(j));
+  }}
+  style={{
+    width: "100%",
+    padding: 14,
+    borderRadius: 14,
+    border: "1px solid #ddd",
+    background: "#fff",
+    cursor: "pointer",
+  }}
+>
+  Создать проект
+</button>          
         ) : (
           <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
             <select
