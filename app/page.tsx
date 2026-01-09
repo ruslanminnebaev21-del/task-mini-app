@@ -113,46 +113,41 @@ export default function HomePage() {
     } as React.CSSProperties,
     muted: { fontSize: 12, opacity: 0.65 } as React.CSSProperties,
     h1: { fontSize: 22, margin: 0 } as React.CSSProperties,
-    badge: {
-      display: "inline-flex",
-      alignItems: "center",
-      gap: 6,
-      padding: "6px 10px",
-      borderRadius: 999,
-      border: "1px solid #e5e5e5",
-      background: "#fafafa",
-      fontSize: 12,
-      opacity: 0.9,
-    } as React.CSSProperties,
 
+    // tabs -> wrap instead of horizontal scroll
     tabWrap: {
       display: "flex",
       gap: 10,
-      alignItems: "center",
-      marginTop: 10,
+      alignItems: "flex-start",
+      marginTop: 12,
     } as React.CSSProperties,
-    tabRow: {
+
+    tabGrid: {
       display: "flex",
+      flexWrap: "wrap",
       gap: 10,
-      overflowX: "auto",
-      WebkitOverflowScrolling: "touch",
-      padding: "2px 2px",
       flex: "1 1 auto",
-      scrollbarWidth: "none", // Firefox
-      msOverflowStyle: "none", // IE/Edge legacy
     } as React.CSSProperties,
-    tab: {
+
+    tabBadge: {
       display: "inline-flex",
       alignItems: "center",
       gap: 8,
-      padding: "10px 12px",
+      padding: "8px 12px",
       borderRadius: 999,
       border: "1px solid #e5e5e5",
       background: "#fff",
-      whiteSpace: "nowrap",
-      fontWeight: 900,
+      fontWeight: 800,
       cursor: "pointer",
       userSelect: "none",
+      whiteSpace: "nowrap",
+    } as React.CSSProperties,
+
+    dot: {
+      width: 8,
+      height: 8,
+      borderRadius: 999,
+      background: "#bdbdbd",
       flex: "0 0 auto",
     } as React.CSSProperties,
   };
@@ -351,29 +346,31 @@ export default function HomePage() {
 
   return (
     <main style={ui.page}>
-      {/* hide scrollbar for webkit */}
-      <style>{`
-        .tabrow::-webkit-scrollbar { display: none; height: 0; width: 0; }
-      `}</style>
-
       {/* Header */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 10 }}>
         <div style={{ flex: 1 }}>
           <h1 style={ui.h1}>Задачи</h1>
 
-          {/* Tabs at the very top */}
+          {/* Tabs under header, wrap into lines */}
           <div style={ui.tabWrap}>
-            <div className="tabrow" style={ui.tabRow}>
+            <div style={ui.tabGrid}>
+              {/* All tasks */}
               <button
                 type="button"
                 onClick={() => setActiveProjectId(null)}
                 style={{
-                  ...ui.tab,
+                  ...ui.tabBadge,
                   background: isAllTasks ? "#111" : "#fff",
                   color: isAllTasks ? "#fff" : "#111",
                   borderColor: isAllTasks ? "#111" : "#e5e5e5",
                 }}
               >
+                <span
+                  style={{
+                    ...ui.dot,
+                    background: isAllTasks ? "#22c55e" : "#bdbdbd",
+                  }}
+                />
                 Все задачи
               </button>
 
@@ -385,21 +382,23 @@ export default function HomePage() {
                     type="button"
                     onClick={() => setActiveProjectId(p.id)}
                     style={{
-                      ...ui.tab,
+                      ...ui.tabBadge,
                       background: isActive ? "#111" : "#fff",
                       color: isActive ? "#fff" : "#111",
                       borderColor: isActive ? "#111" : "#e5e5e5",
                     }}
                     title={p.name}
                   >
+                    <span
+                      style={{
+                        ...ui.dot,
+                        background: isActive ? "#22c55e" : "#bdbdbd",
+                      }}
+                    />
                     {p.name}
                   </button>
                 );
               })}
-
-              {projects.length === 0 && (
-                <div style={{ ...ui.muted, padding: "10px 2px" }}>Проектов пока нет.</div>
-              )}
             </div>
 
             <button
@@ -417,18 +416,10 @@ export default function HomePage() {
             </button>
           </div>
 
-          <div style={{ marginTop: 8 }}>
-            {isAllTasks ? (
-              <span style={ui.badge}>Все задачи</span>
-            ) : activeProject ? (
-              <span style={ui.badge}>
-                <span style={{ width: 6, height: 6, borderRadius: 999, background: "#111" }} />
-                {activeProject.name}
-              </span>
-            ) : (
-              <span style={ui.badge}>Нет проекта</span>
-            )}
-          </div>
+          {/* убрали бейдж активного проекта полностью */}
+          {projects.length === 0 && (
+            <div style={{ ...ui.muted, marginTop: 10 }}>Проектов пока нет, нажми + и создай первый.</div>
+          )}
         </div>
 
         <button
@@ -552,8 +543,37 @@ export default function HomePage() {
                     </div>
 
                     <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                      {t.due_date && <span style={ui.badge}>до {fmtDate(t.due_date)}</span>}
-                      <span style={{ ...ui.badge, opacity: 0.55 }}>id #{t.id}</span>
+                      {t.due_date && (
+                        <span
+                          style={{
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: 6,
+                            padding: "6px 10px",
+                            borderRadius: 999,
+                            border: "1px solid #e5e5e5",
+                            background: "#fafafa",
+                            fontSize: 12,
+                            opacity: 0.9,
+                          }}
+                        >
+                          до {fmtDate(t.due_date)}
+                        </span>
+                      )}
+                      <span
+                        style={{
+                          display: "inline-flex",
+                          alignItems: "center",
+                          padding: "6px 10px",
+                          borderRadius: 999,
+                          border: "1px solid #e5e5e5",
+                          background: "#fff",
+                          fontSize: 12,
+                          opacity: 0.55,
+                        }}
+                      >
+                        id #{t.id}
+                      </span>
                     </div>
                   </div>
                 </label>
