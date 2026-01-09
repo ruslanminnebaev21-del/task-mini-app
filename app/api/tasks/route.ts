@@ -18,8 +18,8 @@ async function getUidFromSession(): Promise<number | null> {
   }
 }
 
-function toNumOrNull(v: string | null) {
-  if (!v) return null;
+function toNumOrNull(v: any) {
+  if (v === null || v === undefined || v === "") return null;
   const n = Number(v);
   if (!Number.isFinite(n) || n <= 0) return null;
   return n;
@@ -35,7 +35,9 @@ export async function GET(req: Request) {
 
   const url = new URL(req.url);
   const view = url.searchParams.get("view"); // "today" или null
-  const projectId = toNumOrNull(url.searchParams.get("projectId"));
+
+  // поддержим оба варианта на всякий случай
+  const projectId = toNumOrNull(url.searchParams.get("project_id") || url.searchParams.get("projectId"));
 
   let q = supabaseAdmin
     .from("tasks")
@@ -48,9 +50,7 @@ export async function GET(req: Request) {
     q = q.gte("due_date", todayStr());
   }
 
-  const { data, error } = await q
-    .order("due_date", { ascending: true })
-    .order("id", { ascending: true });
+  const { data, error } = await q.order("due_date", { ascending: true }).order("id", { ascending: true });
 
   if (error) {
     return NextResponse.json({ ok: false, reason: "DB_ERROR", error: error.message }, { status: 500 });
@@ -66,9 +66,24 @@ export async function POST(req: Request) {
   const body = await req.json().catch(() => ({} as any));
   const title = String(body?.title || "").trim();
   const due_date = body?.due_date ? String(body.due_date) : null;
-  const project_id = Number.isFinite(Number(body?.projectId)) ? Number(body.projectId) : null;
+
+  // ВАЖНО: принимаем и project_id и projectId
+  const project_id = toNumOrNull(body?.project_id ?? body?.projectId);
 
   if (!title) return NextResponse.json({ ok: false, reason: "NO_TITLE" }, { status: 400 });
+  if (!project_id) return NextResponse.json({ ok: false, reason: "NO_PROJECT" }, { status: 400 });
+
+  // Проверим, что проект реально принадлежит этому юзеру
+  const { data: proj, error: projErr } = await supabaseAdmin
+    .from("projects")
+    .select("id")
+    .eq("id", project_id)
+    .eq("user_id", uid)
+    .single();
+
+  if (projErr || !proj) {
+    return NextResponse.json({ ok: false, reason: "BAD_PROJECT" }, { status: 400 });
+  }
 
   const { data, error } = await supabaseAdmin
     .from("tasks")
@@ -79,7 +94,7 @@ export async function POST(req: Request) {
       done: false,
       project_id,
     })
-    .select()
+    .select("id,title,due_date,done,project_id")
     .single();
 
   if (error) {
@@ -106,7 +121,7 @@ export async function PATCH(req: Request) {
     .update({ done })
     .eq("id", id)
     .eq("user_id", uid)
-    .select()
+    .select("id,title,due_date,done,project_id")
     .single();
 
   if (error) {
