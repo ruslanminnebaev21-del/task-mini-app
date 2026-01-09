@@ -149,16 +149,19 @@ export default function HomePage() {
     const j = await r.json().catch(() => ({} as any));
 
     if (!r.ok || !j.ok) {
-      setHint(`Не смог создать проект: ${j.reason || r.status}${j.error ? " | " + j.error : ""}`);
+      setHint(`Ошибка создания проекта: ${j.reason || r.status}${j.error ? " | " + j.error : ""}`);
       return;
     }
 
     setHint(null);
 
-    // Временно: просто перезагрузим страницу, чтобы увидеть изменения (потом сделаем красиво через state)
-    window.location.reload();
+    // если у тебя есть loadProjects() — обновим список
+    if (typeof loadProjects === "function") {
+      // @ts-ignore
+      await loadProjects();
+    }
   } catch (e: any) {
-    setHint(`Создание проекта упало: ${String(e?.message || e)}`);
+    setHint(`Ошибка создания проекта: ${String(e?.message || e)}`);
   }
 }
       // добавляем локально и выбираем новый проект
