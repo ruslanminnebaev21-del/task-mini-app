@@ -33,7 +33,7 @@ export default function HomePage() {
 
   // projects
   const [projects, setProjects] = useState<Project[]>([]);
-  const [activeProjectId, setActiveProjectId] = useState<number | null>(null); // null = "Все задачи"
+  const [activeProjectId, setActiveProjectId] = useState<number | null>(null); // null = Все задачи
   const [loadingProjects, setLoadingProjects] = useState(false);
   const [creatingProject, setCreatingProject] = useState(false);
   const [showCreateProject, setShowCreateProject] = useState(false);
@@ -82,7 +82,7 @@ export default function HomePage() {
       border: "1px solid #d7d7d7",
       background: "#111",
       color: "#fff",
-      fontWeight: 700,
+      fontWeight: 800,
       cursor: "pointer",
       userSelect: "none",
     } as React.CSSProperties,
@@ -92,7 +92,7 @@ export default function HomePage() {
       border: "1px solid #d7d7d7",
       background: "#fff",
       color: "#111",
-      fontWeight: 700,
+      fontWeight: 800,
       cursor: "pointer",
       userSelect: "none",
     } as React.CSSProperties,
@@ -109,10 +109,10 @@ export default function HomePage() {
       userSelect: "none",
       display: "grid",
       placeItems: "center",
+      flex: "0 0 auto",
     } as React.CSSProperties,
     muted: { fontSize: 12, opacity: 0.65 } as React.CSSProperties,
-    h1: { fontSize: 22, margin: "0 0 10px" } as React.CSSProperties,
-    h2: { fontSize: 14, margin: "0 0 10px", opacity: 0.75, fontWeight: 700 } as React.CSSProperties,
+    h1: { fontSize: 22, margin: 0 } as React.CSSProperties,
     badge: {
       display: "inline-flex",
       alignItems: "center",
@@ -125,12 +125,21 @@ export default function HomePage() {
       opacity: 0.9,
     } as React.CSSProperties,
 
+    tabWrap: {
+      display: "flex",
+      gap: 10,
+      alignItems: "center",
+      marginTop: 10,
+    } as React.CSSProperties,
     tabRow: {
       display: "flex",
       gap: 10,
       overflowX: "auto",
-      paddingBottom: 6,
       WebkitOverflowScrolling: "touch",
+      padding: "2px 2px",
+      flex: "1 1 auto",
+      scrollbarWidth: "none", // Firefox
+      msOverflowStyle: "none", // IE/Edge legacy
     } as React.CSSProperties,
     tab: {
       display: "inline-flex",
@@ -141,9 +150,10 @@ export default function HomePage() {
       border: "1px solid #e5e5e5",
       background: "#fff",
       whiteSpace: "nowrap",
-      fontWeight: 800,
+      fontWeight: 900,
       cursor: "pointer",
       userSelect: "none",
+      flex: "0 0 auto",
     } as React.CSSProperties,
   };
 
@@ -200,14 +210,11 @@ export default function HomePage() {
       const list: Project[] = j.projects || [];
       setProjects(list);
 
-      // если проектов нет, логично сидеть на "Все задачи"
       if (list.length === 0) {
         setActiveProjectId(null);
         return;
       }
 
-      // если активного нет (или это "все задачи"), оставим как есть
-      // если активный проект удалили, переключим на первый
       setActiveProjectId((prev) => {
         if (prev === null) return null;
         const exists = list.some((p) => p.id === prev);
@@ -285,7 +292,7 @@ export default function HomePage() {
     if (!title.trim()) return;
 
     if (isAllTasks || !activeProjectId) {
-      setHint("Выбери проект, чтобы добавить задачу.");
+      setHint("Выбери проект табом сверху, чтобы добавить задачу.");
       return;
     }
 
@@ -344,10 +351,73 @@ export default function HomePage() {
 
   return (
     <main style={ui.page}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 10 }}>
-        <div>
+      {/* hide scrollbar for webkit */}
+      <style>{`
+        .tabrow::-webkit-scrollbar { display: none; height: 0; width: 0; }
+      `}</style>
+
+      {/* Header */}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 10 }}>
+        <div style={{ flex: 1 }}>
           <h1 style={ui.h1}>Задачи</h1>
-          <div style={ui.muted}>
+
+          {/* Tabs at the very top */}
+          <div style={ui.tabWrap}>
+            <div className="tabrow" style={ui.tabRow}>
+              <button
+                type="button"
+                onClick={() => setActiveProjectId(null)}
+                style={{
+                  ...ui.tab,
+                  background: isAllTasks ? "#111" : "#fff",
+                  color: isAllTasks ? "#fff" : "#111",
+                  borderColor: isAllTasks ? "#111" : "#e5e5e5",
+                }}
+              >
+                Все задачи
+              </button>
+
+              {projects.map((p) => {
+                const isActive = activeProjectId === p.id;
+                return (
+                  <button
+                    key={p.id}
+                    type="button"
+                    onClick={() => setActiveProjectId(p.id)}
+                    style={{
+                      ...ui.tab,
+                      background: isActive ? "#111" : "#fff",
+                      color: isActive ? "#fff" : "#111",
+                      borderColor: isActive ? "#111" : "#e5e5e5",
+                    }}
+                    title={p.name}
+                  >
+                    {p.name}
+                  </button>
+                );
+              })}
+
+              {projects.length === 0 && (
+                <div style={{ ...ui.muted, padding: "10px 2px" }}>Проектов пока нет.</div>
+              )}
+            </div>
+
+            <button
+              type="button"
+              onClick={openCreateProject}
+              disabled={creatingProject || loadingProjects}
+              style={{
+                ...ui.btnIcon,
+                opacity: creatingProject || loadingProjects ? 0.6 : 1,
+                cursor: creatingProject || loadingProjects ? "not-allowed" : "pointer",
+              }}
+              title="Новый проект"
+            >
+              +
+            </button>
+          </div>
+
+          <div style={{ marginTop: 8 }}>
             {isAllTasks ? (
               <span style={ui.badge}>Все задачи</span>
             ) : activeProject ? (
@@ -369,6 +439,7 @@ export default function HomePage() {
             ...ui.btnGhost,
             opacity: loadingTasks ? 0.6 : 1,
             cursor: loadingTasks ? "not-allowed" : "pointer",
+            minWidth: 56,
           }}
           title="Обновить"
         >
@@ -378,79 +449,20 @@ export default function HomePage() {
 
       {hint && (
         <div style={{ ...ui.card, marginTop: 12, borderColor: "#f0c36d", background: "#fffaf0" }}>
-          <div style={{ fontWeight: 700, marginBottom: 6 }}>Сообщение</div>
+          <div style={{ fontWeight: 800, marginBottom: 6 }}>Сообщение</div>
           <div style={{ lineHeight: 1.35 }}>{hint}</div>
         </div>
       )}
 
-      {/* Tabs */}
-      <section style={{ ...ui.card, marginTop: 12 }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 10 }}>
-          <div style={ui.h2}>Проекты</div>
-          <button
-            type="button"
-            onClick={openCreateProject}
-            disabled={creatingProject || loadingProjects}
-            style={{
-              ...ui.btnIcon,
-              opacity: creatingProject || loadingProjects ? 0.6 : 1,
-              cursor: creatingProject || loadingProjects ? "not-allowed" : "pointer",
-            }}
-            title="Новый проект"
-          >
-            +
-          </button>
-        </div>
-
-        <div style={ui.tabRow}>
-          <button
-            type="button"
-            onClick={() => setActiveProjectId(null)}
-            style={{
-              ...ui.tab,
-              background: isAllTasks ? "#111" : "#fff",
-              color: isAllTasks ? "#fff" : "#111",
-              borderColor: isAllTasks ? "#111" : "#e5e5e5",
-            }}
-          >
-            Все задачи
-          </button>
-
-          {projects.map((p) => {
-            const isActive = activeProjectId === p.id;
-            return (
-              <button
-                key={p.id}
-                type="button"
-                onClick={() => setActiveProjectId(p.id)}
-                style={{
-                  ...ui.tab,
-                  background: isActive ? "#111" : "#fff",
-                  color: isActive ? "#fff" : "#111",
-                  borderColor: isActive ? "#111" : "#e5e5e5",
-                }}
-                title={p.name}
-              >
-                {p.name}
-              </button>
-            );
-          })}
-
-          {projects.length === 0 && (
-            <div style={{ ...ui.muted, padding: "10px 0" }}>Пока проектов нет. Жми плюсик.</div>
-          )}
-        </div>
-      </section>
-
       {/* Add task */}
       <section style={{ ...ui.card, marginTop: 12 }}>
-        <div style={ui.h2}>Новая задача</div>
+        <div style={{ fontSize: 14, margin: "0 0 10px", opacity: 0.75, fontWeight: 800 }}>Новая задача</div>
 
         <div style={{ display: "grid", gap: 10 }}>
           <input
             value={title}
             onChange={(e) => setTitle(e.target.value)}
-            placeholder={isAllTasks ? "Выбери проект сверху…" : "Например: купить билеты, оплатить аренду…"}
+            placeholder={isAllTasks ? "Выбери проект табом сверху…" : "Например: купить билеты, оплатить аренду…"}
             disabled={isAllTasks || !activeProjectId}
             style={{
               ...ui.input,
@@ -480,6 +492,7 @@ export default function HomePage() {
                 opacity: canAddTask ? 1 : 0.5,
                 cursor: canAddTask ? "pointer" : "not-allowed",
                 whiteSpace: "nowrap",
+                minWidth: 120,
               }}
             >
               Добавить
@@ -489,7 +502,7 @@ export default function HomePage() {
 
         {isAllTasks && (
           <div style={{ ...ui.muted, marginTop: 10 }}>
-            Сейчас выбран режим “Все задачи”. Для добавления выбери проект табом.
+            Сейчас выбран режим “Все задачи”. Для добавления выбери конкретный проект табом.
           </div>
         )}
       </section>
@@ -497,7 +510,7 @@ export default function HomePage() {
       {/* Tasks */}
       <section style={{ ...ui.card, marginTop: 12 }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 10 }}>
-          <div style={ui.h2}>Список</div>
+          <div style={{ fontSize: 14, opacity: 0.75, fontWeight: 800 }}>Список</div>
           <div style={ui.muted}>{loadingTasks ? "Загружаю…" : `${tasks.length} шт.`}</div>
         </div>
 
@@ -508,7 +521,7 @@ export default function HomePage() {
         ) : tasks.length === 0 ? (
           <div style={{ opacity: 0.7 }}>Пока пусто.</div>
         ) : (
-          <ul style={{ listStyle: "none", padding: 0, margin: 0, display: "grid", gap: 10 }}>
+          <ul style={{ listStyle: "none", padding: 0, margin: "10px 0 0", display: "grid", gap: 10 }}>
             {tasks.map((t) => (
               <li
                 key={t.id}
@@ -529,7 +542,7 @@ export default function HomePage() {
                   <div style={{ display: "grid", gap: 6, flex: 1 }}>
                     <div
                       style={{
-                        fontWeight: 800,
+                        fontWeight: 900,
                         lineHeight: 1.2,
                         textDecoration: t.done ? "line-through" : "none",
                         opacity: t.done ? 0.6 : 1,
@@ -615,9 +628,7 @@ export default function HomePage() {
               </button>
             </div>
 
-            <div style={{ ...ui.muted, marginTop: 10 }}>
-              Подсказка: короткие названия читаются лучше.
-            </div>
+            <div style={{ ...ui.muted, marginTop: 10 }}>Подсказка: короткие названия читаются лучше.</div>
           </div>
         </div>
       )}
