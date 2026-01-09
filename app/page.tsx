@@ -21,28 +21,37 @@ export default function HomePage() {
   const [title, setTitle] = useState("");
   const [dueDate, setDueDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [hint, setHint] = useState<string | null>(null);
-
+  
   async function authIfPossible() {
-    const initData = getInitDataSafe();
+  const initData = getInitDataSafe();
 
-    if (!initData) {
-      setHint("Открой это из Telegram как Web App (кнопкой у бота), тогда появится сохранение в облаке.");
-      setReady(true);
-      return;
-    }
+  if (!initData) {
+    setHint("Я открыт не внутри Telegram. Открой через кнопку Web App у бота.");
+    setReady(true);
+    return;
+  }
 
+  try {
     const r = await fetch("/api/auth", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
+      credentials: "include",
       body: JSON.stringify({ initData }),
     });
 
-    if (!r.ok) {
-      setHint("Не смог авторизоваться через Telegram. Проверь токен бота и .env.local.");
-    }
+    const j = await r.json().catch(() => ({} as any));
 
-    setReady(true);
+    if (!r.ok || !j.ok) {
+      setHint(`Auth не прошёл: ${j.reason || j.error || r.status}`);
+    } else {
+      setHint(null);
+    }
+  } catch (e: any) {
+    setHint(`Auth запрос упал: ${String(e?.message || e)}`);
   }
+
+  setReady(true);
+}
 
   async function loadToday() {
     const r = await fetch("/api/tasks?view=today");
@@ -109,9 +118,14 @@ export default function HomePage() {
             placeholder="Добавить задачу…"
             style={{ flex: 1, padding: 10, borderRadius: 10, border: "1px solid #ccc" }}
           />
-          <button onClick={addTask} style={{ padding: "10px 12px", borderRadius: 10 }}>
-            Добавить
-          </button>
+	<button
+ 		 type="button"
+ 		 disabled={!title.trim()}
+ 		 onClick={addTask}
+	 	 style={{ padding: "10px 12px", borderRadius: 10, cursor: "pointer", opacity: title.trim() ? 1 : 0.5 }}
+		>
+	  Добавить
+	</button>
         </div>
 
         <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
