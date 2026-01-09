@@ -241,7 +241,7 @@ bgFixed: {
       WebkitBackdropFilter: "blur(10px)",
       color: "#111",
       fontWeight: 500,
-      fontSize: 16,
+      fontSize: 13,
       cursor: "pointer",
       userSelect: "none",
       display: "grid",
