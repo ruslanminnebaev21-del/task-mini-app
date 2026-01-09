@@ -197,6 +197,35 @@ export default function HomePage() {
       if (j?.ok) await loadTasks();
     } catch {}
   }
+    async function openCreateProject() {
+    const name = window.prompt("Название проекта?");
+    if (!name || !name.trim()) return;
+
+    try {
+      const r = await fetch("/api/projects", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ name: name.trim() }),
+      });
+
+      const j = await r.json().catch(() => ({} as any));
+
+      if (!r.ok || !j.ok) {
+        setHint(j.error || j.reason || "Не смог создать проект");
+        return;
+      }
+
+      setHint(null);
+      // дальше позже: подгрузить проекты и выбрать созданный
+      // пока просто покажем что создали
+      if (j.project?.name) {
+        setHint(`Проект создан: ${j.project.name}`);
+      }
+    } catch (e: any) {
+      setHint(`Ошибка создания проекта: ${String(e?.message || e)}`);
+    }
+  }
 
   // ---------- EFFECTS ----------
 
@@ -231,19 +260,15 @@ export default function HomePage() {
         {projects.length === 0 ? (
 <button
   type="button"
-  onClick={async () => {
-    const name = window.prompt("Название проекта?");
-    if (!name || !name.trim()) return;
-
-    const r = await fetch("/api/projects", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      credentials: "include",
-      body: JSON.stringify({ name: name.trim() }),
-    });
-
-    const j = await r.json().catch(() => ({} as any));
-    alert(JSON.stringify(j));
+  onClick={(e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    openCreateProject();
+  }}
+  onTouchEnd={(e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    openCreateProject();
   }}
   style={{
     width: "100%",
@@ -252,10 +277,12 @@ export default function HomePage() {
     border: "1px solid #ddd",
     background: "#fff",
     cursor: "pointer",
+    WebkitTapHighlightColor: "transparent",
+    touchAction: "manipulation",
   }}
 >
   Создать проект
-</button>          
+</button>         
         ) : (
           <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
             <select
