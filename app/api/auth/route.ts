@@ -5,34 +5,33 @@ import { verifyTelegramInitData } from "@/lib/telegram";
 
 export async function POST(req: Request) {
   try {
-    const { initData } = await req.json();
+    const body = await req.json().catch(() => ({} as any));
+    const initData = body?.initData;
 
     const botToken = process.env.TELEGRAM_BOT_TOKEN;
     if (!botToken) {
       return NextResponse.json({ ok: false, reason: "NO_BOT_TOKEN_IN_ENV" }, { status: 500 });
     }
 
-    // Проверяем подпись Telegram
-    const ver = verifyTelegramInitData(initData, botToken);
-
-    if (!ver.ok || !ver.user || !ver.user.id) {
-      return NextResponse.json(
-        { ok: false, reason: "BAD_TELEGRAM_USER", details: ver },
-        { status: 401 }
-      );
+    const ver = verifyTelegramInitData(String(initData || ""), botToken);
+    if (!ver.ok) {
+      return NextResponse.json({ ok: false, reason: ver.reason }, { status: 401 });
     }
 
-    const tgUser = ver.user;
+    const tgId = Number(ver.user.id);
+    if (!Number.isFinite(tgId) || tgId <= 0) {
+      return NextResponse.json({ ok: false, reason: "BAD_TG_ID" }, { status: 401 });
+    }
 
-    // создаём/находим пользователя
     const { data: user, error } = await supabaseAdmin
       .from("users")
       .upsert(
         {
-          tg_id: tgUser.id,
-          telegram_id: tgUser.id,
-          username: tgUser.username || null,
-          first_name: tgUser.first_name || null,
+          // заполняем обе, раз у тебя обе NOT NULL
+          tg_id: tgId,
+          telegram_id: tgId,
+          username: ver.user.username || null,
+          first_name: ver.user.first_name || null,
         },
         { onConflict: "tg_id" }
       )
@@ -46,11 +45,7 @@ export async function POST(req: Request) {
       );
     }
 
-    const token = jwt.sign(
-      { uid: user.id },
-      process.env.APP_JWT_SECRET!,
-      { expiresIn: "30d" }
-    );
+    const token = jwt.sign({ uid: user.id }, process.env.APP_JWT_SECRET!, { expiresIn: "30d" });
 
     const res = NextResponse.json({ ok: true });
 

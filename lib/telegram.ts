@@ -1,30 +1,75 @@
 import crypto from "crypto";
 
-export function verifyTelegramInitData(initData: string, botToken: string) {
-  const params = new URLSearchParams(initData);
+type TgUser = {
+  id: number;
+  first_name?: string;
+  username?: string;
+};
+
+function sha256(data: string | Buffer) {
+  return crypto.createHash("sha256").update(data).digest();
+}
+
+function hmacSha256(key: Buffer, data: string) {
+  return crypto.createHmac("sha256", key).update(data).digest("hex");
+}
+
+export function verifyTelegramInitData(initData: string, botToken: string):
+  | { ok: true; user: TgUser; auth_date: string | null }
+  | { ok: false; reason: string } {
+  if (!initData || typeof initData !== "string") {
+    return { ok: false, reason: "EMPTY_INITDATA" };
+  }
+
+  let params: URLSearchParams;
+  try {
+    params = new URLSearchParams(initData);
+  } catch {
+    return { ok: false, reason: "BAD_INITDATA_FORMAT" };
+  }
+
   const hash = params.get("hash");
-  if (!hash) return { ok: false as const, reason: "no_hash" };
+  if (!hash) return { ok: false, reason: "NO_HASH" };
 
-  params.delete("hash");
+  // собираем data_check_string (все поля кроме hash)
+  const pairs: string[] = [];
+  for (const [k, v] of params.entries()) {
+    if (k === "hash") continue;
+    pairs.push(`${k}=${v}`);
+  }
+  pairs.sort();
+  const dataCheckString = pairs.join("\n");
 
-  const dataCheckString = Array.from(params.entries())
-    .sort(([a], [b]) => a.localeCompare(b))
-    .map(([k, v]) => `${k}=${v}`)
-    .join("\n");
+  // secret_key = SHA256(botToken)
+  const secretKey = sha256(botToken);
+  const calcHash = hmacSha256(secretKey, dataCheckString);
 
-  const secretKey = crypto.createHmac("sha256", "WebAppData").update(botToken).digest();
-  const computedHash = crypto.createHmac("sha256", secretKey).update(dataCheckString).digest("hex");
+  if (calcHash !== hash) {
+    return { ok: false, reason: "BAD_HASH" };
+  }
 
-  if (computedHash !== hash) return { ok: false as const, reason: "bad_hash" };
+  const userStr = params.get("user");
+  if (!userStr) return { ok: false, reason: "NO_USER_IN_INITDATA" };
 
-  const userRaw = params.get("user");
-  if (!userRaw) return { ok: false as const, reason: "no_user" };
+  let userObj: any;
+  try {
+    userObj = JSON.parse(userStr);
+  } catch {
+    return { ok: false, reason: "BAD_USER_JSON" };
+  }
 
-  const user = JSON.parse(userRaw) as {
-    id: number;
-    first_name?: string;
-    username?: string;
+  const idNum = Number(userObj?.id);
+  if (!Number.isFinite(idNum) || idNum <= 0) {
+    return { ok: false, reason: "NO_USER_ID" };
+  }
+
+  return {
+    ok: true,
+    user: {
+      id: idNum,
+      first_name: typeof userObj.first_name === "string" ? userObj.first_name : undefined,
+      username: typeof userObj.username === "string" ? userObj.username : undefined,
+    },
+    auth_date: params.get("auth_date"),
   };
-
-  return { ok: true as const, user, auth_date: params.get("auth_date") };
 }
