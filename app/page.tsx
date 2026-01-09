@@ -64,6 +64,7 @@ export default function HomePage() {
     const r = await fetch("/api/tasks", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
+      credentials: "include",
       body: JSON.stringify({ title: title.trim(), due_date: dueDate }),
     });
 
@@ -82,6 +83,7 @@ export default function HomePage() {
     const r = await fetch("/api/tasks", {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
+      credentials: "include",
       body: JSON.stringify({ id, done }),
     });
 
