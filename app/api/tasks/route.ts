@@ -3,8 +3,8 @@ import jwt from "jsonwebtoken";
 import { cookies } from "next/headers";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 
-function getUidFromSession(): number | null {
-  const c = cookies();
+async function getUidFromSession(): Promise<number | null> {
+  const c = await cookies();
   const token = c.get("session")?.value;
   if (!token) return null;
 
@@ -19,15 +19,17 @@ function getUidFromSession(): number | null {
 }
 
 export async function GET(req: Request) {
-  const uid = getUidFromSession();
-  if (!uid) {
-    return NextResponse.json({ ok: false, reason: "NO_SESSION" }, { status: 401 });
-  }
+  const uid = await getUidFromSession();
+  if (!uid) return NextResponse.json({ ok: false, reason: "NO_SESSION" }, { status: 401 });
 
   const url = new URL(req.url);
   const view = url.searchParams.get("view") || "today";
 
-  let q = supabaseAdmin.from("tasks").select("*").eq("user_id", uid).order("id", { ascending: false });
+  let q = supabaseAdmin
+    .from("tasks")
+    .select("*")
+    .eq("user_id", uid)
+    .order("id", { ascending: false });
 
   if (view === "today") {
     const today = new Date().toISOString().slice(0, 10);
@@ -44,18 +46,14 @@ export async function GET(req: Request) {
 }
 
 export async function POST(req: Request) {
-  const uid = getUidFromSession();
-  if (!uid) {
-    return NextResponse.json({ ok: false, reason: "NO_SESSION" }, { status: 401 });
-  }
+  const uid = await getUidFromSession();
+  if (!uid) return NextResponse.json({ ok: false, reason: "NO_SESSION" }, { status: 401 });
 
   const body = await req.json().catch(() => ({} as any));
   const title = String(body?.title || "").trim();
   const due_date = body?.due_date ? String(body.due_date) : null;
 
-  if (!title) {
-    return NextResponse.json({ ok: false, reason: "NO_TITLE" }, { status: 400 });
-  }
+  if (!title) return NextResponse.json({ ok: false, reason: "NO_TITLE" }, { status: 400 });
 
   const { data, error } = await supabaseAdmin
     .from("tasks")
@@ -71,10 +69,8 @@ export async function POST(req: Request) {
 }
 
 export async function PATCH(req: Request) {
-  const uid = getUidFromSession();
-  if (!uid) {
-    return NextResponse.json({ ok: false, reason: "NO_SESSION" }, { status: 401 });
-  }
+  const uid = await getUidFromSession();
+  if (!uid) return NextResponse.json({ ok: false, reason: "NO_SESSION" }, { status: 401 });
 
   const body = await req.json().catch(() => ({} as any));
   const id = Number(body?.id);
