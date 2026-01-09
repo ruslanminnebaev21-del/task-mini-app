@@ -12,51 +12,48 @@ export async function POST(req: Request) {
       return NextResponse.json({ ok: false, reason: "NO_BOT_TOKEN_IN_ENV" }, { status: 500 });
     }
 
-    // Проверяем, что Telegram принимает токен
-    const meRes = await fetch(`https://api.telegram.org/bot${botToken}/getMe`);
-    if (!meRes.ok) {
-      const txt = await meRes.text();
+    // Проверяем подпись Telegram
+    const ver = verifyTelegramInitData(initData, botToken);
+
+    if (!ver.ok || !ver.user || !ver.user.id) {
       return NextResponse.json(
-        { ok: false, reason: "BOT_TOKEN_REJECTED_BY_TELEGRAM", details: txt.slice(0, 200) },
+        { ok: false, reason: "BAD_TELEGRAM_USER", details: ver },
         { status: 401 }
       );
     }
 
-    // verifyTelegramInitData возвращает ok + user
-    const ver = verifyTelegramInitData(initData, botToken);
-    if (!ver.ok) {
-      return NextResponse.json({ ok: false, reason: ver.reason }, { status: 401 });
-    }
-
     const tgUser = ver.user;
 
-    // создаём/находим пользователя в нашей базе
-	const { data: user, error } = await supabaseAdmin
-	  .from("users")
-	  .upsert(
-	    {
-	      tg_id: tgUser.id,
-	      telegram_id: tgUser.id,
-	      username: tgUser.username || null,
-	      first_name: tgUser.first_name || null,
-	    },
-	    { onConflict: "tg_id" }
-	  )
-	  .select()
-	  .single();
+    // создаём/находим пользователя
+    const { data: user, error } = await supabaseAdmin
+      .from("users")
+      .upsert(
+        {
+          tg_id: tgUser.id,
+          telegram_id: tgUser.id,
+          username: tgUser.username || null,
+          first_name: tgUser.first_name || null,
+        },
+        { onConflict: "tg_id" }
+      )
+      .select()
+      .single();
 
     if (error) {
       return NextResponse.json(
-    	{ ok: false, reason: "DB_ERROR", error: error.message, details: error },
-    	{ status: 500 }
- 		 );
+        { ok: false, reason: "DB_ERROR", error: error.message },
+        { status: 500 }
+      );
     }
 
-    const token = jwt.sign({ uid: user.id }, process.env.APP_JWT_SECRET!, { expiresIn: "30d" });
+    const token = jwt.sign(
+      { uid: user.id },
+      process.env.APP_JWT_SECRET!,
+      { expiresIn: "30d" }
+    );
 
     const res = NextResponse.json({ ok: true });
 
-    // важно для Telegram webview
     res.cookies.set("session", token, {
       httpOnly: true,
       sameSite: "none",
