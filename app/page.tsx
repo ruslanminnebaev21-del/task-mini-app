@@ -96,37 +96,28 @@ export default function HomePage() {
       cursor: "pointer",
       userSelect: "none",
     } as React.CSSProperties,
-    btnIcon: {
-      width: 44,
-      height: 44,
-      borderRadius: 12,
-      border: "1px solid #d7d7d7",
-      background: "#fff",
-      color: "#111",
-      fontWeight: 900,
-      fontSize: 18,
-      cursor: "pointer",
-      userSelect: "none",
-      display: "grid",
-      placeItems: "center",
-      flex: "0 0 auto",
-    } as React.CSSProperties,
     muted: { fontSize: 12, opacity: 0.65 } as React.CSSProperties,
-    h1: { fontSize: 22, margin: 0 } as React.CSSProperties,
 
-    // tabs -> wrap instead of horizontal scroll
-    tabWrap: {
+    // header
+    headerRow: {
       display: "flex",
+      alignItems: "center",
+      justifyContent: "space-between",
       gap: 10,
-      alignItems: "flex-start",
-      marginTop: 12,
+    } as React.CSSProperties,
+    h1: {
+      fontSize: 22,
+      margin: 0,
+      lineHeight: "44px", // чтобы легко выровнять кнопку обновления по высоте
     } as React.CSSProperties,
 
-    tabGrid: {
+    // tabs
+    tabWrap: {
       display: "flex",
       flexWrap: "wrap",
       gap: 10,
-      flex: "1 1 auto",
+      alignItems: "center",
+      marginTop: 12,
     } as React.CSSProperties,
 
     tabBadge: {
@@ -142,6 +133,7 @@ export default function HomePage() {
       cursor: "pointer",
       userSelect: "none",
       whiteSpace: "nowrap",
+      height: 32,
     } as React.CSSProperties,
 
     dot: {
@@ -149,6 +141,40 @@ export default function HomePage() {
       height: 8,
       borderRadius: 999,
       background: "#bdbdbd",
+      flex: "0 0 auto",
+    } as React.CSSProperties,
+
+    // + button: круглая, размер как таб
+    tabPlus: {
+      width: 32,
+      height: 32,
+      borderRadius: 999,
+      border: "1px solid #e5e5e5",
+      background: "#fff",
+      color: "#111",
+      fontWeight: 900,
+      fontSize: 18,
+      cursor: "pointer",
+      userSelect: "none",
+      display: "grid",
+      placeItems: "center",
+      flex: "0 0 auto",
+    } as React.CSSProperties,
+
+    // refresh: круглая, высота как заголовок (44)
+    refresh: {
+      width: 44,
+      height: 44,
+      borderRadius: 999,
+      border: "1px solid #d7d7d7",
+      background: "#fff",
+      color: "#111",
+      fontWeight: 900,
+      fontSize: 18,
+      cursor: "pointer",
+      userSelect: "none",
+      display: "grid",
+      placeItems: "center",
       flex: "0 0 auto",
     } as React.CSSProperties,
   };
@@ -348,95 +374,80 @@ export default function HomePage() {
   return (
     <main style={ui.page}>
       {/* Header */}
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 10 }}>
-        <div style={{ flex: 1 }}>
-          <h1 style={ui.h1}>Задачи</h1>
-
-          {/* Tabs under header, wrap into lines */}
-          <div style={ui.tabWrap}>
-            <div style={ui.tabGrid}>
-              {/* All tasks */}
-              <button
-                type="button"
-                onClick={() => setActiveProjectId(null)}
-                style={{
-                  ...ui.tabBadge,
-                  background: isAllTasks ? "#111" : "#fff",
-                  color: isAllTasks ? "#fff" : "#111",
-                  borderColor: isAllTasks ? "#111" : "#e5e5e5",
-                }}
-              >
-                <span
-                  style={{
-                    ...ui.dot,
-                    background: isAllTasks ? "#22c55e" : "#bdbdbd",
-                  }}
-                />
-                Все задачи
-              </button>
-
-              {projects.map((p) => {
-                const isActive = activeProjectId === p.id;
-                return (
-                  <button
-                    key={p.id}
-                    type="button"
-                    onClick={() => setActiveProjectId(p.id)}
-                    style={{
-                      ...ui.tabBadge,
-                      background: isActive ? "#111" : "#fff",
-                      color: isActive ? "#fff" : "#111",
-                      borderColor: isActive ? "#111" : "#e5e5e5",
-                    }}
-                    title={p.name}
-                  >
-                    <span
-                      style={{
-                        ...ui.dot,
-                        background: isActive ? "#22c55e" : "#bdbdbd",
-                      }}
-                    />
-                    {p.name}
-                  </button>
-                );
-              })}
-            </div>
-
-            <button
-              type="button"
-              onClick={openCreateProject}
-              disabled={creatingProject || loadingProjects}
-              style={{
-                ...ui.btnIcon,
-                opacity: creatingProject || loadingProjects ? 0.6 : 1,
-                cursor: creatingProject || loadingProjects ? "not-allowed" : "pointer",
-              }}
-              title="Новый проект"
-            >
-              +
-            </button>
-          </div>
-
-          {/* убрали бейдж активного проекта полностью */}
-          {projects.length === 0 && (
-            <div style={{ ...ui.muted, marginTop: 10 }}>Проектов пока нет, нажми + и создай первый.</div>
-          )}
-        </div>
+      <div style={ui.headerRow}>
+        <h1 style={ui.h1}>Задачи</h1>
 
         <button
           type="button"
           onClick={() => loadTasks()}
           disabled={loadingTasks}
           style={{
-            ...ui.btnGhost,
+            ...ui.refresh,
             opacity: loadingTasks ? 0.6 : 1,
             cursor: loadingTasks ? "not-allowed" : "pointer",
-            minWidth: 56,
           }}
           title="Обновить"
         >
           ↻
         </button>
+      </div>
+
+      {/* Tabs at top */}
+      <div style={ui.tabWrap}>
+        {/* + before "Все задачи" */}
+        <button
+          type="button"
+          onClick={openCreateProject}
+          disabled={creatingProject || loadingProjects}
+          style={{
+            ...ui.tabPlus,
+            opacity: creatingProject || loadingProjects ? 0.6 : 1,
+            cursor: creatingProject || loadingProjects ? "not-allowed" : "pointer",
+          }}
+          title="Новый проект"
+        >
+          +
+        </button>
+
+        {/* All tasks */}
+        <button
+          type="button"
+          onClick={() => setActiveProjectId(null)}
+          style={{
+            ...ui.tabBadge,
+            background: isAllTasks ? "#111" : "#fff",
+            color: isAllTasks ? "#fff" : "#111",
+            borderColor: isAllTasks ? "#111" : "#e5e5e5",
+          }}
+        >
+          <span style={{ ...ui.dot, background: isAllTasks ? "#22c55e" : "#bdbdbd" }} />
+          Все задачи
+        </button>
+
+        {projects.map((p) => {
+          const isActive = activeProjectId === p.id;
+          return (
+            <button
+              key={p.id}
+              type="button"
+              onClick={() => setActiveProjectId(p.id)}
+              style={{
+                ...ui.tabBadge,
+                background: isActive ? "#111" : "#fff",
+                color: isActive ? "#fff" : "#111",
+                borderColor: isActive ? "#111" : "#e5e5e5",
+              }}
+              title={p.name}
+            >
+              <span style={{ ...ui.dot, background: isActive ? "#22c55e" : "#bdbdbd" }} />
+              {p.name}
+            </button>
+          );
+        })}
+
+        {projects.length === 0 && (
+          <div style={{ ...ui.muted }}>Проектов пока нет, нажми + и создай первый.</div>
+        )}
       </div>
 
       {hint && (
