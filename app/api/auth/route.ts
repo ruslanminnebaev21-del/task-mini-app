@@ -6,19 +6,19 @@ import { verifyTelegramInitData } from "@/lib/telegram";
 export async function POST(req: Request) {
   try {
     const body = await req.json().catch(() => ({} as any));
-    const initData = body?.initData;
+    const initData = String(body?.initData || "");
 
     const botToken = process.env.TELEGRAM_BOT_TOKEN;
     if (!botToken) {
       return NextResponse.json({ ok: false, reason: "NO_BOT_TOKEN_IN_ENV" }, { status: 500 });
     }
 
-    const ver = verifyTelegramInitData(String(initData || ""), botToken);
+    const ver = verifyTelegramInitData(initData, botToken);
     if (!ver.ok) {
       return NextResponse.json({ ok: false, reason: ver.reason }, { status: 401 });
     }
 
-    const tgId = Number(ver.user.id);
+    const tgId = Number(ver.user?.id);
     if (!Number.isFinite(tgId) || tgId <= 0) {
       return NextResponse.json({ ok: false, reason: "BAD_TG_ID" }, { status: 401 });
     }
@@ -27,7 +27,6 @@ export async function POST(req: Request) {
       .from("users")
       .upsert(
         {
-          // заполняем обе, раз у тебя обе NOT NULL
           tg_id: tgId,
           telegram_id: tgId,
           username: ver.user.username || null,
@@ -45,7 +44,12 @@ export async function POST(req: Request) {
       );
     }
 
-    const token = jwt.sign({ uid: user.id }, process.env.APP_JWT_SECRET!, { expiresIn: "30d" });
+    const secret = process.env.APP_JWT_SECRET;
+    if (!secret) {
+      return NextResponse.json({ ok: false, reason: "NO_APP_JWT_SECRET" }, { status: 500 });
+    }
+
+    const token = jwt.sign({ uid: user.id }, secret, { expiresIn: "30d" });
 
     const res = NextResponse.json({ ok: true });
 
