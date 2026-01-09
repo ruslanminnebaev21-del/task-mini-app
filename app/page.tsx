@@ -22,7 +22,6 @@ function getTelegramWebApp() {
 }
 
 function fmtDate(d: string) {
-  // d: YYYY-MM-DD
   const [y, m, day] = d.split("-").map((x) => Number(x));
   if (!y || !m || !day) return d;
   return `${day.toString().padStart(2, "0")}.${m.toString().padStart(2, "0")}.${y}`;
@@ -34,7 +33,7 @@ export default function HomePage() {
 
   // projects
   const [projects, setProjects] = useState<Project[]>([]);
-  const [activeProjectId, setActiveProjectId] = useState<number | null>(null);
+  const [activeProjectId, setActiveProjectId] = useState<number | null>(null); // null = "Все задачи"
   const [loadingProjects, setLoadingProjects] = useState(false);
   const [creatingProject, setCreatingProject] = useState(false);
   const [showCreateProject, setShowCreateProject] = useState(false);
@@ -51,7 +50,8 @@ export default function HomePage() {
     [projects, activeProjectId]
   );
 
-  const canAddTask = Boolean(activeProjectId && title.trim());
+  const isAllTasks = activeProjectId === null;
+  const canAddTask = Boolean(!isAllTasks && activeProjectId && title.trim());
 
   const ui = {
     page: {
@@ -75,15 +75,6 @@ export default function HomePage() {
       border: "1px solid #d7d7d7",
       outline: "none",
       fontSize: 16,
-    } as React.CSSProperties,
-    select: {
-      width: "100%",
-      padding: "12px 12px",
-      borderRadius: 12,
-      border: "1px solid #d7d7d7",
-      outline: "none",
-      fontSize: 16,
-      background: "#fff",
     } as React.CSSProperties,
     btn: {
       padding: "12px 14px",
@@ -132,6 +123,27 @@ export default function HomePage() {
       background: "#fafafa",
       fontSize: 12,
       opacity: 0.9,
+    } as React.CSSProperties,
+
+    tabRow: {
+      display: "flex",
+      gap: 10,
+      overflowX: "auto",
+      paddingBottom: 6,
+      WebkitOverflowScrolling: "touch",
+    } as React.CSSProperties,
+    tab: {
+      display: "inline-flex",
+      alignItems: "center",
+      gap: 8,
+      padding: "10px 12px",
+      borderRadius: 999,
+      border: "1px solid #e5e5e5",
+      background: "#fff",
+      whiteSpace: "nowrap",
+      fontWeight: 800,
+      cursor: "pointer",
+      userSelect: "none",
     } as React.CSSProperties,
   };
 
@@ -188,11 +200,19 @@ export default function HomePage() {
       const list: Project[] = j.projects || [];
       setProjects(list);
 
-      if (list.length > 0) {
-        setActiveProjectId((prev) => (prev ? prev : list[0].id));
-      } else {
+      // если проектов нет, логично сидеть на "Все задачи"
+      if (list.length === 0) {
         setActiveProjectId(null);
+        return;
       }
+
+      // если активного нет (или это "все задачи"), оставим как есть
+      // если активный проект удалили, переключим на первый
+      setActiveProjectId((prev) => {
+        if (prev === null) return null;
+        const exists = list.some((p) => p.id === prev);
+        return exists ? prev : list[0].id;
+      });
     } catch (e: any) {
       setHint(`Не смог загрузить проекты: ${String(e?.message || e)}`);
     } finally {
@@ -264,8 +284,8 @@ export default function HomePage() {
   async function addTask() {
     if (!title.trim()) return;
 
-    if (!activeProjectId) {
-      setHint("Сначала создай проект.");
+    if (isAllTasks || !activeProjectId) {
+      setHint("Выбери проект, чтобы добавить задачу.");
       return;
     }
 
@@ -328,7 +348,9 @@ export default function HomePage() {
         <div>
           <h1 style={ui.h1}>Задачи</h1>
           <div style={ui.muted}>
-            {activeProject ? (
+            {isAllTasks ? (
+              <span style={ui.badge}>Все задачи</span>
+            ) : activeProject ? (
               <span style={ui.badge}>
                 <span style={{ width: 6, height: 6, borderRadius: 999, background: "#111" }} />
                 {activeProject.name}
@@ -342,11 +364,11 @@ export default function HomePage() {
         <button
           type="button"
           onClick={() => loadTasks()}
-          disabled={loadingTasks || !activeProjectId}
+          disabled={loadingTasks}
           style={{
             ...ui.btnGhost,
-            opacity: loadingTasks || !activeProjectId ? 0.6 : 1,
-            cursor: loadingTasks || !activeProjectId ? "not-allowed" : "pointer",
+            opacity: loadingTasks ? 0.6 : 1,
+            cursor: loadingTasks ? "not-allowed" : "pointer",
           }}
           title="Обновить"
         >
@@ -361,53 +383,63 @@ export default function HomePage() {
         </div>
       )}
 
-      {/* Projects */}
+      {/* Tabs */}
       <section style={{ ...ui.card, marginTop: 12 }}>
-        <div style={ui.h2}>Проект</div>
-
-        {projects.length === 0 ? (
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 10 }}>
+          <div style={ui.h2}>Проекты</div>
           <button
             type="button"
             onClick={openCreateProject}
             disabled={creatingProject || loadingProjects}
             style={{
-              ...ui.btn,
-              width: "100%",
+              ...ui.btnIcon,
               opacity: creatingProject || loadingProjects ? 0.6 : 1,
               cursor: creatingProject || loadingProjects ? "not-allowed" : "pointer",
             }}
+            title="Новый проект"
           >
-            {creatingProject ? "Создаю..." : "Создать проект"}
+            +
           </button>
-        ) : (
-          <div style={ui.row}>
-            <select
-              value={activeProjectId ?? ""}
-              onChange={(e) => setActiveProjectId(e.target.value ? Number(e.target.value) : null)}
-              style={ui.select}
-            >
-              {projects.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.name}
-                </option>
-              ))}
-            </select>
+        </div>
 
-            <button
-              type="button"
-              onClick={openCreateProject}
-              disabled={creatingProject}
-              style={{
-                ...ui.btnIcon,
-                opacity: creatingProject ? 0.6 : 1,
-                cursor: creatingProject ? "not-allowed" : "pointer",
-              }}
-              title="Новый проект"
-            >
-              +
-            </button>
-          </div>
-        )}
+        <div style={ui.tabRow}>
+          <button
+            type="button"
+            onClick={() => setActiveProjectId(null)}
+            style={{
+              ...ui.tab,
+              background: isAllTasks ? "#111" : "#fff",
+              color: isAllTasks ? "#fff" : "#111",
+              borderColor: isAllTasks ? "#111" : "#e5e5e5",
+            }}
+          >
+            Все задачи
+          </button>
+
+          {projects.map((p) => {
+            const isActive = activeProjectId === p.id;
+            return (
+              <button
+                key={p.id}
+                type="button"
+                onClick={() => setActiveProjectId(p.id)}
+                style={{
+                  ...ui.tab,
+                  background: isActive ? "#111" : "#fff",
+                  color: isActive ? "#fff" : "#111",
+                  borderColor: isActive ? "#111" : "#e5e5e5",
+                }}
+                title={p.name}
+              >
+                {p.name}
+              </button>
+            );
+          })}
+
+          {projects.length === 0 && (
+            <div style={{ ...ui.muted, padding: "10px 0" }}>Пока проектов нет. Жми плюсик.</div>
+          )}
+        </div>
       </section>
 
       {/* Add task */}
@@ -418,11 +450,11 @@ export default function HomePage() {
           <input
             value={title}
             onChange={(e) => setTitle(e.target.value)}
-            placeholder={activeProjectId ? "Например: купить билеты, оплатить аренду…" : "Сначала создай проект…"}
-            disabled={!activeProjectId}
+            placeholder={isAllTasks ? "Выбери проект сверху…" : "Например: купить билеты, оплатить аренду…"}
+            disabled={isAllTasks || !activeProjectId}
             style={{
               ...ui.input,
-              opacity: activeProjectId ? 1 : 0.6,
+              opacity: isAllTasks || !activeProjectId ? 0.6 : 1,
             }}
           />
 
@@ -431,11 +463,11 @@ export default function HomePage() {
               type="date"
               value={dueDate}
               onChange={(e) => setDueDate(e.target.value)}
-              disabled={!activeProjectId}
+              disabled={isAllTasks || !activeProjectId}
               style={{
                 ...ui.input,
                 padding: "10px 12px",
-                opacity: activeProjectId ? 1 : 0.6,
+                opacity: isAllTasks || !activeProjectId ? 0.6 : 1,
               }}
             />
 
@@ -454,15 +486,19 @@ export default function HomePage() {
             </button>
           </div>
         </div>
+
+        {isAllTasks && (
+          <div style={{ ...ui.muted, marginTop: 10 }}>
+            Сейчас выбран режим “Все задачи”. Для добавления выбери проект табом.
+          </div>
+        )}
       </section>
 
       {/* Tasks */}
       <section style={{ ...ui.card, marginTop: 12 }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 10 }}>
           <div style={ui.h2}>Список</div>
-          <div style={ui.muted}>
-            {loadingTasks ? "Загружаю…" : `${tasks.length} шт.`}
-          </div>
+          <div style={ui.muted}>{loadingTasks ? "Загружаю…" : `${tasks.length} шт.`}</div>
         </div>
 
         {!ready ? (
@@ -493,7 +529,7 @@ export default function HomePage() {
                   <div style={{ display: "grid", gap: 6, flex: 1 }}>
                     <div
                       style={{
-                        fontWeight: 700,
+                        fontWeight: 800,
                         lineHeight: 1.2,
                         textDecoration: t.done ? "line-through" : "none",
                         opacity: t.done ? 0.6 : 1,
