@@ -1,12 +1,19 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+
+type Project = {
+  id: number;
+  name: string;
+  created_at?: string;
+};
 
 type Task = {
   id: number;
   title: string;
   due_date: string | null;
   done: boolean;
+  project_id?: number | null;
 };
 
 function getTelegramWebApp() {
@@ -16,13 +23,22 @@ function getTelegramWebApp() {
 
 export default function HomePage() {
   const [ready, setReady] = useState(false);
+
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [activeProjectId, setActiveProjectId] = useState<number | null>(null);
+
   const [tasks, setTasks] = useState<Task[]>([]);
   const [title, setTitle] = useState("");
   const [dueDate, setDueDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [hint, setHint] = useState<string | null>(null);
 
-  // debug: видит ли Telegram WebApp и есть ли initData
+  // debug
   const [tgInfo, setTgInfo] = useState({ hasTg: false, initLen: 0 });
+
+  const activeProject = useMemo(() => {
+    if (!activeProjectId) return null;
+    return projects.find((p) => p.id === activeProjectId) || null;
+  }, [projects, activeProjectId]);
 
   async function authIfPossible() {
     const tg = getTelegramWebApp();
@@ -30,7 +46,6 @@ export default function HomePage() {
 
     setTgInfo({ hasTg: !!tg, initLen: initData.length });
 
-    // чуть “будим” Telegram
     if (tg) {
       try {
         tg.ready();
@@ -66,9 +81,41 @@ export default function HomePage() {
     setReady(true);
   }
 
-  async function loadToday() {
+  async function loadProjects() {
     try {
-      const r = await fetch("/api/tasks?view=today", { credentials: "include" });
+      const r = await fetch("/api/projects", { credentials: "include" });
+      const j = await r.json().catch(() => ({} as any));
+
+      if (!j.ok) {
+        if (j.reason === "NO_SESSION") return;
+        setHint(j.error || j.reason || "Не смог загрузить проекты");
+        return;
+      }
+
+      const list: Project[] = j.projects || [];
+      setProjects(list);
+
+      // если проект не выбран, выберем первый
+      if (!activeProjectId && list.length > 0) {
+        setActiveProjectId(list[0].id);
+      }
+
+      // если выбранный пропал, сбросим
+      if (activeProjectId && !list.some((p) => p.id === activeProjectId)) {
+        setActiveProjectId(list[0]?.id ?? null);
+      }
+    } catch (e: any) {
+      setHint(`Ошибка загрузки проектов: ${String(e?.message || e)}`);
+    }
+  }
+
+  async function loadTasks() {
+    try {
+      const qs = new URLSearchParams();
+      qs.set("view", "today");
+      if (activeProjectId) qs.set("projectId", String(activeProjectId));
+
+      const r = await fetch(`/api/tasks?${qs.toString()}`, { credentials: "include" });
       const j = await r.json().catch(() => ({} as any));
 
       if (j.ok) {
@@ -76,21 +123,56 @@ export default function HomePage() {
         return;
       }
 
-      if (j.reason === "NO_SESSION") {
-        // вне Telegram это ок, не спамим
-        return;
-      }
+      if (j.reason === "NO_SESSION") return;
 
       setHint(j.error || j.reason || "Не смог загрузить задачи");
     } catch (e: any) {
-      setHint(`Ошибка загрузки: ${String(e?.message || e)}`);
+      setHint(`Ошибка загрузки задач: ${String(e?.message || e)}`);
     }
   }
 
   useEffect(() => {
-    authIfPossible().then(() => loadToday());
+    authIfPossible().then(async () => {
+      await loadProjects();
+      await loadTasks();
+    });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // при смене проекта перезагружаем задачи
+  useEffect(() => {
+    if (!ready) return;
+    loadTasks();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeProjectId, ready]);
+
+  async function createProject() {
+    const name = window.prompt("Название проекта");
+    if (!name || !name.trim()) return;
+
+    const r = await fetch("/api/projects", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ name: name.trim() }),
+    });
+
+    const j = await r.json().catch(() => ({} as any));
+
+    if (j.ok) {
+      await loadProjects();
+      // выберем созданный
+      if (j.project?.id) setActiveProjectId(j.project.id);
+      return;
+    }
+
+    if (j.reason === "NO_SESSION") {
+      setHint("Сессии нет. Открой мини-апп кнопкой у бота (Web App), тогда появится сохранение.");
+      return;
+    }
+
+    setHint(j.error || j.reason || "Ошибка при создании проекта");
+  }
 
   async function addTask() {
     if (!title.trim()) return;
@@ -99,14 +181,18 @@ export default function HomePage() {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       credentials: "include",
-      body: JSON.stringify({ title: title.trim(), due_date: dueDate }),
+      body: JSON.stringify({
+        title: title.trim(),
+        due_date: dueDate,
+        projectId: activeProjectId,
+      }),
     });
 
     const j = await r.json().catch(() => ({} as any));
 
     if (j.ok) {
       setTitle("");
-      await loadToday();
+      await loadTasks();
       return;
     }
 
@@ -127,7 +213,7 @@ export default function HomePage() {
     });
 
     const j = await r.json().catch(() => ({} as any));
-    if (j.ok) await loadToday();
+    if (j.ok) await loadTasks();
   }
 
   return (
@@ -144,23 +230,67 @@ export default function HomePage() {
         debug: hasTg={String(tgInfo.hasTg)} initLen={tgInfo.initLen}
       </div>
 
+      {/* проекты */}
+      <section style={{ padding: 12, border: "1px solid #ddd", borderRadius: 12, marginBottom: 12 }}>
+        {projects.length === 0 ? (
+          <button
+            type="button"
+            onClick={createProject}
+            style={{ padding: "10px 12px", borderRadius: 10, cursor: "pointer" }}
+          >
+            Создать проект
+          </button>
+        ) : (
+          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+            <select
+              value={activeProjectId ?? ""}
+              onChange={(e) => setActiveProjectId(e.target.value ? Number(e.target.value) : null)}
+              style={{ flex: 1, padding: 10, borderRadius: 10, border: "1px solid #ccc" }}
+            >
+              {projects.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.name}
+                </option>
+              ))}
+            </select>
+
+            <button
+              type="button"
+              onClick={createProject}
+              title="Новый проект"
+              style={{ width: 42, height: 42, borderRadius: 10, cursor: "pointer" }}
+            >
+              +
+            </button>
+          </div>
+        )}
+
+        {activeProject && (
+          <div style={{ marginTop: 8, fontSize: 13, opacity: 0.75 }}>
+            Текущий проект: <b>{activeProject.name}</b>
+          </div>
+        )}
+      </section>
+
+      {/* добавление задачи */}
       <section style={{ padding: 12, border: "1px solid #ddd", borderRadius: 12, marginBottom: 12 }}>
         <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
           <input
             value={title}
             onChange={(e) => setTitle(e.target.value)}
-            placeholder="Добавить задачу…"
+            placeholder={projects.length === 0 ? "Сначала создай проект…" : "Добавить задачу…"}
             style={{ flex: 1, padding: 10, borderRadius: 10, border: "1px solid #ccc" }}
+            disabled={projects.length === 0}
           />
           <button
             type="button"
-            disabled={!title.trim()}
+            disabled={!title.trim() || projects.length === 0}
             onClick={addTask}
             style={{
               padding: "10px 12px",
               borderRadius: 10,
               cursor: "pointer",
-              opacity: title.trim() ? 1 : 0.5,
+              opacity: title.trim() && projects.length > 0 ? 1 : 0.5,
             }}
           >
             Добавить
@@ -174,6 +304,7 @@ export default function HomePage() {
             value={dueDate}
             onChange={(e) => setDueDate(e.target.value)}
             style={{ padding: 8, borderRadius: 10, border: "1px solid #ccc" }}
+            disabled={projects.length === 0}
           />
         </div>
       </section>
@@ -181,7 +312,9 @@ export default function HomePage() {
       {!ready ? (
         <div style={{ opacity: 0.7 }}>Загружаю…</div>
       ) : tasks.length === 0 ? (
-        <div style={{ opacity: 0.7 }}>На сегодня задач нет.</div>
+        <div style={{ opacity: 0.7 }}>
+          {projects.length === 0 ? "Создай проект, чтобы добавлять задачи." : "Задач нет."}
+        </div>
       ) : (
         <ul style={{ listStyle: "none", padding: 0, margin: 0, display: "grid", gap: 8 }}>
           {tasks.map((t) => (
@@ -194,6 +327,9 @@ export default function HomePage() {
                 />
                 <span style={{ textDecoration: t.done ? "line-through" : "none" }}>{t.title}</span>
               </label>
+              {t.due_date && (
+                <div style={{ fontSize: 12, opacity: 0.7, marginTop: 6 }}>до {t.due_date}</div>
+              )}
             </li>
           ))}
         </ul>
