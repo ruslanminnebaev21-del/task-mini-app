@@ -34,6 +34,8 @@ export default function HomePage() {
   const [activeProjectId, setActiveProjectId] = useState<number | null>(null);
   const [loadingProjects, setLoadingProjects] = useState(false);
   const [creatingProject, setCreatingProject] = useState(false);
+  const [showCreateProject, setShowCreateProject] = useState(false);
+  const [newProjectName, setNewProjectName] = useState("");
 
   // tasks
   const [tasks, setTasks] = useState<Task[]>([]);
@@ -140,39 +142,46 @@ export default function HomePage() {
     }
   }
 
-  async function openCreateProject() {
-    if (creatingProject) return;
+function openCreateProject() {
+  setHint(null);
+  setNewProjectName("");
+  setShowCreateProject(true);
+}
+async function createProject() {
+  const name = newProjectName.trim();
+  if (!name) return;
 
-    const name = prompt("Название проекта?");
-    if (!name || !name.trim()) return;
+  if (creatingProject) return;
 
-    setCreatingProject(true);
-    try {
-      const r = await fetch("/api/projects", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({ name: name.trim() }),
-      });
+  setCreatingProject(true);
+  try {
+    const r = await fetch("/api/projects", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ name }),
+    });
 
-      const j = await r.json().catch(() => ({} as any));
+    const j = await r.json().catch(() => ({} as any));
 
-      if (!r.ok || !j.ok) {
-        setHint(`Ошибка создания проекта: ${j.reason || r.status}${j.error ? " | " + j.error : ""}`);
-        return;
-      }
-
-      setHint(null);
-
-      // обновим список и выберем новый проект
-      await loadProjects();
-      if (j.project?.id) setActiveProjectId(Number(j.project.id));
-    } catch (e: any) {
-      setHint(`Ошибка создания проекта: ${String(e?.message || e)}`);
-    } finally {
-      setCreatingProject(false);
+    if (!r.ok || !j.ok) {
+      setHint(`Ошибка создания проекта: ${j.reason || r.status}${j.error ? " | " + j.error : ""}`);
+      return;
     }
+
+    setHint(null);
+
+    // обновим список и выберем новый проект
+    await loadProjects();
+    if (j.project?.id) setActiveProjectId(Number(j.project.id));
+
+    setShowCreateProject(false);
+  } catch (e: any) {
+    setHint(`Ошибка создания проекта: ${String(e?.message || e)}`);
+  } finally {
+    setCreatingProject(false);
   }
+}
 
   async function addTask() {
     if (!title.trim()) return;
@@ -383,6 +392,75 @@ export default function HomePage() {
           ))}
         </ul>
       )}
+{showCreateProject && (
+  <div
+    style={{
+      position: "fixed",
+      inset: 0,
+      background: "rgba(0,0,0,0.35)",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      padding: 16,
+      zIndex: 9999,
+    }}
+    onClick={() => !creatingProject && setShowCreateProject(false)}
+  >
+    <div
+      style={{
+        width: "100%",
+        maxWidth: 520,
+        background: "#fff",
+        borderRadius: 16,
+        border: "1px solid #ddd",
+        padding: 14,
+      }}
+      onClick={(e) => e.stopPropagation()}
+    >
+      <div style={{ fontSize: 16, fontWeight: 700, marginBottom: 10 }}>Новый проект</div>
+
+      <input
+        value={newProjectName}
+        onChange={(e) => setNewProjectName(e.target.value)}
+        placeholder="Например: Choup, ремонт, переезд…"
+        style={{ width: "100%", padding: 10, borderRadius: 10, border: "1px solid #ccc" }}
+        autoFocus
+      />
+
+      <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
+        <button
+          type="button"
+          onClick={() => !creatingProject && setShowCreateProject(false)}
+          style={{
+            flex: 1,
+            padding: 10,
+            borderRadius: 10,
+            cursor: creatingProject ? "not-allowed" : "pointer",
+            opacity: creatingProject ? 0.6 : 1,
+          }}
+        >
+          Отмена
+        </button>
+
+        <button
+          type="button"
+          onClick={createProject}
+          disabled={!newProjectName.trim() || creatingProject}
+          style={{
+            flex: 1,
+            padding: 10,
+            borderRadius: 10,
+            cursor: !newProjectName.trim() || creatingProject ? "not-allowed" : "pointer",
+            opacity: !newProjectName.trim() || creatingProject ? 0.6 : 1,
+            fontWeight: 700,
+          }}
+        >
+          {creatingProject ? "Создаю..." : "Создать"}
+        </button>
+      </div>
+    </div>
+  </div>
+)}
     </main>
   );
 }
