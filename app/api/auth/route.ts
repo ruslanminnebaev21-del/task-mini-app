@@ -45,7 +45,10 @@ export async function POST(req: Request) {
       .single();
 
     if (error) {
-      return NextResponse.json({ ok: false, reason: "DB_ERROR", error: error.message }, { status: 500 });
+      return NextResponse.json(
+    	{ ok: false, reason: "DB_ERROR", error: error.message, details: error },
+    	{ status: 500 }
+ 		 );
     }
 
     const token = jwt.sign({ uid: user.id }, process.env.APP_JWT_SECRET!, { expiresIn: "30d" });

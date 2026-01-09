@@ -55,7 +55,7 @@ export default function HomePage() {
       const j = await r.json().catch(() => ({} as any));
 
       if (!r.ok || !j.ok) {
-        setHint(`Auth не прошёл: ${j.reason || j.error || r.status}`);
+        setHint(`Auth не прошёл: ${j.reason || r.status}${j.error ? " | " + j.error : ""}`);
       } else {
         setHint(null);
       }
