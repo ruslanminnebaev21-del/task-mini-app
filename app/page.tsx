@@ -13,6 +13,8 @@ function getInitDataSafe() {
   // @ts-ignore
   const tg = typeof window !== "undefined" ? window.Telegram?.WebApp : null;
   return tg?.initData || "";
+	console.log("INIT DATA:", data);
+  	return data;
 }
 
 export default function HomePage() {
