@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 type Task = {
   id: number;
@@ -29,13 +29,7 @@ function fmtDate(d: string) {
 
 export default function HomePage() {
   const [ready, setReady] = useState(false);
-
-  // hint = только ошибки (карточкой)
   const [hint, setHint] = useState<string | null>(null);
-
-  // toast = только успехи (снизу, автоскрытие)
-  const [toast, setToast] = useState<string | null>(null);
-  const toastTimer = useRef<number | null>(null);
 
   // projects
   const [projects, setProjects] = useState<Project[]>([]);
@@ -51,10 +45,6 @@ export default function HomePage() {
   const [dueDate, setDueDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [loadingTasks, setLoadingTasks] = useState(false);
 
-  // tab pulse animation helper
-  const [tabPulseKey, setTabPulseKey] = useState<string | null>(null);
-  const tabPulseTimer = useRef<number | null>(null);
-
   const activeProject = useMemo(
     () => projects.find((p) => p.id === activeProjectId) || null,
     [projects, activeProjectId]
@@ -63,94 +53,136 @@ export default function HomePage() {
   const isAllTasks = activeProjectId === null;
   const canAddTask = Boolean(!isAllTasks && activeProjectId && title.trim());
 
-  function showToast(msg: string) {
-    setToast(msg);
-    if (toastTimer.current) window.clearTimeout(toastTimer.current);
-    toastTimer.current = window.setTimeout(() => setToast(null), 1800);
-  }
-
-  function pulseTab(key: string) {
-    setTabPulseKey(key);
-    if (tabPulseTimer.current) window.clearTimeout(tabPulseTimer.current);
-    tabPulseTimer.current = window.setTimeout(() => setTabPulseKey(null), 220);
-  }
-
   const ui = {
-    page: {
+    // page + background
+    shell: {
+      minHeight: "100vh",
+      background:
+        "radial-gradient(900px 420px at 70% 20%, rgba(77, 165, 255, 0.22), transparent 60%), radial-gradient(750px 380px at 15% 35%, rgba(0,0,0,0.06), transparent 60%), linear-gradient(180deg, #f7f6f2, #f3f1ed)",
+      position: "relative",
+      overflow: "hidden",
+    } as React.CSSProperties,
+
+    container: {
       maxWidth: 720,
       margin: "0 auto",
       padding: 16,
-      fontFamily: "system-ui",
+      fontFamily:
+        "ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, Apple Color Emoji, Segoe UI Emoji",
       color: "#111",
+      position: "relative",
+      zIndex: 2,
     } as React.CSSProperties,
 
-    // чуть “стекла” + аккуратная тень
+    // decorative orbs (like the picture vibe)
+    orb: {
+      position: "absolute",
+      width: 420,
+      height: 420,
+      borderRadius: 999,
+      filter: "blur(6px)",
+      opacity: 0.9,
+      zIndex: 1,
+      pointerEvents: "none",
+    } as React.CSSProperties,
+
+    orbA: {
+      left: -160,
+      top: 260,
+      background: "radial-gradient(circle at 35% 35%, rgba(0,0,0,0.18), rgba(0,0,0,0.05) 55%, transparent 70%)",
+      transform: "rotate(10deg)",
+    } as React.CSSProperties,
+
+    orbB: {
+      right: -180,
+      top: 170,
+      background:
+        "radial-gradient(circle at 55% 45%, rgba(64, 153, 255, 0.55), rgba(64, 153, 255, 0.18) 48%, transparent 70%)",
+      transform: "rotate(-8deg)",
+    } as React.CSSProperties,
+
+    // glass card
     card: {
-      border: "1px solid rgba(229,229,229,0.85)",
-      borderRadius: 18,
+      borderRadius: 22,
+      padding: 16,
+      background: "rgba(255,255,255,0.62)",
+      border: "1px solid rgba(255,255,255,0.7)",
+      boxShadow:
+        "0 18px 45px rgba(0,0,0,0.08), 0 2px 0 rgba(255,255,255,0.55) inset, 0 -1px 0 rgba(0,0,0,0.03) inset",
+      backdropFilter: "blur(12px)",
+      WebkitBackdropFilter: "blur(12px)",
+    } as React.CSSProperties,
+
+    cardTight: {
+      borderRadius: 22,
       padding: 14,
-      background: "rgba(255,255,255,0.72)",
-      backdropFilter: "blur(10px)",
-      WebkitBackdropFilter: "blur(10px)",
-      boxShadow: "0 10px 30px rgba(0,0,0,0.04)",
+      background: "rgba(255,255,255,0.60)",
+      border: "1px solid rgba(255,255,255,0.72)",
+      boxShadow:
+        "0 14px 34px rgba(0,0,0,0.07), 0 2px 0 rgba(255,255,255,0.55) inset, 0 -1px 0 rgba(0,0,0,0.03) inset",
+      backdropFilter: "blur(12px)",
+      WebkitBackdropFilter: "blur(12px)",
     } as React.CSSProperties,
 
     row: { display: "flex", gap: 10, alignItems: "center" } as React.CSSProperties,
 
+    // inputs - pill, soft inset
     input: {
       width: "100%",
-      padding: "12px 12px",
-      borderRadius: 14,
-      border: "1px solid rgba(215,215,215,0.9)",
+      padding: "12px 14px",
+      borderRadius: 999,
+      border: "1px solid rgba(0,0,0,0.07)",
+      background: "rgba(255,255,255,0.72)",
+      boxShadow: "0 1px 0 rgba(255,255,255,0.8) inset, 0 10px 20px rgba(0,0,0,0.05)",
       outline: "none",
       fontSize: 16,
-      background: "rgba(255,255,255,0.75)",
-      backdropFilter: "blur(8px)",
-      WebkitBackdropFilter: "blur(8px)",
+      color: "#111",
     } as React.CSSProperties,
 
-    btn: {
-      padding: "12px 14px",
-      borderRadius: 14,
-      border: "1px solid rgba(215,215,215,0.9)",
+    // buttons
+    btnPrimary: {
+      padding: "12px 16px",
+      borderRadius: 999,
+      border: "1px solid rgba(0,0,0,0.1)",
       background: "#111",
       color: "#fff",
       fontWeight: 800,
       cursor: "pointer",
       userSelect: "none",
-      transition: "transform 160ms ease, opacity 160ms ease",
+      boxShadow: "0 16px 30px rgba(0,0,0,0.18)",
     } as React.CSSProperties,
 
     btnGhost: {
-      padding: "12px 14px",
+      padding: "12px 16px",
       borderRadius: 999,
-      border: "1px solid rgba(215,215,215,0.9)",
-      background: "rgba(255,255,255,0.7)",
+      border: "1px solid rgba(0,0,0,0.08)",
+      background: "rgba(255,255,255,0.62)",
       color: "#111",
       fontWeight: 800,
       cursor: "pointer",
       userSelect: "none",
-      transition: "transform 160ms ease, opacity 160ms ease",
+      boxShadow: "0 12px 24px rgba(0,0,0,0.07)",
       backdropFilter: "blur(10px)",
       WebkitBackdropFilter: "blur(10px)",
     } as React.CSSProperties,
 
-    // типографика
-    muted: { fontSize: 13, opacity: 0.7, lineHeight: 1.35 } as React.CSSProperties,
+    muted: { fontSize: 12, opacity: 0.65 } as React.CSSProperties,
 
+    // header
     headerRow: {
       display: "flex",
       alignItems: "center",
       justifyContent: "space-between",
-      gap: 10,
+      gap: 12,
+      marginBottom: 8,
     } as React.CSSProperties,
 
     h1: {
-      fontSize: 22,
+      fontSize: 34,
+      letterSpacing: -0.6,
       margin: 0,
       lineHeight: "44px",
       fontWeight: 900,
-      letterSpacing: "-0.01em",
     } as React.CSSProperties,
 
     // tabs
@@ -160,26 +192,26 @@ export default function HomePage() {
       gap: 10,
       alignItems: "center",
       marginTop: 12,
+      marginBottom: 12,
     } as React.CSSProperties,
 
     tabBadge: {
       display: "inline-flex",
       alignItems: "center",
-      gap: 8,
-      padding: "6px 10px",
+      gap: 10,
+      padding: "8px 12px",
       borderRadius: 999,
-      border: "1px solid rgba(229,229,229,0.9)",
-      background: "rgba(255,255,255,0.65)",
-      fontWeight: 550, // меньше “жирности”, но читаемо
-      fontSize: 13,
+      border: "1px solid rgba(0,0,0,0.08)",
+      background: "rgba(255,255,255,0.62)",
+      boxShadow: "0 10px 20px rgba(0,0,0,0.06)",
+      backdropFilter: "blur(10px)",
+      WebkitBackdropFilter: "blur(10px)",
+      fontWeight: 700,
+      fontSize: 14,
       cursor: "pointer",
       userSelect: "none",
       whiteSpace: "nowrap",
-      height: 32,
-      transition: "transform 160ms ease, box-shadow 200ms ease, background 200ms ease",
-      backdropFilter: "blur(10px)",
-      WebkitBackdropFilter: "blur(10px)",
-      boxShadow: "0 8px 18px rgba(0,0,0,0.03)",
+      height: 36,
     } as React.CSSProperties,
 
     dot: {
@@ -188,36 +220,37 @@ export default function HomePage() {
       borderRadius: 999,
       background: "#bdbdbd",
       flex: "0 0 auto",
+      boxShadow: "0 0 0 3px rgba(0,0,0,0.04)",
     } as React.CSSProperties,
 
-    // + button
     tabPlus: {
-      width: 32,
-      height: 32,
+      width: 36,
+      height: 36,
       borderRadius: 999,
-      border: "1px solid rgba(229,229,229,0.9)",
-      background: "rgba(255,255,255,0.65)",
+      border: "1px solid rgba(0,0,0,0.08)",
+      background: "rgba(255,255,255,0.62)",
+      boxShadow: "0 10px 20px rgba(0,0,0,0.06)",
+      backdropFilter: "blur(10px)",
+      WebkitBackdropFilter: "blur(10px)",
       color: "#111",
-      fontWeight: 700,
-      fontSize: 14, // размер плюсика регулируется тут
+      fontWeight: 500,
+      fontSize: 16,
       cursor: "pointer",
       userSelect: "none",
       display: "grid",
       placeItems: "center",
       flex: "0 0 auto",
-      transition: "transform 160ms ease, box-shadow 200ms ease",
-      backdropFilter: "blur(10px)",
-      WebkitBackdropFilter: "blur(10px)",
-      boxShadow: "0 8px 18px rgba(0,0,0,0.03)",
     } as React.CSSProperties,
 
-    // refresh
     refresh: {
       width: 44,
       height: 44,
       borderRadius: 999,
-      border: "1px solid rgba(215,215,215,0.9)",
-      background: "rgba(255,255,255,0.7)",
+      border: "1px solid rgba(0,0,0,0.08)",
+      background: "rgba(255,255,255,0.62)",
+      boxShadow: "0 14px 28px rgba(0,0,0,0.07)",
+      backdropFilter: "blur(10px)",
+      WebkitBackdropFilter: "blur(10px)",
       color: "#111",
       fontWeight: 900,
       fontSize: 18,
@@ -226,61 +259,63 @@ export default function HomePage() {
       display: "grid",
       placeItems: "center",
       flex: "0 0 auto",
-      backdropFilter: "blur(10px)",
-      WebkitBackdropFilter: "blur(10px)",
-      boxShadow: "0 10px 22px rgba(0,0,0,0.04)",
-      transition: "transform 160ms ease, opacity 160ms ease",
     } as React.CSSProperties,
 
-    // skeleton
-    skel: {
-      background: "rgba(0,0,0,0.06)",
-      borderRadius: 999,
-      position: "relative",
-      overflow: "hidden",
+    sectionTitle: {
+      fontSize: 14,
+      opacity: 0.7,
+      fontWeight: 900,
+      letterSpacing: 0.2,
+      margin: "0 0 12px",
     } as React.CSSProperties,
-    skelBlock: {
-      background: "rgba(0,0,0,0.06)",
-      borderRadius: 16,
-      position: "relative",
-      overflow: "hidden",
+
+    // chips
+    chip: {
+      display: "inline-flex",
+      alignItems: "center",
+      padding: "7px 12px",
+      borderRadius: 999,
+      border: "1px solid rgba(0,0,0,0.07)",
+      background: "rgba(255,255,255,0.62)",
+      boxShadow: "0 8px 18px rgba(0,0,0,0.06)",
+      fontSize: 12,
+    } as React.CSSProperties,
+
+    // task item
+    taskItem: {
+      borderRadius: 20,
+      padding: 14,
+      background: "rgba(255,255,255,0.62)",
+      border: "1px solid rgba(255,255,255,0.72)",
+      boxShadow: "0 16px 34px rgba(0,0,0,0.07)",
+      backdropFilter: "blur(12px)",
+      WebkitBackdropFilter: "blur(12px)",
+    } as React.CSSProperties,
+
+    // modal overlay + card
+    overlay: {
+      position: "fixed",
+      inset: 0,
+      background: "rgba(0,0,0,0.35)",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      padding: 16,
+      zIndex: 9999,
+    } as React.CSSProperties,
+
+    modal: {
+      width: "100%",
+      maxWidth: 520,
+      borderRadius: 26,
+      padding: 16,
+      background: "rgba(255,255,255,0.62)",
+      border: "1px solid rgba(255,255,255,0.75)",
+      boxShadow: "0 22px 60px rgba(0,0,0,0.25)",
+      backdropFilter: "blur(14px)",
+      WebkitBackdropFilter: "blur(14px)",
     } as React.CSSProperties,
   };
-
-  function SkelShine() {
-    return <span className="skel-shine" />;
-  }
-
-  function SkeletonTabs() {
-    return (
-      <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
-        <div style={{ ...ui.skel, width: 32, height: 32 }}>
-          <SkelShine />
-        </div>
-        <div style={{ ...ui.skel, width: 110, height: 32 }}>
-          <SkelShine />
-        </div>
-        <div style={{ ...ui.skel, width: 120, height: 32 }}>
-          <SkelShine />
-        </div>
-        <div style={{ ...ui.skel, width: 92, height: 32 }}>
-          <SkelShine />
-        </div>
-      </div>
-    );
-  }
-
-  function SkeletonList() {
-    return (
-      <div style={{ display: "grid", gap: 10, marginTop: 10 }}>
-        {[1, 2, 3].map((k) => (
-          <div key={k} style={{ ...ui.skelBlock, height: 84, border: "1px solid rgba(0,0,0,0.03)" }}>
-            <SkelShine />
-          </div>
-        ))}
-      </div>
-    );
-  }
 
   async function authIfPossible() {
     const tg = getTelegramWebApp();
@@ -404,12 +439,8 @@ export default function HomePage() {
 
       setHint(null);
       await loadProjects();
-      if (j.project?.id) {
-        setActiveProjectId(Number(j.project.id));
-        pulseTab(`p:${Number(j.project.id)}`);
-      }
+      if (j.project?.id) setActiveProjectId(Number(j.project.id));
       setShowCreateProject(false);
-      showToast("Проект создан");
     } catch (e: any) {
       setHint(`Ошибка создания проекта: ${String(e?.message || e)}`);
     } finally {
@@ -441,7 +472,6 @@ export default function HomePage() {
     if (j.ok) {
       setTitle("");
       await loadTasks();
-      showToast("Задача добавлена");
       return;
     }
 
@@ -480,416 +510,252 @@ export default function HomePage() {
   }, [ready, activeProjectId]);
 
   return (
-    <main style={ui.page}>
-      {/* global styles for animations + skeleton shine */}
-      <style jsx global>{`
-        .fade-up {
-          animation: fadeUp 240ms ease both;
-        }
-        @keyframes fadeUp {
-          from {
-            opacity: 0;
-            transform: translateY(6px);
-          }
-          to {
-            opacity: 1;
-            transform: translateY(0);
-          }
-        }
+    <div style={ui.shell}>
+      <div style={{ ...ui.orb, ...ui.orbA }} />
+      <div style={{ ...ui.orb, ...ui.orbB }} />
 
-        .tab-snap {
-          transform: scale(0.985);
-        }
+      <main style={ui.container}>
+        {/* Header */}
+        <div style={ui.headerRow}>
+          <h1 style={ui.h1}>Задачи</h1>
 
-        .skel-shine {
-          position: absolute;
-          inset: 0;
-          transform: translateX(-100%);
-          background: linear-gradient(
-            90deg,
-            rgba(255, 255, 255, 0) 0%,
-            rgba(255, 255, 255, 0.55) 50%,
-            rgba(255, 255, 255, 0) 100%
-          );
-          animation: skel 1200ms ease-in-out infinite;
-        }
-        @keyframes skel {
-          0% {
-            transform: translateX(-120%);
-          }
-          100% {
-            transform: translateX(120%);
-          }
-        }
-
-        .toast {
-          position: fixed;
-          left: 50%;
-          bottom: 16px;
-          transform: translateX(-50%);
-          z-index: 99999;
-          background: rgba(17, 17, 17, 0.86);
-          color: white;
-          padding: 10px 12px;
-          border-radius: 999px;
-          border: 1px solid rgba(255, 255, 255, 0.12);
-          backdrop-filter: blur(10px);
-          -webkit-backdrop-filter: blur(10px);
-          box-shadow: 0 12px 28px rgba(0, 0, 0, 0.22);
-          font-size: 13px;
-          line-height: 1.25;
-          animation: toastIn 220ms ease both;
-          max-width: calc(100vw - 24px);
-          text-align: center;
-          white-space: nowrap;
-          overflow: hidden;
-          text-overflow: ellipsis;
-        }
-        @keyframes toastIn {
-          from {
-            opacity: 0;
-            transform: translateX(-50%) translateY(8px);
-          }
-          to {
-            opacity: 1;
-            transform: translateX(-50%) translateY(0);
-          }
-        }
-      `}</style>
-
-      {/* Header */}
-      <div style={ui.headerRow}>
-        <h1 style={ui.h1}>Задачи</h1>
-
-        <button
-          type="button"
-          onClick={() => loadTasks()}
-          disabled={loadingTasks}
-          style={{
-            ...ui.refresh,
-            opacity: loadingTasks ? 0.65 : 1,
-            cursor: loadingTasks ? "not-allowed" : "pointer",
-            transform: loadingTasks ? "scale(0.98)" : "scale(1)",
-          }}
-          title="Обновить"
-        >
-          <span style={{ display: "inline-block" }} className={loadingTasks ? "spin" : ""}>
-            ↻
-          </span>
-        </button>
-      </div>
-
-      {/* Tabs at top */}
-      <div style={ui.tabWrap}>
-        <button
-          type="button"
-          onClick={openCreateProject}
-          disabled={creatingProject || loadingProjects}
-          style={{
-            ...ui.tabPlus,
-            opacity: creatingProject || loadingProjects ? 0.6 : 1,
-            cursor: creatingProject || loadingProjects ? "not-allowed" : "pointer",
-          }}
-          title="Новый проект"
-        >
-          +
-        </button>
-
-        {loadingProjects && projects.length === 0 ? (
-          <SkeletonTabs />
-        ) : (
-          <>
-            {/* All tasks */}
-            <button
-              type="button"
-              onClick={() => {
-                setActiveProjectId(null);
-                pulseTab("all");
-              }}
-              className={tabPulseKey === "all" ? "tab-snap" : ""}
-              style={{
-                ...ui.tabBadge,
-                background: isAllTasks ? "#111" : "rgba(255,255,255,0.65)",
-                color: isAllTasks ? "#fff" : "#111",
-                borderColor: isAllTasks ? "#111" : "rgba(229,229,229,0.9)",
-                boxShadow: isAllTasks ? "0 10px 22px rgba(0,0,0,0.10)" : ui.tabBadge.boxShadow,
-              }}
-            >
-              <span style={{ ...ui.dot, background: isAllTasks ? "#22c55e" : "#bdbdbd" }} />
-              Все задачи
-            </button>
-
-            {projects.map((p) => {
-              const isActive = activeProjectId === p.id;
-              const key = `p:${p.id}`;
-              return (
-                <button
-                  key={p.id}
-                  type="button"
-                  onClick={() => {
-                    setActiveProjectId(p.id);
-                    pulseTab(key);
-                  }}
-                  className={tabPulseKey === key ? "tab-snap" : ""}
-                  style={{
-                    ...ui.tabBadge,
-                    background: isActive ? "#111" : "rgba(255,255,255,0.65)",
-                    color: isActive ? "#fff" : "#111",
-                    borderColor: isActive ? "#111" : "rgba(229,229,229,0.9)",
-                    boxShadow: isActive ? "0 10px 22px rgba(0,0,0,0.10)" : ui.tabBadge.boxShadow,
-                  }}
-                  title={p.name}
-                >
-                  <span style={{ ...ui.dot, background: isActive ? "#22c55e" : "#bdbdbd" }} />
-                  {p.name}
-                </button>
-              );
-            })}
-
-            {projects.length === 0 && !loadingProjects && (
-              <div style={{ ...ui.muted }}>Проектов пока нет, нажми + и создай первый.</div>
-            )}
-          </>
-        )}
-      </div>
-
-      {/* Errors card only */}
-      {hint && (
-        <div style={{ ...ui.card, marginTop: 12, borderColor: "rgba(240,195,109,0.75)", background: "rgba(255,250,240,0.75)" }}>
-          <div style={{ fontWeight: 900, marginBottom: 6 }}>Сообщение</div>
-          <div style={{ lineHeight: 1.4, fontSize: 13 }}>{hint}</div>
-        </div>
-      )}
-
-      {/* Add task */}
-      <section style={{ ...ui.card, marginTop: 12 }} className="fade-up">
-        <div style={{ fontSize: 13, margin: "0 0 10px", opacity: 0.72, fontWeight: 900, letterSpacing: "-0.01em" }}>
-          Новая задача
-        </div>
-
-        <div style={{ display: "grid", gap: 10 }}>
-          <input
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            placeholder={isAllTasks ? "Выбери проект табом сверху…" : "Например: купить билеты, оплатить аренду…"}
-            disabled={isAllTasks || !activeProjectId}
+          <button
+            type="button"
+            onClick={() => loadTasks()}
+            disabled={loadingTasks}
             style={{
-              ...ui.input,
-              opacity: isAllTasks || !activeProjectId ? 0.6 : 1,
+              ...ui.refresh,
+              opacity: loadingTasks ? 0.6 : 1,
+              cursor: loadingTasks ? "not-allowed" : "pointer",
             }}
-          />
+            title="Обновить"
+          >
+            ↻
+          </button>
+        </div>
 
-          <div style={ui.row}>
+        {/* Tabs at top */}
+        <div style={ui.tabWrap}>
+          {/* + before "Все задачи" */}
+          <button
+            type="button"
+            onClick={openCreateProject}
+            disabled={creatingProject || loadingProjects}
+            style={{
+              ...ui.tabPlus,
+              opacity: creatingProject || loadingProjects ? 0.6 : 1,
+              cursor: creatingProject || loadingProjects ? "not-allowed" : "pointer",
+            }}
+            title="Новый проект"
+          >
+            +
+          </button>
+
+          {/* All tasks */}
+          <button
+            type="button"
+            onClick={() => setActiveProjectId(null)}
+            style={{
+              ...ui.tabBadge,
+              background: isAllTasks ? "#111" : "rgba(255,255,255,0.62)",
+              color: isAllTasks ? "#fff" : "#111",
+              borderColor: isAllTasks ? "rgba(0,0,0,0.18)" : "rgba(0,0,0,0.08)",
+              boxShadow: isAllTasks ? "0 18px 34px rgba(0,0,0,0.22)" : ui.tabBadge.boxShadow,
+            }}
+          >
+            <span style={{ ...ui.dot, background: isAllTasks ? "#22c55e" : "#bdbdbd" }} />
+            Все задачи
+          </button>
+
+          {projects.map((p) => {
+            const isActive = activeProjectId === p.id;
+            return (
+              <button
+                key={p.id}
+                type="button"
+                onClick={() => setActiveProjectId(p.id)}
+                style={{
+                  ...ui.tabBadge,
+                  background: isActive ? "#111" : "rgba(255,255,255,0.62)",
+                  color: isActive ? "#fff" : "#111",
+                  borderColor: isActive ? "rgba(0,0,0,0.18)" : "rgba(0,0,0,0.08)",
+                  boxShadow: isActive ? "0 18px 34px rgba(0,0,0,0.22)" : ui.tabBadge.boxShadow,
+                }}
+                title={p.name}
+              >
+                <span style={{ ...ui.dot, background: isActive ? "#22c55e" : "#bdbdbd" }} />
+                {p.name}
+              </button>
+            );
+          })}
+
+          {projects.length === 0 && <div style={ui.muted}>Проектов пока нет, нажми + и создай первый.</div>}
+        </div>
+
+        {hint && (
+          <div style={{ ...ui.cardTight, borderColor: "rgba(240,195,109,0.55)", background: "rgba(255,250,240,0.7)" }}>
+            <div style={{ fontWeight: 900, marginBottom: 6 }}>Сообщение</div>
+            <div style={{ lineHeight: 1.35 }}>{hint}</div>
+          </div>
+        )}
+
+        {/* Add task */}
+        <section style={{ ...ui.card, marginTop: 14 }}>
+          <div style={ui.sectionTitle}>Новая задача</div>
+
+          <div style={{ display: "grid", gap: 12 }}>
             <input
-              type="date"
-              value={dueDate}
-              onChange={(e) => setDueDate(e.target.value)}
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              placeholder={isAllTasks ? "Выбери проект табом сверху…" : "Например: купить билеты, оплатить аренду…"}
               disabled={isAllTasks || !activeProjectId}
               style={{
                 ...ui.input,
-                padding: "10px 12px",
-                opacity: isAllTasks || !activeProjectId ? 0.6 : 1,
+                opacity: isAllTasks || !activeProjectId ? 0.55 : 1,
               }}
             />
 
-            <button
-              type="button"
-              onClick={addTask}
-              disabled={!canAddTask}
-              style={{
-                ...ui.btn,
-                opacity: canAddTask ? 1 : 0.5,
-                cursor: canAddTask ? "pointer" : "not-allowed",
-                whiteSpace: "nowrap",
-                minWidth: 120,
-                transform: canAddTask ? "scale(1)" : "scale(0.99)",
-              }}
-            >
-              Добавить
-            </button>
-          </div>
-        </div>
-
-        {isAllTasks && (
-          <div style={{ ...ui.muted, marginTop: 10 }}>
-            Сейчас выбран режим “Все задачи”. Для добавления выбери конкретный проект табом.
-          </div>
-        )}
-      </section>
-
-      {/* Tasks */}
-      <section style={{ ...ui.card, marginTop: 12 }} className="fade-up">
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 10 }}>
-          <div style={{ fontSize: 13, opacity: 0.72, fontWeight: 900, letterSpacing: "-0.01em" }}>Список</div>
-          <div style={ui.muted}>{loadingTasks ? "Загружаю…" : `${tasks.length} шт.`}</div>
-        </div>
-
-        {!ready ? (
-          <SkeletonList />
-        ) : loadingTasks ? (
-          <SkeletonList />
-        ) : tasks.length === 0 ? (
-          <div style={{ opacity: 0.7, marginTop: 10 }}>Пока пусто.</div>
-        ) : (
-          <ul style={{ listStyle: "none", padding: 0, margin: "10px 0 0", display: "grid", gap: 10 }}>
-            {tasks.map((t, idx) => (
-              <li
-                key={t.id}
-                className="fade-up"
+            <div style={ui.row}>
+              <input
+                type="date"
+                value={dueDate}
+                onChange={(e) => setDueDate(e.target.value)}
+                disabled={isAllTasks || !activeProjectId}
                 style={{
-                  border: "1px solid rgba(233,233,233,0.9)",
-                  borderRadius: 16,
-                  padding: 12,
-                  background: "rgba(255,255,255,0.72)",
-                  backdropFilter: "blur(10px)",
-                  WebkitBackdropFilter: "blur(10px)",
-                  boxShadow: "0 12px 26px rgba(0,0,0,0.035)",
-                  transition: "opacity 180ms ease, filter 180ms ease, transform 180ms ease, background 180ms ease",
-                  opacity: t.done ? 0.74 : 1,
-                  filter: t.done ? "blur(0.4px)" : "none", // “успокаиваем” без перебора
-                  transform: t.done ? "translateY(1px)" : "translateY(0)",
-                  animationDelay: `${Math.min(idx * 25, 120)}ms`,
+                  ...ui.input,
+                  padding: "11px 14px",
+                  opacity: isAllTasks || !activeProjectId ? 0.55 : 1,
+                }}
+              />
+
+              <button
+                type="button"
+                onClick={addTask}
+                disabled={!canAddTask}
+                style={{
+                  ...ui.btnPrimary,
+                  opacity: canAddTask ? 1 : 0.45,
+                  cursor: canAddTask ? "pointer" : "not-allowed",
+                  whiteSpace: "nowrap",
+                  minWidth: 130,
                 }}
               >
-                <label style={{ display: "flex", gap: 12, alignItems: "flex-start" }}>
-                  <input
-                    type="checkbox"
-                    checked={t.done}
-                    onChange={(e) => toggleDone(t.id, e.target.checked)}
-                    style={{ width: 18, height: 18, marginTop: 2 }}
-                  />
-                  <div style={{ display: "grid", gap: 6, flex: 1 }}>
-                    <div
-                      style={{
-                        fontWeight: 900,
-                        lineHeight: 1.2,
-                        textDecoration: t.done ? "line-through" : "none",
-                        opacity: t.done ? 0.75 : 1,
-                        letterSpacing: "-0.01em",
-                      }}
-                    >
-                      {t.title}
-                    </div>
+                Добавить
+              </button>
+            </div>
+          </div>
 
-                    <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                      {t.due_date && (
-                        <span
-                          style={{
-                            display: "inline-flex",
-                            alignItems: "center",
-                            gap: 6,
-                            padding: "6px 10px",
-                            borderRadius: 999,
-                            border: "1px solid rgba(229,229,229,0.9)",
-                            background: "rgba(250,250,250,0.65)",
-                            fontSize: 12,
-                            opacity: 0.95,
-                          }}
-                        >
-                          до {fmtDate(t.due_date)}
-                        </span>
-                      )}
-                      <span
+          {isAllTasks && (
+            <div style={{ ...ui.muted, marginTop: 12 }}>
+              Сейчас выбран режим “Все задачи”. Для добавления выбери конкретный проект табом.
+            </div>
+          )}
+        </section>
+
+        {/* Tasks */}
+        <section style={{ ...ui.card, marginTop: 14 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 10 }}>
+            <div style={ui.sectionTitle}>Список</div>
+            <div style={ui.muted}>{loadingTasks ? "Загружаю…" : `${tasks.length} шт.`}</div>
+          </div>
+
+          {!ready ? (
+            <div style={{ opacity: 0.7 }}>Загружаю…</div>
+          ) : loadingTasks ? (
+            <div style={{ opacity: 0.7 }}>Загружаю задачи…</div>
+          ) : tasks.length === 0 ? (
+            <div style={{ opacity: 0.7 }}>Пока пусто.</div>
+          ) : (
+            <ul style={{ listStyle: "none", padding: 0, margin: 0, display: "grid", gap: 12 }}>
+              {tasks.map((t) => (
+                <li
+                  key={t.id}
+                  style={{
+                    ...ui.taskItem,
+                    background: t.done ? "rgba(255,255,255,0.55)" : "rgba(255,255,255,0.62)",
+                    opacity: t.done ? 0.82 : 1,
+                  }}
+                >
+                  <label style={{ display: "flex", gap: 12, alignItems: "flex-start" }}>
+                    <input
+                      type="checkbox"
+                      checked={t.done}
+                      onChange={(e) => toggleDone(t.id, e.target.checked)}
+                      style={{ width: 18, height: 18, marginTop: 3 }}
+                    />
+
+                    <div style={{ display: "grid", gap: 10, flex: 1 }}>
+                      <div
                         style={{
-                          display: "inline-flex",
-                          alignItems: "center",
-                          padding: "6px 10px",
-                          borderRadius: 999,
-                          border: "1px solid rgba(229,229,229,0.9)",
-                          background: "rgba(255,255,255,0.6)",
-                          fontSize: 12,
-                          opacity: 0.55,
+                          fontWeight: 900,
+                          fontSize: 16,
+                          lineHeight: 1.2,
+                          textDecoration: t.done ? "line-through" : "none",
                         }}
                       >
-                        id #{t.id}
-                      </span>
+                        {t.title}
+                      </div>
+
+                      <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+                        {t.due_date && <span style={{ ...ui.chip }}>до {fmtDate(t.due_date)}</span>}
+                        <span style={{ ...ui.chip, opacity: 0.55 }}>id #{t.id}</span>
+                      </div>
                     </div>
-                  </div>
-                </label>
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
+                  </label>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
 
-      {/* Toast успехов */}
-      {toast && <div className="toast">{toast}</div>}
+        {/* Modal */}
+        {showCreateProject && (
+          <div style={ui.overlay} onClick={() => !creatingProject && setShowCreateProject(false)}>
+            <div style={ui.modal} onClick={(e) => e.stopPropagation()}>
+              <div style={{ fontSize: 16, fontWeight: 900, marginBottom: 12 }}>Новый проект</div>
 
-      {/* Modal */}
-      {showCreateProject && (
-        <div
-          style={{
-            position: "fixed",
-            inset: 0,
-            background: "rgba(0,0,0,0.30)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            padding: 16,
-            zIndex: 9999,
-          }}
-          onClick={() => !creatingProject && setShowCreateProject(false)}
-        >
-          <div
-            style={{
-              width: "100%",
-              maxWidth: 520,
-              background: "rgba(255,255,255,0.78)",
-              borderRadius: 20,
-              border: "1px solid rgba(229,229,229,0.9)",
-              padding: 14,
-              backdropFilter: "blur(14px)",
-              WebkitBackdropFilter: "blur(14px)",
-              boxShadow: "0 18px 44px rgba(0,0,0,0.18)",
-            }}
-            onClick={(e) => e.stopPropagation()}
-            className="fade-up"
-          >
-            <div style={{ fontSize: 16, fontWeight: 900, marginBottom: 10, letterSpacing: "-0.01em" }}>
-              Новый проект
+              <input
+                value={newProjectName}
+                onChange={(e) => setNewProjectName(e.target.value)}
+                placeholder="Например: работа, дом, спорт…"
+                style={ui.input}
+                autoFocus
+              />
+
+              <div style={{ display: "flex", gap: 12, marginTop: 14 }}>
+                <button
+                  type="button"
+                  onClick={() => !creatingProject && setShowCreateProject(false)}
+                  style={{
+                    ...ui.btnGhost,
+                    flex: 1,
+                    opacity: creatingProject ? 0.6 : 1,
+                    cursor: creatingProject ? "not-allowed" : "pointer",
+                  }}
+                >
+                  Отмена
+                </button>
+
+                <button
+                  type="button"
+                  onClick={createProject}
+                  disabled={!newProjectName.trim() || creatingProject}
+                  style={{
+                    ...ui.btnPrimary,
+                    flex: 1,
+                    opacity: !newProjectName.trim() || creatingProject ? 0.55 : 1,
+                    cursor: !newProjectName.trim() || creatingProject ? "not-allowed" : "pointer",
+                  }}
+                >
+                  {creatingProject ? "Создаю..." : "Создать"}
+                </button>
+              </div>
+
+              <div style={{ ...ui.muted, marginTop: 12 }}>Подсказка: короткие названия читаются лучше.</div>
             </div>
-
-            <input
-              value={newProjectName}
-              onChange={(e) => setNewProjectName(e.target.value)}
-              placeholder="Например: работа, дом, спорт…"
-              style={ui.input}
-              autoFocus
-            />
-
-            <div style={{ display: "flex", gap: 10, marginTop: 12 }}>
-              <button
-                type="button"
-                onClick={() => !creatingProject && setShowCreateProject(false)}
-                style={{
-                  ...ui.btnGhost,
-                  flex: 1,
-                  opacity: creatingProject ? 0.6 : 1,
-                  cursor: creatingProject ? "not-allowed" : "pointer",
-                }}
-              >
-                Отмена
-              </button>
-
-              <button
-                type="button"
-                onClick={createProject}
-                disabled={!newProjectName.trim() || creatingProject}
-                style={{
-                  ...ui.btn,
-                  flex: 1,
-                  opacity: !newProjectName.trim() || creatingProject ? 0.6 : 1,
-                  cursor: !newProjectName.trim() || creatingProject ? "not-allowed" : "pointer",
-                }}
-              >
-                {creatingProject ? "Создаю..." : "Создать"}
-              </button>
-            </div>
-
-            <div style={{ ...ui.muted, marginTop: 10 }}>Подсказка: короткие названия читаются лучше.</div>
           </div>
-        </div>
-      )}
-    </main>
+        )}
+      </main>
+    </div>
   );
 }
