@@ -56,11 +56,9 @@ export default function HomePage() {
   const ui = {
     // page + background
     shell: {
-      minHeight: "100vh",
-      background:
-        "radial-gradient(900px 420px at 70% 20%, rgba(77, 165, 255, 0.22), transparent 60%), radial-gradient(750px 380px at 15% 35%, rgba(0,0,0,0.06), transparent 60%), linear-gradient(180deg, #f7f6f2, #f3f1ed)",
-      position: "relative",
-      overflow: "hidden",
+        minHeight: "100vh",
+        position: "relative",
+        overflow: "hidden",
     } as React.CSSProperties,
 
     container: {
@@ -76,7 +74,7 @@ export default function HomePage() {
 
     // decorative orbs
     orb: {
-      position: "absolute",
+      position: "fixed",
       width: 420,
       height: 420,
       borderRadius: 999,
@@ -101,7 +99,14 @@ export default function HomePage() {
         "radial-gradient(circle at 55% 45%, rgba(64, 153, 255, 0.55), rgba(64, 153, 255, 0.18) 48%, transparent 70%)",
       transform: "rotate(-8deg)",
     } as React.CSSProperties,
-
+bgFixed: {
+  position: "fixed",
+  inset: 0,
+  zIndex: 0,
+  pointerEvents: "none",
+  background:
+    "radial-gradient(900px 420px at 70% 20%, rgba(77, 165, 255, 0.22), transparent 60%), radial-gradient(750px 380px at 15% 35%, rgba(0,0,0,0.06), transparent 60%), linear-gradient(180deg, #f7f6f2, #f3f1ed)",
+} as React.CSSProperties,
     // glass card
     card: {
       borderRadius: 22,
@@ -587,6 +592,7 @@ export default function HomePage() {
 
   return (
     <div style={ui.shell}>
+    <div style={ui.bgFixed} />
       {/* local keyframes for skeleton */}
       <style>{`
         @keyframes skelShimmer {
