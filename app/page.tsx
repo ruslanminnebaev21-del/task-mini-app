@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties } from "react";
 
 type Task = {
@@ -44,18 +44,17 @@ export default function HomePage() {
   // tasks
   const [tasks, setTasks] = useState<Task[]>([]);
   const [togglingIds, setTogglingIds] = useState<Set<number>>(new Set());
-  const [editingId, setEditingId] = useState<number | null>(null);
-  const [editingTitle, setEditingTitle] = useState("");
   const [title, setTitle] = useState("");
 
-  const [noteOpenId, setNoteOpenId] = useState<number | null>(null);
-  const [noteDraft, setNoteDraft] = useState("");
+  // edit task modal
+  const [showEditTask, setShowEditTask] = useState(false);
+  const [editTaskId, setEditTaskId] = useState<number | null>(null);
+  const [editTitle, setEditTitle] = useState("");
+  const [editNote, setEditNote] = useState("");
+  const [savingEditTask, setSavingEditTask] = useState(false);
 
-  const titleBlurGuard = useRef(false);
-  const noteInputRef = useRef<HTMLInputElement | null>(null);
-
-  // чтобы “outside tap” не срабатывал на клавиатуру/системные зоны
-  const appRef = useRef<HTMLElement | null>(null);
+  const editTitleRef = useRef<HTMLInputElement | null>(null);
+  const editNoteRef = useRef<HTMLInputElement | null>(null);
 
   // дата необязательна
   const [dueDate, setDueDate] = useState<string | null>(null);
@@ -134,11 +133,7 @@ export default function HomePage() {
   const noDateTasks = useMemo(() => tasks.filter((t) => !t.due_date), [tasks]);
 
   const ui = {
-    shell: {
-      minHeight: "100vh",
-      position: "relative",
-      overflow: "hidden",
-    } as CSSProperties,
+    shell: { minHeight: "100vh", position: "relative", overflow: "hidden" } as CSSProperties,
 
     container: {
       maxWidth: 720,
@@ -213,6 +208,18 @@ export default function HomePage() {
       width: "100%",
       padding: "12px 16px",
       borderRadius: 999,
+      border: "1px solid rgba(0,0,0,0.07)",
+      background: "rgba(255,255,255,0.72)",
+      boxShadow: "0 1px 0 rgba(255,255,255,0.8) inset, 0 10px 20px rgba(0,0,0,0.05)",
+      outline: "none",
+      fontSize: 16,
+      color: "#111",
+    } as CSSProperties,
+
+    miniInput: {
+      width: "100%",
+      padding: "12px 16px",
+      borderRadius: 16,
       border: "1px solid rgba(0,0,0,0.07)",
       background: "rgba(255,255,255,0.72)",
       boxShadow: "0 1px 0 rgba(255,255,255,0.8) inset, 0 10px 20px rgba(0,0,0,0.05)",
@@ -407,11 +414,7 @@ export default function HomePage() {
       maxWidth: 420,
     } as CSSProperties,
 
-    segmentedInner: {
-      position: "relative",
-      width: "100%",
-      height: "100%",
-    } as CSSProperties,
+    segmentedInner: { position: "relative", width: "100%", height: "100%" } as CSSProperties,
 
     segThumb: {
       position: "absolute",
@@ -484,20 +487,18 @@ export default function HomePage() {
       WebkitBoxOrient: "vertical",
       overflow: "hidden",
       whiteSpace: "pre-wrap",
-    } as CSSProperties,
-
-    noteHint: {
-      fontSize: 12,
-      opacity: 0.55,
       cursor: "pointer",
-      userSelect: "none",
+      userSelect: "text",
     } as CSSProperties,
 
-    noteRow: {
-      minHeight: 18,
-      lineHeight: "18px",
-      display: "flex",
-      alignItems: "center",
+    titleText: {
+      fontWeight: 900,
+      fontSize: 16,
+      lineHeight: 1.2,
+      cursor: "pointer",
+      userSelect: "text",
+      minWidth: 0,
+      wordBreak: "break-word",
     } as CSSProperties,
 
     overlay: {
@@ -531,13 +532,6 @@ export default function HomePage() {
       boxShadow: isActive ? "0 0 0 3px rgba(34, 197, 94, 0.04)" : "0 0 0 3px rgba(0,0,0,0.04)",
     };
   }
-
-  const cancelEdit = useCallback(() => {
-    setEditingId(null);
-    setEditingTitle("");
-    setNoteOpenId(null);
-    setNoteDraft("");
-  }, []);
 
   async function authIfPossible() {
     const tg = getTelegramWebApp();
@@ -636,7 +630,6 @@ export default function HomePage() {
     setLoadingTasks(true);
     try {
       const url = new URL("/api/tasks", window.location.origin);
-
       url.searchParams.set("view", "all");
       if (activeProjectId) url.searchParams.set("projectId", String(activeProjectId));
 
@@ -730,29 +723,6 @@ export default function HomePage() {
     setHint(j.error || "Ошибка при добавлении задачи");
   }
 
-  async function saveNote(id: number, note: string) {
-    const trimmed = note.trim();
-    setTasks((prev) => prev.map((t) => (t.id === id ? { ...t, note: trimmed ? trimmed : null } : t)));
-
-    try {
-      const r = await fetch("/api/tasks", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({ id, note: trimmed ? trimmed : null }),
-      });
-
-      const j = await r.json().catch(() => ({} as any));
-      if (!r.ok || !j.ok) {
-        setHint(j.error || j.reason || "Не смог сохранить заметку");
-        await loadTasks();
-      }
-    } catch (e: any) {
-      setHint(`Ошибка сети при сохранении заметки: ${String(e?.message || e)}`);
-      await loadTasks();
-    }
-  }
-
   async function toggleDone(id: number, done: boolean) {
     if (togglingIds.has(id)) return;
 
@@ -791,68 +761,58 @@ export default function HomePage() {
     }
   }
 
-  function focusTitleInput(id: number) {
-    // иногда в iOS нужно чуть позже, чем rAF
-    setTimeout(() => {
-      const el = document.getElementById(`title-${id}`) as HTMLInputElement | null;
-      el?.focus();
-      el?.setSelectionRange?.(el.value.length, el.value.length);
-    }, 0);
-  }
-
-  function focusNoteInput(id: number) {
-    setTimeout(() => {
-      const el = document.getElementById(`note-${id}`) as HTMLInputElement | null;
-      el?.focus();
-      el?.setSelectionRange?.(el.value.length, el.value.length);
-    }, 0);
-  }
-
-  function startEdit(t: Task) {
+  function openEditTaskModal(t: Task, focus: "title" | "note" = "title") {
     if (t.done) return;
     if (togglingIds.has(t.id)) return;
 
-    setEditingId(t.id);
-    setEditingTitle(t.title);
+    setHint(null);
+    setEditTaskId(t.id);
+    setEditTitle(t.title || "");
+    setEditNote(t.note || "");
+    setShowEditTask(true);
 
-    setNoteDraft(t.note || "");
-    setNoteOpenId(null);
-
-    focusTitleInput(t.id);
+    requestAnimationFrame(() => {
+      if (focus === "note") editNoteRef.current?.focus();
+      else editTitleRef.current?.focus();
+    });
   }
 
-  function startEditNote(t: Task) {
-    if (t.done) return;
-    if (togglingIds.has(t.id)) return;
-
-    setEditingId(t.id);
-    setEditingTitle(t.title);
-
-    setNoteDraft(t.note || "");
-    setNoteOpenId(t.id);
-
-    focusNoteInput(t.id);
+  function closeEditTaskModal() {
+    if (savingEditTask) return;
+    setShowEditTask(false);
+    setEditTaskId(null);
+    setEditTitle("");
+    setEditNote("");
   }
 
-  async function saveTaskEdits(id: number) {
-    const nextTitle = editingTitle.trim();
-    const nextNoteRaw = noteDraft.trim();
-    const nextNote = nextNoteRaw ? nextNoteRaw : null;
+  async function saveEditTask() {
+    if (savingEditTask) return;
+    if (!editTaskId) return;
+
+    const nextTitle = editTitle.trim();
+    const nextNoteTrim = editNote.trim();
+    const nextNote = nextNoteTrim ? nextNoteTrim : null;
 
     if (!nextTitle) {
-      cancelEdit();
+      setHint("Заголовок не может быть пустым.");
+      requestAnimationFrame(() => editTitleRef.current?.focus());
       return;
     }
+
+    const id = editTaskId;
 
     const prev = tasks.find((x) => x.id === id);
     const prevTitle = prev?.title ?? "";
     const prevNote = prev?.note ?? null;
 
     if (prevTitle === nextTitle && prevNote === nextNote) {
-      cancelEdit();
+      closeEditTaskModal();
       return;
     }
 
+    setSavingEditTask(true);
+
+    // оптимистично
     setTasks((list) => list.map((t) => (t.id === id ? { ...t, title: nextTitle, note: nextNote } : t)));
 
     try {
@@ -869,26 +829,18 @@ export default function HomePage() {
         setHint(j.error || j.reason || "Не смог сохранить изменения");
         return;
       }
+
+      closeEditTaskModal();
     } catch (e: any) {
       setTasks((list) => list.map((t) => (t.id === id ? { ...t, title: prevTitle, note: prevNote } : t)));
       setHint(`Ошибка сети при сохранении: ${String(e?.message || e)}`);
-      return;
     } finally {
-      cancelEdit();
+      setSavingEditTask(false);
     }
-  }
-
-  function openNoteEditor(t: Task) {
-    titleBlurGuard.current = true;
-    setNoteDraft(t.note || "");
-    setNoteOpenId(t.id);
-    focusNoteInput(t.id);
   }
 
   function TaskCard({ t }: { t: Task }) {
     const hasMeta = Boolean((isAllTasks && t.project_id) || t.due_date);
-    const isEditing = editingId === t.id;
-    const isNoteOpen = noteOpenId === t.id;
 
     return (
       <div
@@ -913,164 +865,26 @@ export default function HomePage() {
             }}
           />
 
-          <div style={{ display: "grid", gap: 10, flex: 1, minWidth: 0 }}>
-            {/* Заголовок */}
-            {isEditing ? (
-              isNoteOpen ? (
-                // когда редактируем заметку, заголовок показываем текстом, чтобы не дёргать фокус
-                <div
-                  style={{
-                    fontWeight: 900,
-                    fontSize: 16,
-                    lineHeight: 1.2,
-                    minWidth: 0,
-                    wordBreak: "break-word",
-                    opacity: 0.9,
-                  }}
-                  data-editable
-                  onClick={() => {
-                    setNoteOpenId(null);
-                    focusTitleInput(t.id);
-                  }}
-                >
-                  {editingTitle}
-                </div>
-              ) : (
-                <input
-                  data-editable
-                  type="text"
-                  name={`title-${t.id}`}
-                  id={`title-${t.id}`}
-                  value={editingTitle}
-                  onChange={(e) => setEditingTitle(e.target.value)}
-                  onBlur={() => {
-                    if (titleBlurGuard.current) {
-                      titleBlurGuard.current = false;
-                      return;
-                    }
-                    saveTaskEdits(t.id);
-                  }}
-                  onKeyDown={(e) => {
-                    // Backspace не трогаем, иначе ломается удержание
-                    if (e.key === "Enter") {
-                      e.preventDefault();
-                      saveTaskEdits(t.id);
-                    }
-                    if (e.key === "Escape") cancelEdit();
-                  }}
-                  autoCorrect="on"
-                  autoCapitalize="sentences"
-                  spellCheck={true}
-                  autoComplete="on"
-                  inputMode="text"
-                  enterKeyHint="done"
-                  style={{
-                    width: "100%",
-                    border: "none",
-                    outline: "none",
-                    background: "transparent",
-                    fontWeight: 900,
-                    fontSize: 16,
-                    lineHeight: 1.2,
-                    padding: 0,
-                    margin: 0,
-                  }}
-                />
-              )
-            ) : (
-              <div
-                data-editable
-                onClick={() => startEdit(t)}
-                style={{
-                  fontWeight: 900,
-                  fontSize: 16,
-                  lineHeight: 1.2,
-                  textDecoration: t.done ? "line-through" : "none",
-                  cursor: t.done ? "default" : "text",
-                  userSelect: "text",
-                  minWidth: 0,
-                  wordBreak: "break-word",
-                }}
-              >
-                {t.title}
-              </div>
-            )}
+          <div style={{ display: "grid", gap: 8, flex: 1, minWidth: 0 }}>
+            {/* Заголовок (только текст) */}
+            <div
+              style={{
+                ...ui.titleText,
+                textDecoration: t.done ? "line-through" : "none",
+                cursor: t.done ? "default" : "pointer",
+                opacity: t.done ? 0.8 : 1,
+              }}
+              onClick={() => !t.done && openEditTaskModal(t, "title")}
+            >
+              {t.title}
+            </div>
 
-            {/* Заметка (input, без textarea) */}
-            {(isEditing || Boolean(t.note)) && (
-              <div style={ui.noteRow}>
-                {isEditing ? (
-                  isNoteOpen ? (
-                    <input
-                      data-editable
-                      ref={noteInputRef}
-                      type="text"
-                      name={`note-${t.id}`}
-                      id={`note-${t.id}`}
-                      value={noteDraft}
-                      onChange={(e) => setNoteDraft(e.target.value)}
-                      placeholder="Заметка"
-                      onBlur={() => {
-                        saveNote(t.id, noteDraft);
-                        setNoteOpenId(null);
-                      }}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter") {
-                          e.preventDefault();
-                          saveNote(t.id, noteDraft);
-                          setNoteOpenId(null);
-                        }
-                        if (e.key === "Escape") {
-                          e.preventDefault();
-                          setNoteOpenId(null);
-                        }
-                      }}
-                      autoCorrect="on"
-                      autoCapitalize="sentences"
-                      spellCheck={true}
-                      autoComplete="on"
-                      inputMode="text"
-                      enterKeyHint="done"
-                      style={{
-                        width: "100%",
-                        border: "none",
-                        outline: "none",
-                        background: "transparent",
-                        fontSize: 12,
-                        lineHeight: "18px",
-                        padding: 0,
-                        margin: 0,
-                        opacity: 0.55,
-                      }}
-                    />
-                  ) : t.note ? (
-                    <div
-                      data-editable
-                      style={ui.notePreview}
-                      onClick={() => openNoteEditor(t)}
-                    >
-                      {t.note}
-                    </div>
-                  ) : (
-                    <div
-                      data-editable
-                      style={ui.noteHint}
-                      onClick={() => openNoteEditor(t)}
-                    >
-                      Заметка
-                    </div>
-                  )
-                ) : (
-                  <div
-                    data-editable
-                    style={ui.notePreview}
-                    onClick={() => startEditNote(t)}
-                  >
-                    {t.note}
-                  </div>
-                )}
+            {/* Заметка: показываем только если есть. Тап по заметке откроет попап сразу на поле заметки */}
+            {t.note ? (
+              <div style={ui.notePreview} onClick={() => !t.done && openEditTaskModal(t, "note")}>
+                {t.note}
               </div>
-            )}
+            ) : null}
 
             {/* Мета */}
             {hasMeta ? (
@@ -1101,39 +915,13 @@ export default function HomePage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ready, activeProjectId]);
 
-  // Важно: outside-tap работает ТОЛЬКО внутри appRef. Это лечит iOS клавиатуру.
-  useEffect(() => {
-    function handlePointerDown(e: PointerEvent) {
-      if (editingId === null) return;
-
-      const target = e.target;
-      if (!(target instanceof HTMLElement)) return;
-
-      // если тап не внутри контейнера приложения - игнор
-      // (тап по клавиатуре/системным зонам сюда попадает как "вне")
-      if (appRef.current && !appRef.current.contains(target)) return;
-
-      // клики внутри полей ввода не закрывают
-      if (target.closest("input")) return;
-
-      // клики по интерактивным кускам карточки не закрывают
-      if (target.closest("[data-editable]")) return;
-
-      cancelEdit();
-    }
-
-    document.addEventListener("pointerdown", handlePointerDown);
-    return () => document.removeEventListener("pointerdown", handlePointerDown);
-  }, [editingId, cancelEdit]);
-
   return (
     <div style={ui.shell}>
       <div style={ui.bgFixed} />
-
       <div style={{ ...ui.orb, ...ui.orbA }} />
       <div style={{ ...ui.orb, ...ui.orbB }} />
 
-      <main style={ui.container} ref={appRef as any}>
+      <main style={ui.container}>
         {/* Header */}
         <div style={ui.headerRow}>
           <h1 style={ui.h1}>Задачи</h1>
@@ -1211,7 +999,6 @@ export default function HomePage() {
           <div style={{ display: "grid", gap: 10 }}>
             <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
               <input
-                type="text"
                 name="newTaskTitle"
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
@@ -1220,9 +1007,7 @@ export default function HomePage() {
                 autoCorrect="on"
                 autoCapitalize="sentences"
                 spellCheck={true}
-                autoComplete="on"
                 inputMode="text"
-                enterKeyHint="done"
                 style={{
                   ...ui.input,
                   flex: 1,
@@ -1414,14 +1199,13 @@ export default function HomePage() {
           </>
         )}
 
-        {/* Modal */}
+        {/* Modal: Create project */}
         {showCreateProject && (
           <div style={ui.overlay} onClick={() => !creatingProject && setShowCreateProject(false)}>
             <div style={ui.modal} onClick={(e) => e.stopPropagation()}>
               <div style={{ fontSize: 16, fontWeight: 900, marginBottom: 12 }}>Новый проект</div>
 
               <input
-                type="text"
                 name="newProjectName"
                 value={newProjectName}
                 onChange={(e) => setNewProjectName(e.target.value)}
@@ -1429,11 +1213,9 @@ export default function HomePage() {
                 style={ui.input}
                 autoFocus
                 autoCorrect="on"
-                autoCapitalize="words"
+                autoCapitalize="sentences"
                 spellCheck={true}
-                autoComplete="on"
                 inputMode="text"
-                enterKeyHint="done"
               />
 
               <div style={{ display: "flex", gap: 12, marginTop: 14 }}>
@@ -1466,6 +1248,97 @@ export default function HomePage() {
               </div>
 
               <div style={{ ...ui.muted, marginTop: 12 }}>Подсказка: короткие названия читаются лучше.</div>
+            </div>
+          </div>
+        )}
+
+        {/* Modal: Edit task */}
+        {showEditTask && (
+          <div style={ui.overlay} onClick={closeEditTaskModal}>
+            <div style={ui.modal} onClick={(e) => e.stopPropagation()}>
+              <div style={{ fontSize: 16, fontWeight: 900, marginBottom: 12 }}>Редактирование</div>
+
+              <div style={{ display: "grid", gap: 10 }}>
+                <input
+                  ref={editTitleRef}
+                  name="editTaskTitle"
+                  value={editTitle}
+                  onChange={(e) => setEditTitle(e.target.value)}
+                  placeholder="Заголовок"
+                  style={ui.miniInput}
+                  autoCorrect="on"
+                  autoCapitalize="sentences"
+                  spellCheck={true}
+                  inputMode="text"
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      saveEditTask();
+                    }
+                    if (e.key === "Escape") {
+                      e.preventDefault();
+                      closeEditTaskModal();
+                    }
+                  }}
+                />
+
+                <input
+                  ref={editNoteRef}
+                  name="editTaskNote"
+                  value={editNote}
+                  onChange={(e) => setEditNote(e.target.value)}
+                  placeholder="Заметка"
+                  style={{ ...ui.miniInput, fontSize: 14, borderRadius: 16 }}
+                  autoCorrect="on"
+                  autoCapitalize="sentences"
+                  spellCheck={true}
+                  inputMode="text"
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      saveEditTask();
+                    }
+                    if (e.key === "Escape") {
+                      e.preventDefault();
+                      closeEditTaskModal();
+                    }
+                  }}
+                />
+              </div>
+
+              <div style={{ display: "flex", gap: 12, marginTop: 14 }}>
+                <button
+                  type="button"
+                  onClick={closeEditTaskModal}
+                  style={{
+                    ...ui.btnGhost,
+                    flex: 1,
+                    opacity: savingEditTask ? 0.6 : 1,
+                    cursor: savingEditTask ? "not-allowed" : "pointer",
+                  }}
+                  disabled={savingEditTask}
+                >
+                  Отмена
+                </button>
+
+                <button
+                  type="button"
+                  onClick={saveEditTask}
+                  style={{
+                    ...ui.btnPrimary,
+                    flex: 1,
+                    opacity: savingEditTask ? 0.6 : 1,
+                    cursor: savingEditTask ? "not-allowed" : "pointer",
+                  }}
+                  disabled={savingEditTask}
+                >
+                  {savingEditTask ? "Сохраняю..." : "Сохранить"}
+                </button>
+              </div>
+
+              <div style={{ ...ui.muted, marginTop: 12 }}>
+                Enter сохраняет. Escape закрывает.
+              </div>
             </div>
           </div>
         )}
