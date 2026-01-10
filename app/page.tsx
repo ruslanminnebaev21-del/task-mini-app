@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties } from "react";
 
 type Task = {
@@ -493,13 +493,13 @@ export default function HomePage() {
       cursor: "pointer",
       userSelect: "none",
     } as CSSProperties,
-    
-noteRow: {
-  minHeight: 18,          // фиксируем высоту строки, подбери 18–20
-  lineHeight: "18px",     // чтобы подсказка и input совпали по базовой линии
-  display: "flex",
-  alignItems: "center",
-} as CSSProperties,
+
+    noteRow: {
+      minHeight: 18,
+      lineHeight: "18px",
+      display: "flex",
+      alignItems: "center",
+    } as CSSProperties,
 
     overlay: {
       position: "fixed",
@@ -529,9 +529,16 @@ noteRow: {
     return {
       ...ui.dot,
       background: isActive ? "#22c55e" : "#bdbdbd",
-      boxShadow: isActive ? "0 0 0 3px rgba(34,197,94,0.04)" : "0 0 0 3px rgba(0,0,0,0.04)",
+      boxShadow: isActive ? "0 0 0 3px rgba(34, 197, 94, 0.04)" : "0 0 0 3px rgba(0,0,0,0.04)",
     };
   }
+
+  const cancelEdit = useCallback(() => {
+    setEditingId(null);
+    setEditingTitle("");
+    setNoteOpenId(null);
+    setNoteDraft("");
+  }, []);
 
   async function authIfPossible() {
     const tg = getTelegramWebApp();
@@ -772,15 +779,11 @@ noteRow: {
 
       const j = await r.json().catch(() => ({} as any));
       if (!r.ok || !j.ok) {
-        setTasks((prevTasks) =>
-          prevTasks.map((t) => (t.id === id ? { ...t, done: Boolean(prevDone) } : t))
-        );
+        setTasks((prevTasks) => prevTasks.map((t) => (t.id === id ? { ...t, done: Boolean(prevDone) } : t)));
         setHint(j.error || j.reason || "Не смог обновить задачу");
       }
     } catch (e: any) {
-      setTasks((prevTasks) =>
-        prevTasks.map((t) => (t.id === id ? { ...t, done: Boolean(prevDone) } : t))
-      );
+      setTasks((prevTasks) => prevTasks.map((t) => (t.id === id ? { ...t, done: Boolean(prevDone) } : t)));
       setHint(`Ошибка сети при обновлении: ${String(e?.message || e)}`);
     } finally {
       setTogglingIds((s) => {
@@ -802,24 +805,19 @@ noteRow: {
     setNoteOpenId(null);
   }
 
-  function cancelEdit() {
-    setEditingId(null);
-    setEditingTitle("");
-    setNoteOpenId(null);
-    setNoteDraft("");
+  function startEditNote(t: Task) {
+    if (t.done) return;
+    if (togglingIds.has(t.id)) return;
+
+    setEditingId(t.id);
+    setEditingTitle(t.title);
+
+    setNoteDraft(t.note || "");
+    setNoteOpenId(t.id);
+
+    requestAnimationFrame(() => noteInputRef.current?.focus());
   }
-function startEditNote(t: Task) {
-  if (t.done) return;
-  if (togglingIds.has(t.id)) return;
 
-  setEditingId(t.id);
-  setEditingTitle(t.title);
-
-  setNoteDraft(t.note || "");
-  setNoteOpenId(t.id);
-
-  requestAnimationFrame(() => noteInputRef.current?.focus());
-}
   async function saveTaskEdits(id: number) {
     const nextTitle = editingTitle.trim();
     const nextNoteRaw = noteDraft.trim();
@@ -893,168 +891,161 @@ function startEditNote(t: Task) {
             style={{
               width: 18,
               height: 18,
-              marginTop: 4,
+              marginTop: 3,
               cursor: togglingIds.has(t.id) ? "not-allowed" : "pointer",
               opacity: togglingIds.has(t.id) ? 0.6 : 1,
             }}
           />
 
           <div style={{ display: "grid", gap: 10, flex: 1, minWidth: 0 }}>
- {/* Заголовок */}
-{isEditing ? (
-  isNoteOpen ? (
-    // когда редактируем заметку, заголовок показываем как текст, чтобы не украл фокус
-    <div
-      style={{
-        fontWeight: 900,
-        fontSize: 16,
-        lineHeight: 1.2,
-        minWidth: 0,
-        wordBreak: "break-word",
-        opacity: 0.9,
-      }}
-      onPointerDown={(e) => {
-        // если ткнули по заголовку во время редактирования заметки, переключаемся на редактирование заголовка
-        e.preventDefault();
-        setNoteOpenId(null);
-        requestAnimationFrame(() => {
-          // фокус словит title input за счет autoFocus ниже (потому что isNoteOpen станет false)
-        });
-      }}
-    >
-      {editingTitle}
-    </div>
-  ) : (
-    <input
-      data-editable
-      name={`title-${t.id}`}
-      id={`title-${t.id}`}
-      autoFocus
-      value={editingTitle}
-      onChange={(e) => setEditingTitle(e.target.value)}
-      onBlur={() => {
-        if (titleBlurGuard.current) {
-          titleBlurGuard.current = false;
-          return;
-        }
-        saveTaskEdits(t.id);
-      }}
-      onKeyDown={(e) => {
-        if (e.key === "Enter") {
-          e.preventDefault();
-          saveTaskEdits(t.id);
-        }
-        if (e.key === "Escape") cancelEdit();
-      }}
-      style={{
-        width: "100%",
-        border: "none",
-        outline: "none",
-        background: "transparent",
-        fontWeight: 900,
-        fontSize: 16,
-        lineHeight: 1.2,
-        padding: 0,
-        margin: 0,
-      }}
-    />
-  )
-) : (
-  <div
-    data-editable
-    onClick={() => startEdit(t)}
-    style={{
-      fontWeight: 900,
-      fontSize: 16,
-      lineHeight: 1.2,
-      textDecoration: t.done ? "line-through" : "none",
-      cursor: t.done ? "default" : "text",
-      userSelect: "text",
-      minWidth: 0,
-      wordBreak: "break-word",
-    }}
-  >
-    {t.title}
-  </div>
-)}
+            {/* Заголовок */}
+            {isEditing ? (
+              isNoteOpen ? (
+                <div
+                  style={{
+                    fontWeight: 900,
+                    fontSize: 16,
+                    lineHeight: 1.2,
+                    minWidth: 0,
+                    wordBreak: "break-word",
+                    opacity: 0.9,
+                  }}
+                  onPointerDown={(e) => {
+                    e.preventDefault();
+                    setNoteOpenId(null);
+                  }}
+                >
+                  {editingTitle}
+                </div>
+              ) : (
+                <input
+                  data-editable
+                  name={`title-${t.id}`}
+                  id={`title-${t.id}`}
+                  autoFocus
+                  value={editingTitle}
+                  onChange={(e) => setEditingTitle(e.target.value)}
+                  onBlur={() => {
+                    if (titleBlurGuard.current) {
+                      titleBlurGuard.current = false;
+                      return;
+                    }
+                    saveTaskEdits(t.id);
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      saveTaskEdits(t.id);
+                    }
+                    if (e.key === "Escape") cancelEdit();
+                  }}
+                  style={{
+                    width: "100%",
+                    border: "none",
+                    outline: "none",
+                    background: "transparent",
+                    fontWeight: 900,
+                    fontSize: 16,
+                    lineHeight: 1.2,
+                    padding: 0,
+                    margin: 0,
+                  }}
+                />
+              )
+            ) : (
+              <div
+                data-editable
+                onClick={() => startEdit(t)}
+                style={{
+                  fontWeight: 900,
+                  fontSize: 16,
+                  lineHeight: 1.2,
+                  textDecoration: t.done ? "line-through" : "none",
+                  cursor: t.done ? "default" : "text",
+                  userSelect: "text",
+                  minWidth: 0,
+                  wordBreak: "break-word",
+                }}
+              >
+                {t.title}
+              </div>
+            )}
 
-{/* Заметка */}
-{isEditing ? (
-  isNoteOpen ? (
-    <input
-      data-editable
-      ref={noteInputRef}
-      name={`note-${t.id}`}
-      id={`note-${t.id}`}
-      autoFocus
-      value={noteDraft}
-      onChange={(e) => setNoteDraft(e.target.value)}
-      placeholder="Заметка"
-      onBlur={() => {
-        saveNote(t.id, noteDraft);
-        setNoteOpenId(null);
-      }}
-      onKeyDown={(e) => {
-        if (e.key === "Enter") {
-          e.preventDefault();
-          saveNote(t.id, noteDraft);
-          setNoteOpenId(null);
-        }
-        if (e.key === "Escape") {
-          e.preventDefault();
-          setNoteOpenId(null);
-        }
-      }}
-      style={{
-        width: "100%",
-        border: "none",
-        outline: "none",
-        background: "transparent",
-        fontSize: 12,
-        lineHeight: 1.25,
-        padding: 0,
-        margin: 0,
-        opacity: 0.55,
-      }}
-    />
-  ) : t.note ? (
-    <div
-      data-editable
-
-      style={ui.notePreview}
-      onPointerDown={(e) => {
-        e.preventDefault();
-        openNoteEditor(t);
-      }}
-    >
-      {t.note}
-    </div>
-  ) : (
-    <div
-      data-editable
-
-      style={ui.noteHint}
-      onPointerDown={(e) => {
-        e.preventDefault();
-        openplaceholder="Заметка"Editor(t);
-      }}
-    >
-      Заметка
-    </div>
-  )
-) : t.note ? (
-  <div
-    data-editable
-
-    style={ui.notePreview}
-    onPointerDown={(e) => {
-      e.preventDefault();
-      startEditNote(t);
-    }}
-  >
-    {t.note}
-  </div>
-) : null}
+            {/* Заметка */}
+            <div style={ui.noteRow}>
+              {isEditing ? (
+                isNoteOpen ? (
+                  <input
+                    data-editable
+                    ref={noteInputRef}
+                    name={`note-${t.id}`}
+                    id={`note-${t.id}`}
+                    value={noteDraft}
+                    onChange={(e) => setNoteDraft(e.target.value)}
+                    placeholder="Заметка"
+                    onBlur={() => {
+                      saveNote(t.id, noteDraft);
+                      setNoteOpenId(null);
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        saveNote(t.id, noteDraft);
+                        setNoteOpenId(null);
+                      }
+                      if (e.key === "Escape") {
+                        e.preventDefault();
+                        setNoteOpenId(null);
+                      }
+                    }}
+                    style={{
+                      width: "100%",
+                      border: "none",
+                      outline: "none",
+                      background: "transparent",
+                      fontSize: 12,
+                      lineHeight: "18px",
+                      padding: 0,
+                      margin: 0,
+                      opacity: 0.55,
+                    }}
+                  />
+                ) : t.note ? (
+                  <div
+                    data-editable
+                    style={ui.notePreview}
+                    onPointerDown={(e) => {
+                      e.preventDefault();
+                      openNoteEditor(t);
+                    }}
+                  >
+                    {t.note}
+                  </div>
+                ) : (
+                  <div
+                    data-editable
+                    style={ui.noteHint}
+                    onPointerDown={(e) => {
+                      e.preventDefault();
+                      openNoteEditor(t);
+                    }}
+                  >
+                    Заметка
+                  </div>
+                )
+              ) : t.note ? (
+                <div
+                  data-editable
+                  style={ui.notePreview}
+                  onPointerDown={(e) => {
+                    e.preventDefault();
+                    startEditNote(t);
+                  }}
+                >
+                  {t.note}
+                </div>
+              ) : null}
+            </div>
 
             {/* Мета */}
             {hasMeta ? (
@@ -1084,27 +1075,25 @@ function startEditNote(t: Task) {
     loadTasks();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ready, activeProjectId]);
-  
-useEffect(() => {
-  function handlePointerDown(e: PointerEvent) {
-    // если сейчас не в режиме редактирования — ничего не делаем
-    if (editingId === null) return;
 
-    const target = e.target as HTMLElement;
+  useEffect(() => {
+    function handlePointerDown(e: PointerEvent) {
+      if (editingId === null) return;
 
-    // если клик внутри любого input — не закрываем
-    if (target.closest("input")) return;
+      const target = e.target as HTMLElement;
 
-    // если клик по заметке/заголовку — не закрываем
-    if (target.closest("[data-editable]")) return;
+      // клики внутри полей ввода не закрывают
+      if (target.closest("input, textarea")) return;
 
-    // иначе — выходим из любого редактирования
-    cancelEdit();
-  }
+      // клики по интерактивным кускам карточки не закрывают
+      if (target.closest("[data-editable]")) return;
 
-  document.addEventListener("pointerdown", handlePointerDown);
-  return () => document.removeEventListener("pointerdown", handlePointerDown);
-}, [editingId]);
+      cancelEdit();
+    }
+
+    document.addEventListener("pointerdown", handlePointerDown);
+    return () => document.removeEventListener("pointerdown", handlePointerDown);
+  }, [editingId, cancelEdit]);
 
   return (
     <div style={ui.shell}>
@@ -1352,14 +1341,7 @@ useEffect(() => {
                     .filter((s) => s.key !== "NO_DATE")
                     .map((sec) => (
                       <div key={sec.key} style={{ display: "grid", gap: 10 }}>
-                        <div
-                          style={{
-                            display: "flex",
-                            alignItems: "baseline",
-                            justifyContent: "space-between",
-                            gap: 12,
-                          }}
-                        >
+                        <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 12 }}>
                           <div style={ui.dayTitle}>{sec.label}</div>
                           <div style={ui.muted}>{sec.count} шт.</div>
                         </div>
