@@ -1,13 +1,17 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import Script from "next/script";
 import "./globals.css";
-export const metadata = {
-  viewport: "width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no",
-};
 
 export const metadata: Metadata = {
   title: "TODO",
   description: "Telegram Mini App",
+};
+
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 1,
+  userScalable: false,
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
