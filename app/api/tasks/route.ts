@@ -41,7 +41,7 @@ export async function GET(req: Request) {
 
   let q = supabaseAdmin
     .from("tasks")
-    .select("id,title,due_date,done,project_id")
+    .select("id,title,due_date,done,project_id,note")
     .eq("user_id", uid);
 
   if (projectId) q = q.eq("project_id", projectId);
@@ -66,6 +66,7 @@ export async function POST(req: Request) {
   const body = await req.json().catch(() => ({} as any));
   const title = String(body?.title || "").trim();
   const due_date = body?.due_date ? String(body.due_date) : null;
+  const note = typeof body?.note === "string" ? body.note.trim() : null;
 
   // ВАЖНО: принимаем и project_id и projectId
   const project_id = toNumOrNull(body?.project_id ?? body?.projectId);
@@ -93,8 +94,9 @@ export async function POST(req: Request) {
       due_date,
       done: false,
       project_id,
+      note,
     })
-    .select("id,title,due_date,done,project_id")
+    .select("id,title,due_date,done,project_id,note")
     .single();
 
   if (error) {
@@ -103,25 +105,49 @@ export async function POST(req: Request) {
 
   return NextResponse.json({ ok: true, task: data });
 }
-
+//
 export async function PATCH(req: Request) {
   const uid = await getUidFromSession();
   if (!uid) return NextResponse.json({ ok: false, reason: "NO_SESSION" }, { status: 401 });
 
   const body = await req.json().catch(() => ({} as any));
   const id = Number(body?.id);
-  const done = Boolean(body?.done);
 
   if (!Number.isFinite(id) || id <= 0) {
     return NextResponse.json({ ok: false, reason: "BAD_ID" }, { status: 400 });
   }
 
+  // собираем update только из разрешённых полей
+  const patch: any = {};
+
+  if (typeof body?.done === "boolean") {
+    patch.done = body.done;
+  }
+
+  if (typeof body?.title === "string") {
+    const title = body.title.trim();
+    if (!title) {
+      return NextResponse.json({ ok: false, reason: "NO_TITLE" }, { status: 400 });
+    }
+    patch.title = title;
+  }
+if (typeof body?.note === "string") {
+  const note = body.note.trim();
+  patch.note = note || null; // пустую строку превращаем в null
+}    
+  if (Object.keys(patch).length === 0) {
+    return NextResponse.json(
+      { ok: false, reason: "BAD_INPUT", error: "Передай done (boolean) или title (string)" },
+      { status: 400 }
+    );
+  }
+
   const { data, error } = await supabaseAdmin
     .from("tasks")
-    .update({ done })
+    .update(patch)
     .eq("id", id)
     .eq("user_id", uid)
-    .select("id,title,due_date,done,project_id")
+    .select("id,title,due_date,done,project_id,note")
     .single();
 
   if (error) {
@@ -130,3 +156,4 @@ export async function PATCH(req: Request) {
 
   return NextResponse.json({ ok: true, task: data });
 }
+//

@@ -5,8 +5,55 @@ import { verifyTelegramInitData } from "@/lib/telegram";
 
 export async function POST(req: Request) {
   try {
+          // ===== DEV LOCAL AUTH =====
+    const isDev = process.env.NODE_ENV !== "production";
+    if (isDev && process.env.DEV_LOCAL_AUTH === "true") {
+      const fakeTgId = Number(process.env.DEV_TG_ID || 999999);
+
+      const { data: user, error } = await supabaseAdmin
+        .from("users")
+        .upsert(
+          {
+            tg_id: fakeTgId,
+            telegram_id: fakeTgId,
+            username: "local_dev",
+            first_name: "Local",
+          },
+          { onConflict: "tg_id" }
+        )
+        .select()
+        .single();
+
+      if (error) {
+        return NextResponse.json(
+          { ok: false, reason: "DB_ERROR", error: error.message },
+          { status: 500 }
+        );
+      }
+
+      const secret = process.env.APP_JWT_SECRET;
+      if (!secret) {
+        return NextResponse.json({ ok: false, reason: "NO_APP_JWT_SECRET" }, { status: 500 });
+      }
+
+      const token = jwt.sign({ uid: user.id }, secret, { expiresIn: "30d" });
+
+      const res = NextResponse.json({ ok: true, dev: true });
+
+      res.cookies.set("session", token, {
+        httpOnly: true,
+        sameSite: "lax",
+        secure: false,
+        path: "/",
+      });
+
+      return res;
+    }
+    // ===== END DEV LOCAL AUTH =====
+    
     const body = await req.json().catch(() => ({} as any));
     const initData = String(body?.initData || "");
+    
 
     const botToken = process.env.TELEGRAM_BOT_TOKEN;
     if (!botToken) {
@@ -53,12 +100,14 @@ export async function POST(req: Request) {
 
     const res = NextResponse.json({ ok: true });
 
-    res.cookies.set("session", token, {
-      httpOnly: true,
-      sameSite: "none",
-      secure: true,
-      path: "/",
-    });
+const cookieSecure = process.env.NODE_ENV === "production";
+
+res.cookies.set("session", token, {
+  httpOnly: true,
+  sameSite: cookieSecure ? "none" : "lax",
+  secure: cookieSecure,
+  path: "/",
+});
 
     return res;
   } catch (e: any) {
