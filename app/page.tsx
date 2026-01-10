@@ -552,7 +552,6 @@ export default function HomePage() {
     }
 
     if (!initData) {
-      // dev режим: авторизуемся локально без Telegram
       if (DEV_LOCAL_AUTH) {
         try {
           const r = await fetch("/api/auth", {
@@ -639,7 +638,6 @@ export default function HomePage() {
     try {
       const url = new URL("/api/tasks", window.location.origin);
 
-      // просим все, чтобы подтянуть null due_date
       url.searchParams.set("view", "all");
       if (activeProjectId) url.searchParams.set("projectId", String(activeProjectId));
 
@@ -711,7 +709,7 @@ export default function HomePage() {
       credentials: "include",
       body: JSON.stringify({
         title: title.trim(),
-        due_date: dueDate, // null = без даты
+        due_date: dueDate,
         projectId: activeProjectId,
       }),
     });
@@ -920,6 +918,7 @@ export default function HomePage() {
               ) : (
                 <input
                   data-editable
+                  type="text"
                   name={`title-${t.id}`}
                   id={`title-${t.id}`}
                   autoFocus
@@ -933,12 +932,19 @@ export default function HomePage() {
                     saveTaskEdits(t.id);
                   }}
                   onKeyDown={(e) => {
+                    // Важно: не трогаем Backspace вообще, иначе ломается "удержание"
                     if (e.key === "Enter") {
                       e.preventDefault();
                       saveTaskEdits(t.id);
                     }
                     if (e.key === "Escape") cancelEdit();
                   }}
+                  autoCorrect="on"
+                  autoCapitalize="sentences"
+                  spellCheck={true}
+                  autoComplete="on"
+                  inputMode="text"
+                  enterKeyHint="done"
                   style={{
                     width: "100%",
                     border: "none",
@@ -972,80 +978,90 @@ export default function HomePage() {
             )}
 
             {/* Заметка */}
-            <div style={ui.noteRow}>
-              {isEditing ? (
-                isNoteOpen ? (
-                  <input
-                    data-editable
-                    ref={noteInputRef}
-                    name={`note-${t.id}`}
-                    id={`note-${t.id}`}
-                    value={noteDraft}
-                    onChange={(e) => setNoteDraft(e.target.value)}
-                    placeholder="Заметка"
-                    onBlur={() => {
-                      saveNote(t.id, noteDraft);
-                      setNoteOpenId(null);
-                    }}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") {
-                        e.preventDefault();
+            {(isEditing || Boolean(t.note)) && (
+              <div style={ui.noteRow}>
+                {isEditing ? (
+                  isNoteOpen ? (
+                    <input
+                      data-editable
+                      ref={noteInputRef}
+                      type="text"
+                      name={`note-${t.id}`}
+                      id={`note-${t.id}`}
+                      value={noteDraft}
+                      onChange={(e) => setNoteDraft(e.target.value)}
+                      placeholder="Заметка"
+                      onBlur={() => {
                         saveNote(t.id, noteDraft);
                         setNoteOpenId(null);
-                      }
-                      if (e.key === "Escape") {
+                      }}
+                      onKeyDown={(e) => {
+                        // Важно: не трогаем Backspace вообще
+                        if (e.key === "Enter") {
+                          e.preventDefault();
+                          saveNote(t.id, noteDraft);
+                          setNoteOpenId(null);
+                        }
+                        if (e.key === "Escape") {
+                          e.preventDefault();
+                          setNoteOpenId(null);
+                        }
+                      }}
+                      autoCorrect="on"
+                      autoCapitalize="sentences"
+                      spellCheck={true}
+                      autoComplete="on"
+                      inputMode="text"
+                      enterKeyHint="done"
+                      style={{
+                        width: "100%",
+                        border: "none",
+                        outline: "none",
+                        background: "transparent",
+                        fontSize: 12,
+                        lineHeight: "18px",
+                        padding: 0,
+                        margin: 0,
+                        opacity: 0.55,
+                      }}
+                    />
+                  ) : t.note ? (
+                    <div
+                      data-editable
+                      style={ui.notePreview}
+                      onPointerDown={(e) => {
                         e.preventDefault();
-                        setNoteOpenId(null);
-                      }
-                    }}
-                    style={{
-                      width: "100%",
-                      border: "none",
-                      outline: "none",
-                      background: "transparent",
-                      fontSize: 12,
-                      lineHeight: "18px",
-                      padding: 0,
-                      margin: 0,
-                      opacity: 0.55,
-                    }}
-                  />
-                ) : t.note ? (
+                        openNoteEditor(t);
+                      }}
+                    >
+                      {t.note}
+                    </div>
+                  ) : (
+                    <div
+                      data-editable
+                      style={ui.noteHint}
+                      onPointerDown={(e) => {
+                        e.preventDefault();
+                        openNoteEditor(t);
+                      }}
+                    >
+                      Заметка
+                    </div>
+                  )
+                ) : (
                   <div
                     data-editable
                     style={ui.notePreview}
                     onPointerDown={(e) => {
                       e.preventDefault();
-                      openNoteEditor(t);
+                      startEditNote(t);
                     }}
                   >
                     {t.note}
                   </div>
-                ) : (
-                  <div
-                    data-editable
-                    style={ui.noteHint}
-                    onPointerDown={(e) => {
-                      e.preventDefault();
-                      openNoteEditor(t);
-                    }}
-                  >
-                    Заметка
-                  </div>
-                )
-              ) : t.note ? (
-                <div
-                  data-editable
-                  style={ui.notePreview}
-                  onPointerDown={(e) => {
-                    e.preventDefault();
-                    startEditNote(t);
-                  }}
-                >
-                  {t.note}
-                </div>
-              ) : null}
-            </div>
+                )}
+              </div>
+            )}
 
             {/* Мета */}
             {hasMeta ? (
@@ -1180,11 +1196,19 @@ export default function HomePage() {
           <div style={{ display: "grid", gap: 10 }}>
             <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
               <input
+                type="text"
                 name="newTaskTitle"
+                id="newTaskTitle"
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
                 placeholder={isAllTasks ? "Выбери проект табом сверху…" : "Добавьте новую задачу"}
                 disabled={isAllTasks || !activeProjectId}
+                autoCorrect="on"
+                autoCapitalize="sentences"
+                spellCheck={true}
+                autoComplete="on"
+                inputMode="text"
+                enterKeyHint="done"
                 style={{
                   ...ui.input,
                   flex: 1,
@@ -1383,12 +1407,20 @@ export default function HomePage() {
               <div style={{ fontSize: 16, fontWeight: 900, marginBottom: 12 }}>Новый проект</div>
 
               <input
+                type="text"
                 name="newProjectName"
+                id="newProjectName"
                 value={newProjectName}
                 onChange={(e) => setNewProjectName(e.target.value)}
                 placeholder="Например: работа, дом, спорт…"
                 style={ui.input}
                 autoFocus
+                autoCorrect="on"
+                autoCapitalize="words"
+                spellCheck={true}
+                autoComplete="on"
+                inputMode="text"
+                enterKeyHint="done"
               />
 
               <div style={{ display: "flex", gap: 12, marginTop: 14 }}>
