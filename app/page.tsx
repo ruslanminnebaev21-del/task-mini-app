@@ -1335,10 +1335,6 @@ export default function HomePage() {
                   {savingEditTask ? "Сохраняю..." : "Сохранить"}
                 </button>
               </div>
-
-              <div style={{ ...ui.muted, marginTop: 12 }}>
-                Enter сохраняет. Escape закрывает.
-              </div>
             </div>
           </div>
         )}
