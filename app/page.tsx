@@ -926,6 +926,7 @@ function startEditNote(t: Task) {
     </div>
   ) : (
     <input
+      data-editable
       name={`title-${t.id}`}
       id={`title-${t.id}`}
       autoFocus
@@ -960,6 +961,7 @@ function startEditNote(t: Task) {
   )
 ) : (
   <div
+    data-editable
     onClick={() => startEdit(t)}
     style={{
       fontWeight: 900,
@@ -980,6 +982,7 @@ function startEditNote(t: Task) {
 {isEditing ? (
   isNoteOpen ? (
     <input
+      data-editable
       ref={noteInputRef}
       name={`note-${t.id}`}
       id={`note-${t.id}`}
@@ -1016,6 +1019,8 @@ function startEditNote(t: Task) {
     />
   ) : t.note ? (
     <div
+      data-editable
+
       style={ui.notePreview}
       onPointerDown={(e) => {
         e.preventDefault();
@@ -1026,10 +1031,12 @@ function startEditNote(t: Task) {
     </div>
   ) : (
     <div
+      data-editable
+
       style={ui.noteHint}
       onPointerDown={(e) => {
         e.preventDefault();
-        openNoteEditor(t);
+        openplaceholder="Заметка"Editor(t);
       }}
     >
       Заметка
@@ -1037,6 +1044,8 @@ function startEditNote(t: Task) {
   )
 ) : t.note ? (
   <div
+    data-editable
+
     style={ui.notePreview}
     onPointerDown={(e) => {
       e.preventDefault();
@@ -1075,6 +1084,27 @@ function startEditNote(t: Task) {
     loadTasks();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ready, activeProjectId]);
+  
+useEffect(() => {
+  function handlePointerDown(e: PointerEvent) {
+    // если сейчас не в режиме редактирования — ничего не делаем
+    if (editingId === null) return;
+
+    const target = e.target as HTMLElement;
+
+    // если клик внутри любого input — не закрываем
+    if (target.closest("input")) return;
+
+    // если клик по заметке/заголовку — не закрываем
+    if (target.closest("[data-editable]")) return;
+
+    // иначе — выходим из любого редактирования
+    cancelEdit();
+  }
+
+  document.addEventListener("pointerdown", handlePointerDown);
+  return () => document.removeEventListener("pointerdown", handlePointerDown);
+}, [editingId]);
 
   return (
     <div style={ui.shell}>
