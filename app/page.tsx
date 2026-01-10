@@ -54,6 +54,9 @@ export default function HomePage() {
   const titleBlurGuard = useRef(false);
   const noteInputRef = useRef<HTMLInputElement | null>(null);
 
+  // чтобы “outside tap” не срабатывал на клавиатуру/системные зоны
+  const appRef = useRef<HTMLElement | null>(null);
+
   // дата необязательна
   const [dueDate, setDueDate] = useState<string | null>(null);
 
@@ -98,21 +101,18 @@ export default function HomePage() {
 
     const sections: TaskSection[] = [];
 
-    // сегодня
     if (byKey.has(todayISO)) {
       const todayTasks = byKey.get(todayISO)!;
       sections.push({ key: todayISO, label: "Сегодня", tasks: todayTasks, count: todayTasks.length });
       byKey.delete(todayISO);
     }
 
-    // завтра
     if (byKey.has(tomorrowISO)) {
       const tomorrowTasks = byKey.get(tomorrowISO)!;
       sections.push({ key: tomorrowISO, label: "Завтра", tasks: tomorrowTasks, count: tomorrowTasks.length });
       byKey.delete(tomorrowISO);
     }
 
-    // остальные даты (по возрастанию)
     const otherDates = Array.from(byKey.keys())
       .filter((k) => k !== "NO_DATE")
       .sort((a, b) => a.localeCompare(b));
@@ -123,7 +123,6 @@ export default function HomePage() {
       byKey.delete(d);
     }
 
-    // без даты (на всякий, чтобы не терять задачи)
     if (byKey.has("NO_DATE")) {
       const nd = byKey.get("NO_DATE")!;
       sections.push({ key: "NO_DATE", label: "Без даты", tasks: nd, count: nd.length });
@@ -792,6 +791,23 @@ export default function HomePage() {
     }
   }
 
+  function focusTitleInput(id: number) {
+    // иногда в iOS нужно чуть позже, чем rAF
+    setTimeout(() => {
+      const el = document.getElementById(`title-${id}`) as HTMLInputElement | null;
+      el?.focus();
+      el?.setSelectionRange?.(el.value.length, el.value.length);
+    }, 0);
+  }
+
+  function focusNoteInput(id: number) {
+    setTimeout(() => {
+      const el = document.getElementById(`note-${id}`) as HTMLInputElement | null;
+      el?.focus();
+      el?.setSelectionRange?.(el.value.length, el.value.length);
+    }, 0);
+  }
+
   function startEdit(t: Task) {
     if (t.done) return;
     if (togglingIds.has(t.id)) return;
@@ -801,6 +817,8 @@ export default function HomePage() {
 
     setNoteDraft(t.note || "");
     setNoteOpenId(null);
+
+    focusTitleInput(t.id);
   }
 
   function startEditNote(t: Task) {
@@ -813,7 +831,7 @@ export default function HomePage() {
     setNoteDraft(t.note || "");
     setNoteOpenId(t.id);
 
-    requestAnimationFrame(() => noteInputRef.current?.focus());
+    focusNoteInput(t.id);
   }
 
   async function saveTaskEdits(id: number) {
@@ -864,7 +882,7 @@ export default function HomePage() {
     titleBlurGuard.current = true;
     setNoteDraft(t.note || "");
     setNoteOpenId(t.id);
-    requestAnimationFrame(() => noteInputRef.current?.focus());
+    focusNoteInput(t.id);
   }
 
   function TaskCard({ t }: { t: Task }) {
@@ -899,6 +917,7 @@ export default function HomePage() {
             {/* Заголовок */}
             {isEditing ? (
               isNoteOpen ? (
+                // когда редактируем заметку, заголовок показываем текстом, чтобы не дёргать фокус
                 <div
                   style={{
                     fontWeight: 900,
@@ -908,9 +927,10 @@ export default function HomePage() {
                     wordBreak: "break-word",
                     opacity: 0.9,
                   }}
-                  onPointerDown={(e) => {
-                    e.preventDefault();
+                  data-editable
+                  onClick={() => {
                     setNoteOpenId(null);
+                    focusTitleInput(t.id);
                   }}
                 >
                   {editingTitle}
@@ -921,7 +941,6 @@ export default function HomePage() {
                   type="text"
                   name={`title-${t.id}`}
                   id={`title-${t.id}`}
-                  autoFocus
                   value={editingTitle}
                   onChange={(e) => setEditingTitle(e.target.value)}
                   onBlur={() => {
@@ -932,7 +951,7 @@ export default function HomePage() {
                     saveTaskEdits(t.id);
                   }}
                   onKeyDown={(e) => {
-                    // Важно: не трогаем Backspace вообще, иначе ломается "удержание"
+                    // Backspace не трогаем, иначе ломается удержание
                     if (e.key === "Enter") {
                       e.preventDefault();
                       saveTaskEdits(t.id);
@@ -977,7 +996,7 @@ export default function HomePage() {
               </div>
             )}
 
-            {/* Заметка */}
+            {/* Заметка (input, без textarea) */}
             {(isEditing || Boolean(t.note)) && (
               <div style={ui.noteRow}>
                 {isEditing ? (
@@ -996,7 +1015,6 @@ export default function HomePage() {
                         setNoteOpenId(null);
                       }}
                       onKeyDown={(e) => {
-                        // Важно: не трогаем Backspace вообще
                         if (e.key === "Enter") {
                           e.preventDefault();
                           saveNote(t.id, noteDraft);
@@ -1029,10 +1047,7 @@ export default function HomePage() {
                     <div
                       data-editable
                       style={ui.notePreview}
-                      onPointerDown={(e) => {
-                        e.preventDefault();
-                        openNoteEditor(t);
-                      }}
+                      onClick={() => openNoteEditor(t)}
                     >
                       {t.note}
                     </div>
@@ -1040,10 +1055,7 @@ export default function HomePage() {
                     <div
                       data-editable
                       style={ui.noteHint}
-                      onPointerDown={(e) => {
-                        e.preventDefault();
-                        openNoteEditor(t);
-                      }}
+                      onClick={() => openNoteEditor(t)}
                     >
                       Заметка
                     </div>
@@ -1052,10 +1064,7 @@ export default function HomePage() {
                   <div
                     data-editable
                     style={ui.notePreview}
-                    onPointerDown={(e) => {
-                      e.preventDefault();
-                      startEditNote(t);
-                    }}
+                    onClick={() => startEditNote(t)}
                   >
                     {t.note}
                   </div>
@@ -1092,14 +1101,20 @@ export default function HomePage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ready, activeProjectId]);
 
+  // Важно: outside-tap работает ТОЛЬКО внутри appRef. Это лечит iOS клавиатуру.
   useEffect(() => {
     function handlePointerDown(e: PointerEvent) {
       if (editingId === null) return;
 
-      const target = e.target as HTMLElement;
+      const target = e.target;
+      if (!(target instanceof HTMLElement)) return;
+
+      // если тап не внутри контейнера приложения - игнор
+      // (тап по клавиатуре/системным зонам сюда попадает как "вне")
+      if (appRef.current && !appRef.current.contains(target)) return;
 
       // клики внутри полей ввода не закрывают
-      if (target.closest("input, textarea")) return;
+      if (target.closest("input")) return;
 
       // клики по интерактивным кускам карточки не закрывают
       if (target.closest("[data-editable]")) return;
@@ -1118,7 +1133,7 @@ export default function HomePage() {
       <div style={{ ...ui.orb, ...ui.orbA }} />
       <div style={{ ...ui.orb, ...ui.orbB }} />
 
-      <main style={ui.container}>
+      <main style={ui.container} ref={appRef as any}>
         {/* Header */}
         <div style={ui.headerRow}>
           <h1 style={ui.h1}>Задачи</h1>
@@ -1198,7 +1213,6 @@ export default function HomePage() {
               <input
                 type="text"
                 name="newTaskTitle"
-                id="newTaskTitle"
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
                 placeholder={isAllTasks ? "Выбери проект табом сверху…" : "Добавьте новую задачу"}
@@ -1409,7 +1423,6 @@ export default function HomePage() {
               <input
                 type="text"
                 name="newProjectName"
-                id="newProjectName"
                 value={newProjectName}
                 onChange={(e) => setNewProjectName(e.target.value)}
                 placeholder="Например: работа, дом, спорт…"
