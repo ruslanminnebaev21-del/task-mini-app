@@ -1174,8 +1174,8 @@ export default function HomePage() {
                   {Array.from({ length: 3 }).map((_, s) => (
                     <div key={s} style={{ display: "grid", gap: 10 }}>
                       <div style={{ display: "flex", justifyContent: "space-between" }}>
-                        <div style={{ ...ui.skeletonLine, width: 120, height: 18 }} />
-                        <div style={{ ...ui.skeletonLine, width: 40, height: 14 }} />
+                        <div className="skeleton-line" style={{ width: 120, height: 18 }} />
+                        <div className="skeleton-line" style={{ width: 40, height: 14 }} />
                       </div>
 
                       <div style={{ display: "grid", gap: 14 }}>
