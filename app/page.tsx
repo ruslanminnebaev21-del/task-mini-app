@@ -1124,7 +1124,7 @@ export default function HomePage() {
                   }}
                   title={dueDate ? `Дата: ${fmtDate(dueDate)}` : "Выбрать дату"}
                 >
-                  Выбрать дату
+                  {dueDate ? `Дата: ${fmtDate(dueDate)}` : "Выбрать дату"}
                 </button>
 
                 {/* Прозрачный инпут поверх кнопки, чтобы iOS точно открыл пикер */}
