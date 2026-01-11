@@ -41,7 +41,7 @@ export async function GET(req: Request) {
 
   let q = supabaseAdmin
     .from("tasks")
-    .select("id,title,due_date,done,project_id,note")
+    .select("id,title,due_date,done,completed_at,project_id,note")
     .eq("user_id", uid);
 
   if (projectId) q = q.eq("project_id", projectId);
@@ -124,6 +124,24 @@ export async function PATCH(req: Request) {
     patch.done = body.done;
   }
 
+    // completed_at: строка ISO или null
+  if (body?.completed_at === null) {
+    patch.completed_at = null;
+  } else if (typeof body?.completed_at === "string") {
+    const v = body.completed_at.trim();
+    patch.completed_at = v ? v : null;
+  }
+
+  // страховка: если done=true, а completed_at не передали, ставим серверное время
+  if (patch.done === true && patch.completed_at === undefined) {
+    patch.completed_at = new Date().toISOString();
+  }
+
+  // если done=false, а completed_at не передали, можно обнулить автоматически
+  if (patch.done === false && patch.completed_at === undefined) {
+    patch.completed_at = null;
+  }
+
   if (typeof body?.title === "string") {
     const title = body.title.trim();
     if (!title) {
@@ -134,7 +152,16 @@ export async function PATCH(req: Request) {
 if (typeof body?.note === "string") {
   const note = body.note.trim();
   patch.note = note || null; // пустую строку превращаем в null
-}    
+} 
+
+if (body?.due_date === null) {
+  patch.due_date = null;
+} else if (typeof body?.due_date === "string") {
+  const d = body.due_date.trim();
+  // либо пусто -> null, либо YYYY-MM-DD
+  patch.due_date = d ? d : null;
+}
+
   if (Object.keys(patch).length === 0) {
     return NextResponse.json(
       { ok: false, reason: "BAD_INPUT", error: "Передай done (boolean) или title (string)" },
@@ -147,7 +174,7 @@ if (typeof body?.note === "string") {
     .update(patch)
     .eq("id", id)
     .eq("user_id", uid)
-    .select("id,title,due_date,done,project_id,note")
+    .select("id,title,due_date,done,completed_at,project_id,note")
     .single();
 
   if (error) {
@@ -156,4 +183,27 @@ if (typeof body?.note === "string") {
 
   return NextResponse.json({ ok: true, task: data });
 }
-//
+
+export async function DELETE(req: Request) {
+  const uid = await getUidFromSession();
+  if (!uid) return NextResponse.json({ ok: false, reason: "NO_SESSION" }, { status: 401 });
+
+  const body = await req.json().catch(() => ({} as any));
+  const id = Number(body?.id);
+
+  if (!Number.isFinite(id) || id <= 0) {
+    return NextResponse.json({ ok: false, reason: "BAD_ID" }, { status: 400 });
+  }
+
+  const { error } = await supabaseAdmin
+    .from("tasks")
+    .delete()
+    .eq("id", id)
+    .eq("user_id", uid);
+
+  if (error) {
+    return NextResponse.json({ ok: false, reason: "DB_ERROR", error: error.message }, { status: 500 });
+  }
+
+  return NextResponse.json({ ok: true });
+}

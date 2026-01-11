@@ -2,12 +2,14 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties } from "react";
+import { IconTrash, IconPlus, IconRotate, IconEdit } from "@/app/components/icons";
 
 type Task = {
   id: number;
   title: string;
   due_date: string | null;
   done: boolean;
+  completed_at?: string | null;
   project_id?: number | null;
   note?: string | null;
 };
@@ -28,11 +30,35 @@ function fmtDate(d: string) {
   if (!y || !m || !day) return d;
   return `${day.toString().padStart(2, "0")}.${m.toString().padStart(2, "0")}.${y}`;
 }
+function fmtDateTimeLocal(iso?: string | null) {
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  return new Intl.DateTimeFormat(undefined, {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(d);
+}
+
+function isoDayFromTs(ts?: string | null) {
+  if (!ts) return null;
+  const d = new Date(ts);
+  if (Number.isNaN(d.getTime())) return null;
+
+  // важное: берем локальный день устройства, а не UTC
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
 
 export default function HomePage() {
   const [ready, setReady] = useState(false);
   const [hint, setHint] = useState<string | null>(null);
-
+  //usestate
   // projects
   const [projects, setProjects] = useState<Project[]>([]);
   const [activeProjectId, setActiveProjectId] = useState<number | null>(null); // null = Все задачи
@@ -45,6 +71,7 @@ export default function HomePage() {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [togglingIds, setTogglingIds] = useState<Set<number>>(new Set());
   const [title, setTitle] = useState("");
+  const [viewMode, setViewMode] = useState<"all" | "completed">("all");
 
   // edit task modal
   const [showEditTask, setShowEditTask] = useState(false);
@@ -53,10 +80,25 @@ export default function HomePage() {
   const [editNote, setEditNote] = useState("");
   const [savingEditTask, setSavingEditTask] = useState(false);
 
+  // delete task confirm modal
+  const [showDeleteTask, setShowDeleteTask] = useState(false);
+  const [deleteTaskId, setDeleteTaskId] = useState<number | null>(null);
+  const [deletingTask, setDeletingTask] = useState(false);
+
   const editTitleRef = useRef<HTMLInputElement | null>(null);
   const editNoteRef = useRef<HTMLInputElement | null>(null);
   const swipeStartX = useRef<number | null>(null);
   const dueDateRef = useRef<HTMLInputElement | null>(null);
+
+   // edit projects modal
+  type EditableProject = { id: number; name: string; originalName: string; deleted?: boolean };
+
+  const [showEditProjects, setShowEditProjects] = useState(false);
+  const [editProjects, setEditProjects] = useState<EditableProject[]>([]);
+  const [savingProjectsEdit, setSavingProjectsEdit] = useState(false); 
+
+  const [editDueDate, setEditDueDate] = useState<string | null>(null);
+  const editDueDateRef = useRef<HTMLInputElement | null>(null);
 
   // дата необязательна
   const [dueDate, setDueDate] = useState<string | null>(null);
@@ -83,6 +125,12 @@ export default function HomePage() {
     return dateISO(d);
   }, []);
 
+  const yesterdayISO = useMemo(() => {
+  const d = new Date();
+  d.setDate(d.getDate() - 1);
+  return dateISO(d);
+}, []);
+
   const isToday = dueDate === todayISO;
   const isTomorrow = dueDate === tomorrowISO;
   const hasCustomDate = Boolean(dueDate && !isToday && !isTomorrow);
@@ -94,14 +142,36 @@ export default function HomePage() {
     const byKey = new Map<string, Task[]>();
 
     for (const t of tasks) {
+      if (t.done) continue; // ✅ выполненные не показываем в “Все задачи”
       const key = t.due_date || "NO_DATE";
       const arr = byKey.get(key) || [];
       arr.push(t);
       byKey.set(key, arr);
-    }
+    }  
 
     const sections: TaskSection[] = [];
 
+    // ✅ 1) просроченные: всё, что строго меньше todayISO
+    const overdueDates = Array.from(byKey.keys())
+      .filter((k) => k !== "NO_DATE" && k < todayISO)
+      .sort((a, b) => a.localeCompare(b));
+
+    const overdueTasks: Task[] = [];
+    for (const d of overdueDates) {
+      overdueTasks.push(...(byKey.get(d) || []));
+      byKey.delete(d);
+    }
+
+    if (overdueTasks.length > 0) {
+      sections.push({
+        key: "OVERDUE",
+        label: "Вышел срок",
+        tasks: overdueTasks,
+        count: overdueTasks.length,
+      });
+    }
+
+    // ✅ 2) сегодня/завтра/остальные будущие даты как было
     if (byKey.has(todayISO)) {
       const todayTasks = byKey.get(todayISO)!;
       sections.push({ key: todayISO, label: "Сегодня", tasks: todayTasks, count: todayTasks.length });
@@ -132,10 +202,57 @@ export default function HomePage() {
     return sections;
   }, [tasks, todayISO, tomorrowISO]);
 
-  const noDateTasks = useMemo(() => tasks.filter((t) => !t.due_date), [tasks]);
+const completedSections = useMemo<TaskSection[]>(() => {
+  const doneTasks = tasks
+    .filter((t) => t.done && t.completed_at)
+    // сортируем по дате закрытия: новые сверху
+    .sort((a, b) => String(b.completed_at).localeCompare(String(a.completed_at)));
+
+  const byKey = new Map<string, Task[]>();
+
+  for (const t of doneTasks) {
+    const key = isoDayFromTs(t.completed_at) || "NO_DATE";
+    const arr = byKey.get(key) || [];
+    arr.push(t);
+    byKey.set(key, arr);
+  }
+
+  const sections: TaskSection[] = [];
+
+  if (byKey.has(todayISO)) {
+    const arr = byKey.get(todayISO)!;
+    sections.push({ key: todayISO, label: "Сегодня", tasks: arr, count: arr.length });
+    byKey.delete(todayISO);
+  }
+
+  if (byKey.has(yesterdayISO)) {
+    const arr = byKey.get(yesterdayISO)!;
+    sections.push({ key: yesterdayISO, label: "Вчера", tasks: arr, count: arr.length });
+    byKey.delete(yesterdayISO);
+  }
+
+  const otherDates = Array.from(byKey.keys())
+    .filter((k) => k !== "NO_DATE")
+    // новые даты сверху
+    .sort((a, b) => b.localeCompare(a));
+
+  for (const d of otherDates) {
+    const arr = byKey.get(d)!;
+    sections.push({ key: d, label: fmtDate(d), tasks: arr, count: arr.length });
+  }
+
+  // на всякий случай, если вдруг есть done без completed_at
+  if (byKey.has("NO_DATE")) {
+    const arr = byKey.get("NO_DATE")!;
+    sections.push({ key: "NO_DATE", label: "Без даты", tasks: arr, count: arr.length });
+  }
+
+  return sections;
+}, [tasks, todayISO, yesterdayISO]);
+
+  const noDateTasks = useMemo(() => tasks.filter((t) => !t.due_date && !t.done), [tasks]);
 
   const ui = {
-
     shell: {
       minHeight: "100vh",
       position: "relative",
@@ -219,9 +336,6 @@ export default function HomePage() {
       display: "grid",
       gridTemplateColumns: "1fr",
       overflowX: "hidden",
-      //paddingLeft: 18,          // ✅ даём тени воздух
-      //paddingRight: 18,         // ✅ даём тени воздух
-      //boxSizing: "border-box",  // ✅ чтобы padding не раздувал ширину
     } as CSSProperties,
 
     panel: {
@@ -281,6 +395,19 @@ export default function HomePage() {
       WebkitBackdropFilter: "blur(10px)",
     } as CSSProperties,
 
+    trashBtn: {
+      width: 15,
+      height: 15,
+      padding: 0,
+      border: "none",
+      background: "transparent",
+      cursor: "pointer",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      marginTop: 3,
+    } as CSSProperties,
+
     btnCircle: {
       width: 44,
       height: 44,
@@ -316,19 +443,6 @@ export default function HomePage() {
       border: "1px solid rgba(0,0,0,0.16)",
       background: "rgba(17,17,17,0.92)",
       color: "#fff",
-    } as CSSProperties,
-
-    chipIcon: {
-      width: 28,
-      height: 28,
-      borderRadius: 999,
-      border: "1px solid rgba(0,0,0,0.08)",
-      background: "rgba(255,255,255,0.62)",
-      boxShadow: "0 8px 18px rgba(0,0,0,0.06)",
-      cursor: "pointer",
-      userSelect: "none",
-      display: "grid",
-      placeItems: "center",
     } as CSSProperties,
 
     muted: { fontSize: 12, opacity: 0.65 } as CSSProperties,
@@ -499,11 +613,23 @@ export default function HomePage() {
     taskItem: {
       borderRadius: 20,
       padding: 14,
-      background: "rgba(255,255,255,0.62)",
       border: "1px solid rgba(255,255,255,0.72)",
       boxShadow: "0 16px 34px rgba(0,0,0,0.01)",
       backdropFilter: "blur(12px)",
       WebkitBackdropFilter: "blur(12px)",
+    } as CSSProperties,
+
+    // ✅ базовый фон, done и overdue вынесены сюда (без rgba в компоненте)
+    taskItemBase: {
+      background: "rgba(255,255,255,0.62)",
+    } as CSSProperties,
+
+    taskItemDone: {
+      background: "rgba(255,255,255,0.55)",
+    } as CSSProperties,
+
+    taskItemOverdue: {
+      background: "rgba(255, 0, 0, 0.1)", // прозрачно-жёлтый
     } as CSSProperties,
 
     notePreview: {
@@ -654,6 +780,75 @@ export default function HomePage() {
     }
   }
 
+async function saveProjectsEdit() {
+  if (savingProjectsEdit) return;
+
+  // базовая валидация: пустые имена
+  const bad = editProjects.find((p) => !p.deleted && !p.name.trim());
+  if (bad) {
+    setHint("Название проекта не может быть пустым.");
+    return;
+  }
+
+  setSavingProjectsEdit(true);
+  setHint(null);
+
+  try {
+    // 1) переименования
+    const toRename = editProjects.filter((p) => !p.deleted && p.name.trim() !== p.originalName);
+
+    for (const p of toRename) {
+      const r = await fetch("/api/projects", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ id: p.id, name: p.name.trim() }),
+      });
+
+      const j = await r.json().catch(() => ({} as any));
+      if (!r.ok || !j.ok) {
+        setHint(`Не смог переименовать "${p.originalName}": ${j.error || j.reason || r.status}`);
+        setSavingProjectsEdit(false);
+        return;
+      }
+    }
+
+    // 2) удаления
+    const toDelete = editProjects.filter((p) => p.deleted);
+
+    for (const p of toDelete) {
+      const r = await fetch("/api/projects", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ id: p.id }),
+      });
+
+      const text = await r.text();
+      let j: any = {};
+      try {
+        j = text ? JSON.parse(text) : {};
+      } catch {}
+
+      if (!r.ok || !j.ok) {
+        setHint(`Не смог удалить "${p.originalName}": ${j.error || j.reason || r.status}`);
+        setSavingProjectsEdit(false);
+        return;
+      }
+    }
+
+    // обновим проекты и задачи (удаление проекта сносит задачи)
+    await loadProjects();
+    await loadTasks();
+
+    closeEditProjects();
+  } catch (e: any) {
+    setHint(`Ошибка сети: ${String(e?.message || e)}`);
+  } finally {
+    setSavingProjectsEdit(false);
+  }
+}
+
   async function loadTasks() {
     setLoadingTasks(true);
     try {
@@ -754,9 +949,15 @@ export default function HomePage() {
   async function toggleDone(id: number, done: boolean) {
     if (togglingIds.has(id)) return;
 
-    const prevDone = tasks.find((t) => t.id === id)?.done;
+    const prev = tasks.find((t) => t.id === id);
+    const prevDone = prev?.done;
+    const prevCompletedAt = prev?.completed_at ?? null;
 
-    setTasks((prevTasks) => prevTasks.map((t) => (t.id === id ? { ...t, done } : t)));
+    const nextCompletedAt = done ? new Date().toISOString() : null;
+
+    setTasks((prevTasks) =>
+      prevTasks.map((t) => (t.id === id ? { ...t, done, completed_at: nextCompletedAt } : t))
+    );
 
     setTogglingIds((s) => {
       const next = new Set(s);
@@ -769,16 +970,24 @@ export default function HomePage() {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
-        body: JSON.stringify({ id, done }),
+        body: JSON.stringify({ id, done, completed_at: nextCompletedAt }),
       });
 
       const j = await r.json().catch(() => ({} as any));
       if (!r.ok || !j.ok) {
-        setTasks((prevTasks) => prevTasks.map((t) => (t.id === id ? { ...t, done: Boolean(prevDone) } : t)));
+        setTasks((prevTasks) =>
+          prevTasks.map((t) =>
+            t.id === id ? { ...t, done: Boolean(prevDone), completed_at: prevCompletedAt } : t
+          )
+        );
         setHint(j.error || j.reason || "Не смог обновить задачу");
       }
     } catch (e: any) {
-      setTasks((prevTasks) => prevTasks.map((t) => (t.id === id ? { ...t, done: Boolean(prevDone) } : t)));
+      setTasks((prevTasks) =>
+        prevTasks.map((t) =>
+          t.id === id ? { ...t, done: Boolean(prevDone), completed_at: prevCompletedAt } : t
+        )
+      );
       setHint(`Ошибка сети при обновлении: ${String(e?.message || e)}`);
     } finally {
       setTogglingIds((s) => {
@@ -797,6 +1006,7 @@ export default function HomePage() {
     setEditTaskId(t.id);
     setEditTitle(t.title || "");
     setEditNote(t.note || "");
+    setEditDueDate(t.due_date || null);
     setShowEditTask(true);
 
     requestAnimationFrame(() => {
@@ -805,12 +1015,66 @@ export default function HomePage() {
     });
   }
 
+  function openDeleteTaskModal(id: number) {
+    if (togglingIds.has(id)) return;
+    setHint(null);
+    setDeleteTaskId(id);
+    setShowDeleteTask(true);
+  }
+
+  function closeDeleteTaskModal() {
+    if (deletingTask) return;
+    setShowDeleteTask(false);
+    setDeleteTaskId(null);
+  }
+
+  async function deleteTask(id: number) {
+    if (deletingTask) return;
+
+    setDeletingTask(true);
+
+    const prevTasks = tasks;
+    setTasks((list) => list.filter((t) => t.id !== id));
+
+    try {
+      const r = await fetch("/api/tasks", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ id }),
+      });
+
+      const text = await r.text();
+      let j: any = {};
+      try {
+        j = text ? JSON.parse(text) : {};
+      } catch {
+        j = {};
+      }
+
+      if (!r.ok || !j.ok) {
+        setTasks(prevTasks);
+        setHint(`DELETE упал: HTTP ${r.status}. ${j.reason || ""} ${j.error || ""}`.trim());
+        return;
+      }
+
+      closeDeleteTaskModal();
+      await loadTasks();
+    } catch (e: any) {
+      setTasks(prevTasks);
+      setHint(`Ошибка сети при удалении: ${String(e?.message || e)}`);
+    } finally {
+      setDeletingTask(false);
+    }
+  }
+
   function closeEditTaskModal() {
     if (savingEditTask) return;
     setShowEditTask(false);
     setEditTaskId(null);
     setEditTitle("");
     setEditNote("");
+    setEditDueDate(null);
   }
 
   async function saveEditTask() {
@@ -820,6 +1084,7 @@ export default function HomePage() {
     const nextTitle = editTitle.trim();
     const nextNoteTrim = editNote.trim();
     const nextNote = nextNoteTrim ? nextNoteTrim : null;
+    const nextDueDate = editDueDate || null;
 
     if (!nextTitle) {
       setHint("Заголовок не может быть пустым.");
@@ -832,28 +1097,32 @@ export default function HomePage() {
     const prev = tasks.find((x) => x.id === id);
     const prevTitle = prev?.title ?? "";
     const prevNote = prev?.note ?? null;
+    const prevDueDate = prev?.due_date ?? null;
 
-    if (prevTitle === nextTitle && prevNote === nextNote) {
+    if (prevTitle === nextTitle && prevNote === nextNote && prevDueDate === nextDueDate) {
       closeEditTaskModal();
       return;
     }
 
     setSavingEditTask(true);
 
-    // оптимистично
-    setTasks((list) => list.map((t) => (t.id === id ? { ...t, title: nextTitle, note: nextNote } : t)));
+    setTasks((list) => list.map((t) => (t.id === id ? { ...t, title: nextTitle, note: nextNote, due_date: nextDueDate } : t)));
 
     try {
       const r = await fetch("/api/tasks", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
-        body: JSON.stringify({ id, title: nextTitle, note: nextNote }),
+        body: JSON.stringify({ id, title: nextTitle, note: nextNote, due_date: nextDueDate }),
       });
 
       const j = await r.json().catch(() => ({} as any));
       if (!r.ok || !j.ok) {
-        setTasks((list) => list.map((t) => (t.id === id ? { ...t, title: prevTitle, note: prevNote } : t)));
+        setTasks((list) =>
+          list.map((t) =>
+            t.id === id ? { ...t, title: prevTitle, note: prevNote, due_date: prevDueDate } : t
+          )
+        );
         setHint(j.error || j.reason || "Не смог сохранить изменения");
         return;
       }
@@ -867,14 +1136,37 @@ export default function HomePage() {
     }
   }
 
+  function openEditProjects() {
+  setHint(null);
+  setEditProjects(projects.map((p) => ({ id: p.id, name: p.name, originalName: p.name, deleted: false })));
+  setShowEditProjects(true);
+}
+
+function closeEditProjects() {
+  if (savingProjectsEdit) return;
+  setShowEditProjects(false);
+  setEditProjects([]);
+}
+
+function setProjectName(id: number, name: string) {
+  setEditProjects((list) => list.map((p) => (p.id === id ? { ...p, name } : p)));
+}
+
+function toggleProjectDelete(id: number) {
+  setEditProjects((list) => list.map((p) => (p.id === id ? { ...p, deleted: !p.deleted } : p)));
+}
+
   function TaskCard({ t }: { t: Task }) {
     const hasMeta = Boolean((isAllTasks && t.project_id) || t.due_date);
+    const isOverdue = Boolean(t.due_date && t.due_date < todayISO);
 
     return (
       <div
         style={{
           ...ui.taskItem,
-          background: t.done ? "rgba(255,255,255,0.55)" : "rgba(255,255,255,0.62)",
+          ...ui.taskItemBase,
+          ...(isOverdue && !t.done ? ui.taskItemOverdue : null),
+          ...(t.done ? ui.taskItemDone : null),
           opacity: t.done ? 0.82 : 1,
         }}
       >
@@ -890,6 +1182,7 @@ export default function HomePage() {
               marginTop: 3,
               cursor: togglingIds.has(t.id) ? "not-allowed" : "pointer",
               opacity: togglingIds.has(t.id) ? 0.6 : 1,
+              flex: "0 0 auto",
             }}
           />
 
@@ -913,14 +1206,38 @@ export default function HomePage() {
             ) : null}
 
             {hasMeta ? (
-              <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 6, }}>
+              <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 6 }}>
                 {isAllTasks && t.project_id ? (
-                  <span style={{ ...ui.chip}}>{projectNameById.get(t.project_id) || "Проект"}</span>
+                  <span style={ui.chip}>{projectNameById.get(t.project_id) || "Проект"}</span>
                 ) : null}
-                {t.due_date ? <span style={{ ...ui.chip }}>до {fmtDate(t.due_date)}</span> : null}
+
+                {t.due_date ? (
+                  <span
+                    style={{ ...ui.chip, cursor: t.done ? "default" : "pointer", opacity: 0.55 }}
+                    onClick={() => !t.done && openEditTaskModal(t, "title")}
+                    title="Нажми, чтобы отредактировать"
+                  >
+                    до {fmtDate(t.due_date)}
+                  </span>
+                ) : null}
               </div>
             ) : null}
+
           </div>
+
+          <button
+            type="button"
+            onClick={() => openDeleteTaskModal(t.id)}
+            disabled={deletingTask || togglingIds.has(t.id)}
+            style={{
+              ...ui.trashBtn,
+              opacity: deletingTask || togglingIds.has(t.id) ? 0.25 : 0.5,
+              cursor: deletingTask || togglingIds.has(t.id) ? "not-allowed" : "pointer",
+            }}
+            title="Удалить"
+          >
+            <IconTrash size={15} />
+          </button>
         </div>
       </div>
     );
@@ -955,6 +1272,10 @@ export default function HomePage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ready, activeProjectId]);
 
+  const editIsToday = editDueDate === todayISO;
+  const editIsTomorrow = editDueDate === tomorrowISO;
+  const editHasCustomDate = Boolean(editDueDate && !editIsToday && !editIsTomorrow);
+
   return (
     <div style={ui.shell}>
       <div style={ui.bgFixed} />
@@ -977,7 +1298,7 @@ export default function HomePage() {
             }}
             title="Обновить"
           >
-            ↻
+            <IconRotate size={18} style={{ color: "#000000" }}/>
           </button>
         </div>
 
@@ -994,12 +1315,45 @@ export default function HomePage() {
             }}
             title="Новый проект"
           >
-            +
+            <IconPlus size={12} style={{ color: "#000000" }}/>
+          </button>
+          
+          <button
+            type="button"
+            onClick={openEditProjects}
+            disabled={creatingProject || loadingProjects}
+            style={{
+              ...ui.tabPlus,
+              opacity: creatingProject || loadingProjects ? 0.6 : 1,
+              cursor: creatingProject || loadingProjects ? "not-allowed" : "pointer",
+            }}
+            title="Редактировать проекты"
+          >
+            <IconEdit size={12} style={{ color: "#000000" }}/>
+          </button>
+         
+          <button
+            type="button"
+            onClick={() => {
+              setViewMode("all");
+              setActiveProjectId(null);
+            }}
+            style={ui.tabBadge}
+          >
+            <span style={dotStyle(viewMode === "all" && isAllTasks)} />
+            Все задачи
           </button>
 
-          <button type="button" onClick={() => setActiveProjectId(null)} style={ui.tabBadge}>
-            <span style={dotStyle(isAllTasks)} />
-            Все задачи
+          <button
+            type="button"
+            onClick={() => {
+              setViewMode("completed");
+              setActiveProjectId(null);
+            }}
+            style={ui.tabBadge}
+          >
+            <span style={dotStyle(viewMode === "completed")} />
+            Завершено
           </button>
 
           {projects.map((p) => {
@@ -1008,7 +1362,10 @@ export default function HomePage() {
               <button
                 key={p.id}
                 type="button"
-                onClick={() => setActiveProjectId(p.id)}
+                onClick={() => {
+                  setViewMode("all");
+                  setActiveProjectId(p.id);
+                }}
                 style={ui.tabBadge}
                 title={p.name}
               >
@@ -1035,140 +1392,142 @@ export default function HomePage() {
         )}
 
         {/* Add task */}
-        <section style={{ ...ui.card, marginTop: 14 }}>
-          <div style={{ display: "grid", gap: 10 }}>
-            <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
-              <input
-                name="newTaskTitle"
-                value={title}
-                onChange={(e) => setTitle(e.target.value)}
-                placeholder={isAllTasks ? "Выбери проект табом сверху…" : "Добавьте новую задачу"}
-                disabled={isAllTasks || !activeProjectId}
-                autoCorrect="on"
-                autoCapitalize="sentences"
-                spellCheck={true}
-                inputMode="text"
-                style={{
-                  ...ui.input,
-                  flex: 1,
-                  opacity: isAllTasks || !activeProjectId ? 0.55 : 1,
-                }}
-              />
+        {viewMode === "all" && (
+            <section style={{ ...ui.card, marginTop: 14 }}>
+              <div style={{ display: "grid", gap: 10 }}>
+                <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+                  <input
+                    name="newTaskTitle"
+                    value={title}
+                    onChange={(e) => setTitle(e.target.value)}
+                    placeholder={isAllTasks ? "Выбери проект табом сверху…" : "Добавьте новую задачу"}
+                    disabled={isAllTasks || !activeProjectId}
+                    autoCorrect="on"
+                    autoCapitalize="sentences"
+                    spellCheck={true}
+                    inputMode="text"
+                    style={{
+                      ...ui.input,
+                      flex: 1,
+                      opacity: isAllTasks || !activeProjectId ? 0.55 : 1,
+                    }}
+                  />
 
-              <button
-                type="button"
-                onClick={addTask}
-                disabled={!canAddTask}
-                style={{
-                  ...ui.btnCircle,
-                  opacity: canAddTask ? 1 : 0.45,
-                  cursor: canAddTask ? "pointer" : "not-allowed",
-                }}
-                title="Добавить"
-              >
-                +
-              </button>
-            </div>
+                  <button
+                    type="button"
+                    onClick={addTask}
+                    disabled={!canAddTask}
+                    style={{
+                      ...ui.btnCircle,
+                      opacity: canAddTask ? 1 : 0.45,
+                      cursor: canAddTask ? "pointer" : "not-allowed",
+                    }}
+                    title="Добавить"
+                  >
+                    <IconPlus size={15} style={{ color: "#ffffff" }}/>
+                  </button>
+                </div>
 
-            <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
-              <button
-                type="button"
-                disabled={isAllTasks || !activeProjectId}
-                onClick={() => setDueDate((prev) => (prev === todayISO ? null : todayISO))}
-                style={{
-                  ...ui.chipBtn,
-                  ...(isToday ? ui.chipBtnActive : null),
-                  opacity: isAllTasks || !activeProjectId ? 0.55 : 1,
-                  cursor: isAllTasks || !activeProjectId ? "not-allowed" : "pointer",
-                }}
-              >
-                Сегодня
-              </button>
+                <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+                  <button
+                    type="button"
+                    disabled={isAllTasks || !activeProjectId}
+                    onClick={() => setDueDate((prev) => (prev === todayISO ? null : todayISO))}
+                    style={{
+                      ...ui.chipBtn,
+                      ...(isToday ? ui.chipBtnActive : null),
+                      opacity: isAllTasks || !activeProjectId ? 0.55 : 1,
+                      cursor: isAllTasks || !activeProjectId ? "not-allowed" : "pointer",
+                    }}
+                  >
+                    Сегодня
+                  </button>
 
-              <button
-                type="button"
-                disabled={isAllTasks || !activeProjectId}
-                onClick={() => setDueDate((prev) => (prev === tomorrowISO ? null : tomorrowISO))}
-                style={{
-                  ...ui.chipBtn,
-                  ...(isTomorrow ? ui.chipBtnActive : null),
-                  opacity: isAllTasks || !activeProjectId ? 0.55 : 1,
-                  cursor: isAllTasks || !activeProjectId ? "not-allowed" : "pointer",
-                }}
-              >
-                Завтра
-              </button>
+                  <button
+                    type="button"
+                    disabled={isAllTasks || !activeProjectId}
+                    onClick={() => setDueDate((prev) => (prev === tomorrowISO ? null : tomorrowISO))}
+                    style={{
+                      ...ui.chipBtn,
+                      ...(isTomorrow ? ui.chipBtnActive : null),
+                      opacity: isAllTasks || !activeProjectId ? 0.55 : 1,
+                      cursor: isAllTasks || !activeProjectId ? "not-allowed" : "pointer",
+                    }}
+                  >
+                    Завтра
+                  </button>
 
-              <div style={{ position: "relative", display: "inline-flex" }}>
-                <button
-                  type="button"
-                  disabled={isAllTasks || !activeProjectId}
-                  onClick={() => {
-                    // если уже стоит кастомная дата, по нажатию очищаем
-                    if (hasCustomDate) {
-                      setDueDate(null);
-                      return;
-                    }
+                  <div style={{ position: "relative", display: "inline-flex" }}>
+                    <button
+                      type="button"
+                      disabled={isAllTasks || !activeProjectId}
+                      onClick={() => {
+                        // если уже стоит кастомная дата, по нажатию очищаем
+                        if (hasCustomDate) {
+                          setDueDate(null);
+                          return;
+                        }
 
-                    // iOS WebView: лучше focus(), чем click()
-                    requestAnimationFrame(() => {
-                      dueDateRef.current?.focus();
-                      dueDateRef.current?.click(); // иногда помогает, но focus главное
-                    });
-                  }}
-                  style={{
-                    ...ui.chipBtn,
-                    ...(hasCustomDate ? ui.chipBtnActive : null),
-                    opacity: isAllTasks || !activeProjectId ? 0.55 : 1,
-                    cursor: isAllTasks || !activeProjectId ? "not-allowed" : "pointer",
-                  }}
-                  title={dueDate ? `Дата: ${fmtDate(dueDate)}` : "Выбрать дату"}
-                >
-                  {dueDate ? `Дата: ${fmtDate(dueDate)}` : "Выбрать дату"}
-                </button>
+                        // iOS WebView: лучше focus(), чем click()
+                        requestAnimationFrame(() => {
+                          dueDateRef.current?.focus();
+                          dueDateRef.current?.click(); // иногда помогает, но focus главное
+                        });
+                      }}
+                      style={{
+                        ...ui.chipBtn,
+                        ...(hasCustomDate ? ui.chipBtnActive : null),
+                        opacity: isAllTasks || !activeProjectId ? 0.55 : 1,
+                        cursor: isAllTasks || !activeProjectId ? "not-allowed" : "pointer",
+                      }}
+                      title={dueDate ? `Дата: ${fmtDate(dueDate)}` : "Выбрать дату"}
+                    >
+                      {dueDate ? `Дата: ${fmtDate(dueDate)}` : "Выбрать дату"}
+                    </button>
 
-                {/* Прозрачный инпут поверх кнопки, чтобы iOS точно открыл пикер */}
-                <input
-                  ref={dueDateRef}
-                  id="dueDatePicker"
-                  name="dueDatePicker"
-                  type="date"
-                  value={dueDate || ""}
-                  disabled={isAllTasks || !activeProjectId}
-                  onChange={(e) => {
-                    const v = e.target.value || null;
-                    setDueDate(v);
+                    {/* Прозрачный инпут поверх кнопки, чтобы iOS точно открыл пикер */}
+                    <input
+                      ref={dueDateRef}
+                      id="dueDatePicker"
+                      name="dueDatePicker"
+                      type="date"
+                      value={dueDate || ""}
+                      disabled={isAllTasks || !activeProjectId}
+                      onChange={(e) => {
+                        const v = e.target.value || null;
+                        setDueDate(v);
 
-                    // важно: после выбора закрываем пикер (iOS иногда "зависает" на фокусе)
-                    requestAnimationFrame(() => {
-                      dueDateRef.current?.blur();
-                      (document.activeElement as HTMLElement | null)?.blur?.();
-                    });
-                  }}
-                  style={{
-                    position: "absolute",
-                    inset: 0,
-                    opacity: 0.001, // не 0, чтобы iOS не "оптимизировал" элемент
-                    width: "100%",
-                    height: "100%",
-                    border: "none",
-                    background: "transparent",
-                    cursor: isAllTasks || !activeProjectId ? "not-allowed" : "pointer",
-                  }}
-                />
+                        // важно: после выбора закрываем пикер (iOS иногда "зависает" на фокусе)
+                        requestAnimationFrame(() => {
+                          dueDateRef.current?.blur();
+                          (document.activeElement as HTMLElement | null)?.blur?.();
+                        });
+                      }}
+                      style={{
+                        position: "absolute",
+                        inset: 0,
+                        opacity: 0.001, // не 0, чтобы iOS не "оптимизировал" элемент
+                        width: "100%",
+                        height: "100%",
+                        border: "none",
+                        background: "transparent",
+                        cursor: isAllTasks || !activeProjectId ? "not-allowed" : "pointer",
+                      }}
+                    />
+                  </div>
+                </div>
               </div>
-            </div>
-          </div>
 
-          {isAllTasks && (
-            <div style={{ ...ui.muted, marginTop: 12 }}>
-              Сейчас выбран режим “Все задачи”. Для добавления выбери конкретный проект табом.
-            </div>
-          )}
-        </section>
+              {isAllTasks && (
+                <div style={{ ...ui.muted, marginTop: 12 }}>
+                  Сейчас выбран режим “Все задачи”. Для добавления выбери конкретный проект табом.
+                </div>
+              )}
+            </section>
+            )}
 
         {/* Mode switch */}
-        {ready && (
+        {ready && viewMode === "all" && (
           <div style={{ marginTop: 12 }}>
             <div
               style={ui.segmented}
@@ -1237,91 +1596,133 @@ export default function HomePage() {
         {/* Lists (слайд без полос и без внутреннего скролла) */}
         {ready && (
           <div style={ui.listsWrap}>
-            {/* PANEL: schedule */}
-            <div
-              style={{
-                ...ui.panel,
-                opacity: listMode === "schedule" ? 1 : 0,
-                transform: listMode === "schedule" ? "translateX(0%)" : "translateX(-110%)",
-                pointerEvents: listMode === "schedule" ? "auto" : "none",
-              }}
-            >
-              {loadingTasks ? (
-                <div style={{ display: "grid", gap: 18 }}>
-                  {Array.from({ length: 3 }).map((_, s) => (
-                    <div key={s} style={{ display: "grid", gap: 10 }}>
-                      <div style={{ display: "flex", justifyContent: "space-between" }}>
-                        <div className="skeleton-line" style={{ width: 120, height: 18 }} />
-                        <div className="skeleton-line" style={{ width: 40, height: 14 }} />
+
+            {/* PANEL: completed */}
+            {viewMode === "completed" && (
+              <div style={{ display: "grid", gap: 18 }}>
+                {completedSections.length === 0 ? (
+                  <div style={{ opacity: 0.7 }}>Завершённых задач пока нет.</div>
+                ) : (
+                  completedSections.map((sec) => (
+                    <div key={sec.key} style={{ display: "grid", gap: 10 }}>
+                      <div
+                        style={{
+                          display: "flex",
+                          alignItems: "baseline",
+                          justifyContent: "space-between",
+                          gap: 12,
+                        }}
+                      >
+                        <div style={ui.dayTitle}>{sec.label}</div>
+                        <div style={ui.muted}>{sec.count} шт.</div>
                       </div>
 
                       <div style={{ display: "grid", gap: 14 }}>
-                        {Array.from({ length: 3 }).map((_, i) => (
-                          <SkeletonTask key={i} />
+                        {sec.tasks.map((t) => (
+                          <TaskCard key={t.id} t={t} />
                         ))}
                       </div>
                     </div>
-                  ))}
-                </div>
-              ) : tasks.length === 0 ? (
-                <div style={{ opacity: 0.7 }}>Пока пусто.</div>
-              ) : (
-                <div style={{ display: "grid", gap: 18 }}>
-                  {taskSections
-                    .filter((s) => s.key !== "NO_DATE")
-                    .map((sec) => (
-                      <div key={sec.key} style={{ display: "grid", gap: 10 }}>
-                        <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 12 }}>
-                          <div style={ui.dayTitle}>{sec.label}</div>
-                          <div style={ui.muted}>{sec.count} шт.</div>
+                  ))
+                )}
+              </div>
+            )}
+
+            {/* PANEL: schedule */}
+            {viewMode === "all" && (
+              <div
+                style={{
+                  ...ui.panel,
+                  opacity: listMode === "schedule" ? 1 : 0,
+                  transform: listMode === "schedule" ? "translateX(0%)" : "translateX(-110%)",
+                  pointerEvents: listMode === "schedule" ? "auto" : "none",
+                }}
+              >
+                {loadingTasks ? (
+                  <div style={{ display: "grid", gap: 18 }}>
+                    {Array.from({ length: 3 }).map((_, s) => (
+                      <div key={s} style={{ display: "grid", gap: 10 }}>
+                        <div style={{ display: "flex", justifyContent: "space-between" }}>
+                          <div className="skeleton-line" style={{ width: 120, height: 18 }} />
+                          <div className="skeleton-line" style={{ width: 40, height: 14 }} />
                         </div>
 
                         <div style={{ display: "grid", gap: 14 }}>
-                          {sec.tasks.map((t) => (
-                            <TaskCard key={t.id} t={t} />
+                          {Array.from({ length: 3 }).map((_, i) => (
+                            <SkeletonTask key={i} />
                           ))}
                         </div>
                       </div>
                     ))}
-                </div>
-              )}
-            </div>
-
-            {/* PANEL: no_date */}
-            <div
-              style={{
-                ...ui.panel,
-                opacity: listMode === "no_date" ? 1 : 0,
-                transform: listMode === "no_date" ? "translateX(0%)" : "translateX(110%)",
-                pointerEvents: listMode === "no_date" ? "auto" : "none",
-              }}
-            >
-              <div style={{ display: "grid", gap: 10 }}>
-                <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 12 }}>
-                  <div style={ui.dayTitle}>Задачи</div>
-                  <div style={ui.muted}>{noDateTasks.length} шт.</div>
-                </div>
-
-                {loadingTasks ? (
-                  <div style={{ display: "grid", gap: 14 }}>
-                    {Array.from({ length: 4 }).map((_, i) => (
-                      <SkeletonTask key={i} />
-                    ))}
                   </div>
-                ) : noDateTasks.length === 0 ? (
-                  <div style={{ opacity: 0.7 }}>Задач без даты нет.</div>
+                ) : tasks.length === 0 ? (
+                  <div style={{ opacity: 0.7 }}>Пока пусто.</div>
                 ) : (
-                  <div style={{ display: "grid", gap: 14 }}>
-                    {noDateTasks.map((t) => (
-                      <TaskCard key={t.id} t={t} />
-                    ))}
+                  <div style={{ display: "grid", gap: 18 }}>
+                    {taskSections
+                      .filter((s) => s.key !== "NO_DATE")
+                      .map((sec) => (
+                        <div key={sec.key} style={{ display: "grid", gap: 10 }}>
+                          <div
+                            style={{
+                              display: "flex",
+                              alignItems: "baseline",
+                              justifyContent: "space-between",
+                              gap: 12,
+                            }}
+                          >
+                            <div style={ui.dayTitle}>{sec.label}</div>
+                            <div style={ui.muted}>{sec.count} шт.</div>
+                          </div>
+
+                          <div style={{ display: "grid", gap: 14 }}>
+                            {sec.tasks.map((t) => (
+                              <TaskCard key={t.id} t={t} />
+                            ))}
+                          </div>
+                        </div>
+                      ))}
                   </div>
                 )}
               </div>
-            </div>
+            )}
+
+            {/* PANEL: no_date */}
+            {viewMode === "all" && (
+              <div
+                style={{
+                  ...ui.panel,
+                  opacity: listMode === "no_date" ? 1 : 0,
+                  transform: listMode === "no_date" ? "translateX(0%)" : "translateX(110%)",
+                  pointerEvents: listMode === "no_date" ? "auto" : "none",
+                }}
+              >
+                <div style={{ display: "grid", gap: 10 }}>
+                  <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 12 }}>
+                    <div style={ui.dayTitle}>Задачи</div>
+                    <div style={ui.muted}>{noDateTasks.length} шт.</div>
+                  </div>
+
+                  {loadingTasks ? (
+                    <div style={{ display: "grid", gap: 14 }}>
+                      {Array.from({ length: 4 }).map((_, i) => (
+                        <SkeletonTask key={i} />
+                      ))}
+                    </div>
+                  ) : noDateTasks.length === 0 ? (
+                    <div style={{ opacity: 0.7 }}>Задач без даты нет.</div>
+                  ) : (
+                    <div style={{ display: "grid", gap: 14 }}>
+                      {noDateTasks.map((t) => (
+                        <TaskCard key={t.id} t={t} />
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
           </div>
         )}
-
         {/* Modal: Create project */}
         {showCreateProject && (
           <div style={ui.overlay} onClick={() => !creatingProject && setShowCreateProject(false)}>
@@ -1427,6 +1828,81 @@ export default function HomePage() {
                     }
                   }}
                 />
+
+                <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap", marginTop:10, marginBottom: 10  }}>
+                  <button
+                    type="button"
+                    onClick={() => setEditDueDate((prev) => (prev === todayISO ? null : todayISO))}
+                    style={{
+                      ...ui.chipBtn,
+                      ...(editIsToday ? ui.chipBtnActive : null),
+                    }}
+                  >
+                    Сегодня
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setEditDueDate((prev) => (prev === tomorrowISO ? null : tomorrowISO))}
+                    style={{
+                      ...ui.chipBtn,
+                      ...(editIsTomorrow ? ui.chipBtnActive : null),
+                    }}
+                  >
+                    Завтра
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (editHasCustomDate) {
+                        setEditDueDate(null);
+                        return;
+                      }
+                      const el = editDueDateRef.current;
+                      if (!el) return;
+
+                      // iOS/Telegram: click обязателен
+                      try {
+                        // @ts-ignore
+                        if (typeof el.showPicker === "function") el.showPicker();
+                      } catch {}
+                      el.click();
+                      el.focus();
+                    }}
+                    style={{
+                      ...ui.chipBtn,
+                      ...(editHasCustomDate ? ui.chipBtnActive : null),
+                    }}
+                    title={editDueDate ? `Дата: ${fmtDate(editDueDate)}` : "Выбрать дату"}
+                  >
+                    {editDueDate ? fmtDate(editDueDate) : "Выбрать дату"}
+                  </button>
+
+                  <input
+                    ref={editDueDateRef}
+                    type="date"
+                    value={editDueDate || ""}
+                    onChange={(e) => {
+                      const v = e.target.value || null;
+                      setEditDueDate(v);
+
+                      // закрываем пикер
+                      requestAnimationFrame(() => {
+                        editDueDateRef.current?.blur();
+                      });
+                    }}
+                    style={{
+                      position: "absolute",
+                      width: 1,
+                      height: 1,
+                      opacity: 0,
+                      pointerEvents: "none",
+                    }}
+                    tabIndex={-1}
+                  />
+                </div>
+                
               </div>
 
               <div style={{ display: "flex", gap: 12, marginTop: 14 }}>
@@ -1461,6 +1937,131 @@ export default function HomePage() {
             </div>
           </div>
         )}
+        {/* Modal: Delete task */}
+        {showDeleteTask && (
+          <div style={ui.overlay} onClick={closeDeleteTaskModal}>
+            <div style={ui.modal} onClick={(e) => e.stopPropagation()}>
+              <div style={{ fontSize: 16, fontWeight: 900, marginBottom: 10 }}>Удалить задачу?</div>
+
+              <div style={{ opacity: 0.7, lineHeight: 1.35 }}>
+                Задача удалится безвозратно.
+              </div>
+
+              <div style={{ display: "flex", gap: 12, marginTop: 14 }}>
+                <button
+                  type="button"
+                  onClick={closeDeleteTaskModal}
+                  style={{
+                    ...ui.btnGhost,
+                    flex: 1,
+                    opacity: deletingTask ? 0.6 : 1,
+                    cursor: deletingTask ? "not-allowed" : "pointer",
+                  }}
+                  disabled={deletingTask}
+                >
+                  Нет
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => deleteTask(deleteTaskId!)}
+                  style={{
+                    ...ui.btnPrimary,
+                    flex: 1,
+                    opacity: deleteTaskId ? 1 : 0.6,
+                    cursor: deleteTaskId ? "pointer" : "not-allowed",
+                  }}
+                  disabled={!deleteTaskId || deletingTask}
+                >
+                  {deletingTask ? "Удаляю..." : "Да, удалить"}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+        {/* Modal: Edit Project */}
+        {showEditProjects && (
+          <div style={ui.overlay} onClick={closeEditProjects}>
+            <div style={ui.modal} onClick={(e) => e.stopPropagation()}>
+              <div style={{ fontSize: 16, fontWeight: 900, marginBottom: 6 }}>Редактирование проекта</div>
+              <div style={{ opacity: 0.7, lineHeight: 1.35, marginBottom: 12, fontSize: 12 }}>
+                Внимание! При удалении проекта, задачи этого проекта удаляются безвозвратно.
+              </div>
+
+              <div style={{ display: "grid", gap: 10 }}>
+                {editProjects.map((p) => (
+                  <div
+                    key={p.id}
+                    style={{
+                      display: "flex",
+                      gap: 10,
+                      alignItems: "center",
+                      opacity: p.deleted ? 0.45 : 1,
+                    }}
+                  >
+                    <input
+                      value={p.name}
+                      onChange={(e) => setProjectName(p.id, e.target.value)}
+                      disabled={p.deleted}
+                      style={{
+                        ...ui.miniInput,
+                        flex: 1,
+
+                        //textDecoration: p.deleted ? "line-through" : "none",
+                      }}
+                      placeholder="Название проекта"
+                    />
+
+                    <button
+                      type="button"
+                      onClick={() => toggleProjectDelete(p.id)}
+                      disabled={savingProjectsEdit}
+                      style={{
+                        ...ui.trashBtn,
+                        opacity: p.deleted ? 0.9 : 0.55,
+                        cursor: savingProjectsEdit ? "not-allowed" : "pointer",
+                      }}
+                      title={p.deleted ? "Вернуть проект" : "Удалить проект"}
+                    >
+                      <IconTrash size={18} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+
+              <div style={{ display: "flex", gap: 12, marginTop: 14 }}>
+                <button
+                  type="button"
+                  onClick={closeEditProjects}
+                  style={{
+                    ...ui.btnGhost,
+                    flex: 1,
+                    opacity: savingProjectsEdit ? 0.6 : 1,
+                    cursor: savingProjectsEdit ? "not-allowed" : "pointer",
+                  }}
+                  disabled={savingProjectsEdit}
+                >
+                  Отмена
+                </button>
+
+                <button
+                  type="button"
+                  onClick={saveProjectsEdit}
+                  style={{
+                    ...ui.btnPrimary,
+                    flex: 1,
+                    opacity: savingProjectsEdit ? 0.6 : 1,
+                    cursor: savingProjectsEdit ? "not-allowed" : "pointer",
+                  }}
+                  disabled={savingProjectsEdit}
+                >
+                  {savingProjectsEdit ? "Сохраняю..." : "Сохранить"}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}        
+
       </main>
     </div>
   );
