@@ -56,6 +56,7 @@ export default function HomePage() {
   const editTitleRef = useRef<HTMLInputElement | null>(null);
   const editNoteRef = useRef<HTMLInputElement | null>(null);
   const swipeStartX = useRef<number | null>(null);
+  const dueDateRef = useRef<HTMLInputElement | null>(null);
 
   // дата необязательна
   const [dueDate, setDueDate] = useState<string | null>(null);
@@ -1098,38 +1099,64 @@ export default function HomePage() {
                 Завтра
               </button>
 
-              <button
-                type="button"
-                disabled={isAllTasks || !activeProjectId}
-                onClick={() => {
-                  if (hasCustomDate) {
-                    setDueDate(null);
-                    return;
-                  }
-                  const el = document.getElementById("dueDatePicker") as HTMLInputElement | null;
-                  el?.showPicker?.();
-                  el?.click();
-                }}
-                style={{
-                  ...ui.chipBtn,
-                  ...(hasCustomDate ? ui.chipBtnActive : null),
-                  opacity: isAllTasks || !activeProjectId ? 0.55 : 1,
-                  cursor: isAllTasks || !activeProjectId ? "not-allowed" : "pointer",
-                }}
-                title={dueDate ? `Дата: ${fmtDate(dueDate)}` : "Выбрать дату"}
-              >
-                Выбрать дату
-              </button>
+              <div style={{ position: "relative", display: "inline-flex" }}>
+                <button
+                  type="button"
+                  disabled={isAllTasks || !activeProjectId}
+                  onClick={() => {
+                    // если уже стоит кастомная дата, по нажатию очищаем
+                    if (hasCustomDate) {
+                      setDueDate(null);
+                      return;
+                    }
 
-              <input
-                id="dueDatePicker"
-                name="dueDatePicker"
-                type="date"
-                value={dueDate || ""}
-                onChange={(e) => setDueDate(e.target.value || null)}
-                style={{ position: "absolute", opacity: 0, width: 1, height: 1, pointerEvents: "none" }}
-                tabIndex={-1}
-              />
+                    // iOS WebView: лучше focus(), чем click()
+                    requestAnimationFrame(() => {
+                      dueDateRef.current?.focus();
+                      dueDateRef.current?.click(); // иногда помогает, но focus главное
+                    });
+                  }}
+                  style={{
+                    ...ui.chipBtn,
+                    ...(hasCustomDate ? ui.chipBtnActive : null),
+                    opacity: isAllTasks || !activeProjectId ? 0.55 : 1,
+                    cursor: isAllTasks || !activeProjectId ? "not-allowed" : "pointer",
+                  }}
+                  title={dueDate ? `Дата: ${fmtDate(dueDate)}` : "Выбрать дату"}
+                >
+                  Выбрать дату
+                </button>
+
+                {/* Прозрачный инпут поверх кнопки, чтобы iOS точно открыл пикер */}
+                <input
+                  ref={dueDateRef}
+                  id="dueDatePicker"
+                  name="dueDatePicker"
+                  type="date"
+                  value={dueDate || ""}
+                  disabled={isAllTasks || !activeProjectId}
+                  onChange={(e) => {
+                    const v = e.target.value || null;
+                    setDueDate(v);
+
+                    // важно: после выбора закрываем пикер (iOS иногда "зависает" на фокусе)
+                    requestAnimationFrame(() => {
+                      dueDateRef.current?.blur();
+                      (document.activeElement as HTMLElement | null)?.blur?.();
+                    });
+                  }}
+                  style={{
+                    position: "absolute",
+                    inset: 0,
+                    opacity: 0.001, // не 0, чтобы iOS не "оптимизировал" элемент
+                    width: "100%",
+                    height: "100%",
+                    border: "none",
+                    background: "transparent",
+                    cursor: isAllTasks || !activeProjectId ? "not-allowed" : "pointer",
+                  }}
+                />
+              </div>
             </div>
           </div>
 
