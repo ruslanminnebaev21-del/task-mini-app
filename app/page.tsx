@@ -18,13 +18,13 @@ type Project = {
   created_at: string;
 };
 
-function getTelegramWebApp() {
-  // @ts-ignore
-  return typeof window !== "undefined" ? window.Telegram?.WebApp : null;
-}
+  function getTelegramWebApp() {
+    // @ts-ignore
+    return typeof window !== "undefined" ? window.Telegram?.WebApp : null;
+  }
 
 function fmtDate(d: string) {
-  const [y, m, day] = d.split("-").map((x) => Number(x));
+        const [y, m, day] = d.split("-").map((x) => Number(x));
   if (!y || !m || !day) return d;
   return `${day.toString().padStart(2, "0")}.${m.toString().padStart(2, "0")}.${y}`;
 }
@@ -476,8 +476,7 @@ export default function HomePage() {
       boxShadow: "0 16px 34px rgba(0,0,0,0.07)",
       backdropFilter: "blur(12px)",
       WebkitBackdropFilter: "blur(12px)",
-    } as CSSProperties,
-
+    } as CSSProperties,  
     notePreview: {
       fontSize: 12,
       opacity: 0.55,
@@ -900,6 +899,20 @@ export default function HomePage() {
       </div>
     );
   }
+  function SkeletonTask() {
+    return (
+      <div className="skeleton" style={{ padding: 14, borderRadius: 20 }}>
+        <div style={{ display: "grid", gap: 10 }}>
+          <div className="skeleton-line" style={{ width: "70%" }} />
+          <div className="skeleton-line" style={{ width: "50%", height: 10 }} />
+          <div style={{ display: "flex", gap: 10 }}>
+            <div className="skeleton-line" style={{ width: 60, height: 22, borderRadius: 999 }} />
+            <div className="skeleton-line" style={{ width: 90, height: 22, borderRadius: 999 }} />
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   useEffect(() => {
     (async () => {
@@ -1102,7 +1115,7 @@ export default function HomePage() {
         </section>
 
         {/* Mode switch */}
-        {ready && !loadingTasks && (
+        {ready && (
           <div style={{ marginTop: 12 }}>
             <div style={ui.segmented}>
               <div style={ui.segmentedInner}>
@@ -1153,10 +1166,27 @@ export default function HomePage() {
         )}
 
         {/* Lists */}
-        {ready && !loadingTasks && (
+        {ready && (
           <>
             {listMode === "schedule" ? (
-              tasks.length === 0 ? (
+              loadingTasks ? (
+                <div style={{ marginTop: 12, display: "grid", gap: 18 }}>
+                  {Array.from({ length: 3 }).map((_, s) => (
+                    <div key={s} style={{ display: "grid", gap: 10 }}>
+                      <div style={{ display: "flex", justifyContent: "space-between" }}>
+                        <div style={{ ...ui.skeletonLine, width: 120, height: 18 }} />
+                        <div style={{ ...ui.skeletonLine, width: 40, height: 14 }} />
+                      </div>
+
+                      <div style={{ display: "grid", gap: 14 }}>
+                        {Array.from({ length: 3 }).map((_, i) => (
+                          <SkeletonTask key={i} />
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : tasks.length === 0 ? (
                 <div style={{ opacity: 0.7, marginTop: 12 }}>Пока пусто.</div>
               ) : (
                 <div style={{ marginTop: 12, display: "grid", gap: 18 }}>
@@ -1189,11 +1219,12 @@ export default function HomePage() {
                   <div style={{ opacity: 0.7 }}>Задач без даты нет.</div>
                 ) : (
                   <div style={{ display: "grid", gap: 14 }}>
-                    {noDateTasks.map((t) => (
-                      <TaskCard key={t.id} t={t} />
-                    ))}
+                    {loadingTasks
+                      ? Array.from({ length: 4 }).map((_, i) => <SkeletonTask key={i} />)
+                      : noDateTasks.map((t) => <TaskCard key={t.id} t={t} />)
+                    }
                   </div>
-                )}
+                )}        
               </div>
             )}
           </>

@@ -1,6 +1,6 @@
 import type { Metadata, Viewport } from "next";
-import Script from "next/script";
 import "./globals.css";
+import ClientScripts from "./client-scripts";
 
 export const metadata: Metadata = {
   title: "TODO",
@@ -18,10 +18,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="ru">
       <head>
-        <Script
-          src="https://telegram.org/js/telegram-web-app.js"
-          strategy="beforeInteractive"
-        />
+        <ClientScripts />
       </head>
       <body>{children}</body>
     </html>
