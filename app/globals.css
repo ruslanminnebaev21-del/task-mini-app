@@ -53,7 +53,7 @@ html {
     rgba(0,0,0,0.06) 63%
   );
   background-size: 400% 100%;
-  animation: skeletonMove 1.2s ease-in-out infinite;
+  animation: skeletonMove 2.4s ease-in-out infinite;
   border-radius: 12px;
 }
 
@@ -68,5 +68,5 @@ html {
   );
   background-size: 200% 100%;
   background-position: 200% 0;
-  animation: skeletonMove 1.2s ease-in-out infinite;
+  animation: skeletonMove 2.4s ease-in-out infinite;
 }

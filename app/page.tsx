@@ -18,13 +18,13 @@ type Project = {
   created_at: string;
 };
 
-  function getTelegramWebApp() {
-    // @ts-ignore
-    return typeof window !== "undefined" ? window.Telegram?.WebApp : null;
-  }
+function getTelegramWebApp() {
+  // @ts-ignore
+  return typeof window !== "undefined" ? window.Telegram?.WebApp : null;
+}
 
 function fmtDate(d: string) {
-        const [y, m, day] = d.split("-").map((x) => Number(x));
+  const [y, m, day] = d.split("-").map((x) => Number(x));
   if (!y || !m || !day) return d;
   return `${day.toString().padStart(2, "0")}.${m.toString().padStart(2, "0")}.${y}`;
 }
@@ -55,6 +55,7 @@ export default function HomePage() {
 
   const editTitleRef = useRef<HTMLInputElement | null>(null);
   const editNoteRef = useRef<HTMLInputElement | null>(null);
+  const swipeStartX = useRef<number | null>(null);
 
   // дата необязательна
   const [dueDate, setDueDate] = useState<string | null>(null);
@@ -84,7 +85,7 @@ export default function HomePage() {
   const isToday = dueDate === todayISO;
   const isTomorrow = dueDate === tomorrowISO;
   const hasCustomDate = Boolean(dueDate && !isToday && !isTomorrow);
-  const canAddTask = Boolean(!isAllTasks && activeProjectId && title.trim());
+  const canAddTask = Boolean(!isAllTasks && activeProjectId !== null && title.trim());
 
   type TaskSection = { key: string; label: string; tasks: Task[]; count: number };
 
@@ -133,7 +134,13 @@ export default function HomePage() {
   const noDateTasks = useMemo(() => tasks.filter((t) => !t.due_date), [tasks]);
 
   const ui = {
-    shell: { minHeight: "100vh", position: "relative", overflow: "hidden" } as CSSProperties,
+
+    shell: {
+      minHeight: "100vh",
+      position: "relative",
+      overflowX: "hidden",
+      overflowY: "visible",
+    } as CSSProperties,
 
     container: {
       maxWidth: 720,
@@ -202,6 +209,25 @@ export default function HomePage() {
         "0 14px 34px rgba(0,0,0,0.07), 0 2px 0 rgba(255,255,255,0.55) inset, 0 -1px 0 rgba(0,0,0,0.03) inset",
       backdropFilter: "blur(12px)",
       WebkitBackdropFilter: "blur(12px)",
+    } as CSSProperties,
+
+    // ✅ фикс “полос” и внутреннего скролла: никакого 200% и absolute-панелей
+    listsWrap: {
+      marginTop: 12,
+      position: "relative",
+      display: "grid",
+      gridTemplateColumns: "1fr",
+      overflowX: "hidden",
+      //paddingLeft: 18,          // ✅ даём тени воздух
+      //paddingRight: 18,         // ✅ даём тени воздух
+      //boxSizing: "border-box",  // ✅ чтобы padding не раздувал ширину
+    } as CSSProperties,
+
+    panel: {
+      gridColumn: "1 / 1",
+      gridRow: "1 / 1",
+      transition: "transform 260ms cubic-bezier(0.18,0.9,0.2,1), opacity 220ms ease",
+      willChange: "transform, opacity",
     } as CSSProperties,
 
     input: {
@@ -460,12 +486,13 @@ export default function HomePage() {
     chip: {
       display: "inline-flex",
       alignItems: "center",
-      padding: "7px 12px",
+      padding: "4px 12px",
       borderRadius: 999,
       border: "1px solid rgba(0,0,0,0.07)",
       background: "rgba(255,255,255,0.62)",
       boxShadow: "0 8px 18px rgba(0,0,0,0.06)",
       fontSize: 12,
+      opacity: 0.55,
     } as CSSProperties,
 
     taskItem: {
@@ -473,10 +500,11 @@ export default function HomePage() {
       padding: 14,
       background: "rgba(255,255,255,0.62)",
       border: "1px solid rgba(255,255,255,0.72)",
-      boxShadow: "0 16px 34px rgba(0,0,0,0.07)",
+      boxShadow: "0 16px 34px rgba(0,0,0,0.01)",
       backdropFilter: "blur(12px)",
       WebkitBackdropFilter: "blur(12px)",
-    } as CSSProperties,  
+    } as CSSProperties,
+
     notePreview: {
       fontSize: 12,
       opacity: 0.55,
@@ -865,7 +893,6 @@ export default function HomePage() {
           />
 
           <div style={{ display: "grid", gap: 8, flex: 1, minWidth: 0 }}>
-            {/* Заголовок (только текст) */}
             <div
               style={{
                 ...ui.titleText,
@@ -878,18 +905,16 @@ export default function HomePage() {
               {t.title}
             </div>
 
-            {/* Заметка: показываем только если есть. Тап по заметке откроет попап сразу на поле заметки */}
             {t.note ? (
               <div style={ui.notePreview} onClick={() => !t.done && openEditTaskModal(t, "note")}>
                 {t.note}
               </div>
             ) : null}
 
-            {/* Мета */}
             {hasMeta ? (
-              <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+              <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 6, }}>
                 {isAllTasks && t.project_id ? (
-                  <span style={{ ...ui.chip, opacity: 0.85 }}>{projectNameById.get(t.project_id) || "Проект"}</span>
+                  <span style={{ ...ui.chip}}>{projectNameById.get(t.project_id) || "Проект"}</span>
                 ) : null}
                 {t.due_date ? <span style={{ ...ui.chip }}>до {fmtDate(t.due_date)}</span> : null}
               </div>
@@ -899,6 +924,7 @@ export default function HomePage() {
       </div>
     );
   }
+
   function SkeletonTask() {
     return (
       <div className="skeleton" style={{ padding: 14, borderRadius: 20 }}>
@@ -1085,14 +1111,14 @@ export default function HomePage() {
                   el?.click();
                 }}
                 style={{
-                  ...ui.chipIcon,
+                  ...ui.chipBtn,
                   ...(hasCustomDate ? ui.chipBtnActive : null),
                   opacity: isAllTasks || !activeProjectId ? 0.55 : 1,
                   cursor: isAllTasks || !activeProjectId ? "not-allowed" : "pointer",
                 }}
                 title={dueDate ? `Дата: ${fmtDate(dueDate)}` : "Выбрать дату"}
               >
-                📅
+                Выбрать дату
               </button>
 
               <input
@@ -1117,7 +1143,23 @@ export default function HomePage() {
         {/* Mode switch */}
         {ready && (
           <div style={{ marginTop: 12 }}>
-            <div style={ui.segmented}>
+            <div
+              style={ui.segmented}
+              onTouchStart={(e) => {
+                swipeStartX.current = e.touches[0].clientX;
+              }}
+              onTouchEnd={(e) => {
+                if (swipeStartX.current === null) return;
+
+                const dx = e.changedTouches[0].clientX - swipeStartX.current;
+                swipeStartX.current = null;
+
+                if (Math.abs(dx) < 40) return;
+
+                if (dx < 0 && listMode === "schedule") setListMode("no_date");
+                if (dx > 0 && listMode === "no_date") setListMode("schedule");
+              }}
+            >
               <div style={ui.segmentedInner}>
                 <div
                   style={{
@@ -1165,12 +1207,20 @@ export default function HomePage() {
           </div>
         )}
 
-        {/* Lists */}
+        {/* Lists (слайд без полос и без внутреннего скролла) */}
         {ready && (
-          <>
-            {listMode === "schedule" ? (
-              loadingTasks ? (
-                <div style={{ marginTop: 12, display: "grid", gap: 18 }}>
+          <div style={ui.listsWrap}>
+            {/* PANEL: schedule */}
+            <div
+              style={{
+                ...ui.panel,
+                opacity: listMode === "schedule" ? 1 : 0,
+                transform: listMode === "schedule" ? "translateX(0%)" : "translateX(-110%)",
+                pointerEvents: listMode === "schedule" ? "auto" : "none",
+              }}
+            >
+              {loadingTasks ? (
+                <div style={{ display: "grid", gap: 18 }}>
                   {Array.from({ length: 3 }).map((_, s) => (
                     <div key={s} style={{ display: "grid", gap: 10 }}>
                       <div style={{ display: "flex", justifyContent: "space-between" }}>
@@ -1187,9 +1237,9 @@ export default function HomePage() {
                   ))}
                 </div>
               ) : tasks.length === 0 ? (
-                <div style={{ opacity: 0.7, marginTop: 12 }}>Пока пусто.</div>
+                <div style={{ opacity: 0.7 }}>Пока пусто.</div>
               ) : (
-                <div style={{ marginTop: 12, display: "grid", gap: 18 }}>
+                <div style={{ display: "grid", gap: 18 }}>
                   {taskSections
                     .filter((s) => s.key !== "NO_DATE")
                     .map((sec) => (
@@ -1207,27 +1257,42 @@ export default function HomePage() {
                       </div>
                     ))}
                 </div>
-              )
-            ) : (
-              <div style={{ marginTop: 12, display: "grid", gap: 10 }}>
+              )}
+            </div>
+
+            {/* PANEL: no_date */}
+            <div
+              style={{
+                ...ui.panel,
+                opacity: listMode === "no_date" ? 1 : 0,
+                transform: listMode === "no_date" ? "translateX(0%)" : "translateX(110%)",
+                pointerEvents: listMode === "no_date" ? "auto" : "none",
+              }}
+            >
+              <div style={{ display: "grid", gap: 10 }}>
                 <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 12 }}>
                   <div style={ui.dayTitle}>Задачи</div>
                   <div style={ui.muted}>{noDateTasks.length} шт.</div>
                 </div>
 
-                {noDateTasks.length === 0 ? (
+                {loadingTasks ? (
+                  <div style={{ display: "grid", gap: 14 }}>
+                    {Array.from({ length: 4 }).map((_, i) => (
+                      <SkeletonTask key={i} />
+                    ))}
+                  </div>
+                ) : noDateTasks.length === 0 ? (
                   <div style={{ opacity: 0.7 }}>Задач без даты нет.</div>
                 ) : (
                   <div style={{ display: "grid", gap: 14 }}>
-                    {loadingTasks
-                      ? Array.from({ length: 4 }).map((_, i) => <SkeletonTask key={i} />)
-                      : noDateTasks.map((t) => <TaskCard key={t.id} t={t} />)
-                    }
+                    {noDateTasks.map((t) => (
+                      <TaskCard key={t.id} t={t} />
+                    ))}
                   </div>
-                )}        
+                )}
               </div>
-            )}
-          </>
+            </div>
+          </div>
         )}
 
         {/* Modal: Create project */}
