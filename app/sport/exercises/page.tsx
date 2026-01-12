@@ -8,7 +8,7 @@ import AppMenu from "@/app/components/AppMenu/AppMenu";
 import { IconPlus, IconTrash, IconUser, IconStats } from "@/app/components/icons";
 import styles from "../sport.module.css";
 
-type Tab = { label: string; href: string };
+
 type LoadType = "external" | "bodyweight";
 
 type Tab = {
