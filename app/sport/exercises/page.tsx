@@ -17,6 +17,12 @@ type Tab = {
   showDot: boolean;   // нужна ли точка
   icon?:  "stats" | "user" | "dumbbell"; // какие иконки поддерживаем
 };
+type Exercise = {
+  id: number;
+  name: string;
+  loadType: LoadType;
+  created_at?: string;
+};
 
 const TABS: Tab[] = [
   { label: "Тренировки", href: "/sport", showDot: true },
