@@ -36,7 +36,7 @@ function renderTabIcon(icon?: Tab["icon"]) {
     case "stats":
       return <IconStats className={styles.tabIcon} />;
     case "dumbbell":
-      return <IconDumbbell className={styles.tabIcon} />;
+      return <IconStats className={styles.tabIcon} />;
     default:
       return null;
   }

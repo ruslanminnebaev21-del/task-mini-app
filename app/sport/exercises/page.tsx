@@ -166,7 +166,7 @@ export default function SportExercisesPage() {
 
       const ex = j.exercise;
       const mapped: Exercise = {
-        id: String(ex.id),
+        id: Number(ex.id),
         name: String(ex.name || n),
         loadType: (ex.load_type as LoadType) || loadType,
       };
