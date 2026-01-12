@@ -1,0 +1,609 @@
+/* app/sport/sport.module.css */
+/* твой текущий файл + доп. классы ниже */
+
+.shell {
+  min-height: 100vh;
+  position: relative;
+  overflow-x: hidden;
+}
+
+/*.bg {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(900px 420px at 70% 20%, rgba(77, 165, 255, 0.22), transparent 60%),
+    radial-gradient(750px 380px at 15% 35%, rgba(0, 0, 0, 0.06), transparent 60%),
+    linear-gradient(180deg, #f7f6f2, #f3f1ed);
+}
+
+.orbA,
+.orbB {
+  position: fixed;
+  width: 420px;
+  height: 420px;
+  border-radius: 999px;
+  filter: blur(6px);
+  opacity: 0.9;
+  z-index: 1;
+  pointer-events: none;
+}
+
+.orbA {
+  left: -160px;
+  top: 260px;
+  background: radial-gradient(circle at 35% 35%, rgba(0, 0, 0, 0.18), rgba(0, 0, 0, 0.05) 55%, transparent 70%);
+  transform: rotate(10deg);
+}
+
+.orbB {
+  right: -180px;
+  top: 170px;
+  background: radial-gradient(circle at 55% 45%, rgba(64, 153, 255, 0.55), rgba(64, 153, 255, 0.18) 48%, transparent 70%);
+  transform: rotate(-8deg);
+}*/
+
+.bg {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(860px 520px at 72% 26%, rgba(85, 155, 255, 0.20), transparent 64%),
+    radial-gradient(760px 520px at 18% 38%, rgba(85, 155, 255, 0.10), transparent 66%),
+    radial-gradient(900px 640px at 45% 10%, rgba(255, 255, 255, 0.70), transparent 60%),
+    linear-gradient(180deg, #eef2f6, #f4f6f8 45%, #f7f6f3);
+}
+
+.orbA,
+.orbB {
+  position: fixed;
+  width: 520px;
+  height: 520px;
+  border-radius: 999px;
+  filter: blur(24px);
+  opacity: 0.45;
+  z-index: 1;
+  pointer-events: none;
+}
+
+.orbA {
+  left: -240px;
+  top: 280px;
+  background: radial-gradient(circle at 35% 35%, rgba(0, 0, 0, 0.14), rgba(0, 0, 0, 0.04) 58%, transparent 74%);
+}
+
+.orbB {
+  right: -260px;
+  top: 180px;
+  background: radial-gradient(circle at 55% 45%, rgba(85, 155, 255, 0.40), rgba(85, 155, 255, 0.14) 55%, transparent 76%);
+}
+
+/*--------------------*/
+
+.container {
+  position: relative;
+  z-index: 2;
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 16px;
+  color: #111;
+  font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, Apple Color Emoji, Segoe UI Emoji;
+}
+
+.headerRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.h1 {
+  font-size: 34px;
+  letter-spacing: -0.6px;
+  margin: 0;
+  line-height: 44px;
+  font-weight: 900;
+}
+
+.tabWrap {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+  margin-top: 12px;
+  margin-bottom: 12px;
+}
+
+.tabBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  background: rgba(255, 255, 255, 0.62);
+  box-shadow: 0 10px 20px rgba(0, 0, 0, 0.06);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  font-weight: 500;
+  font-size: 13px;
+  user-select: none;
+  white-space: nowrap;
+  height: 36px;
+  color: #111;
+  text-decoration: none;
+}
+
+.tabBadgeActive {
+  /*border: 1px solid rgba(0, 0, 0, 0.16);
+  background: rgba(17, 17, 17, 0.92);
+  color: #fff;*/
+}
+
+.dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: #bdbdbd;
+  flex: 0 0 auto;
+  box-shadow: 0 0 0 3px rgba(0, 0, 0, 0.04);
+}
+
+.dotActive {
+  background: #22c55e;
+  box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.06);
+}
+
+.card {
+  border-radius: 22px;
+  padding: 16px;
+  background: rgba(255, 255, 255, 0.62);
+  border: 1px solid rgba(255, 255, 255, 0.7);
+  box-shadow:
+    0 18px 45px rgba(0, 0, 0, 0.08),
+    0 2px 0 rgba(255, 255, 255, 0.55) inset,
+    0 -1px 0 rgba(0, 0, 0, 0.03) inset;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+.muted {
+  font-size: 12px;
+  opacity: 0.65;
+  line-height: 1.35;
+}
+
+/* --------- ДОБАВЛЕНО ДЛЯ УПРАЖНЕНИЙ --------- */
+
+.formGrid {
+  display: grid;
+  gap: 14px;
+}
+
+.field {
+  display: grid;
+  gap: 16px;
+}
+
+.label {
+  font-size: 12px;
+  font-weight: 900;
+  opacity: 0.75;
+  letter-spacing: -0.1px;
+}
+
+.input {
+  width: 100%;
+  padding: 12px 16px;
+  border-radius: 999px;
+  border: 1px solid rgba(0, 0, 0, 0.07);
+  background: rgba(255, 255, 255, 0.72);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.8) inset, 0 10px 20px rgba(0, 0, 0, 0.05);
+  outline: none;
+  font-size: 16px;
+  color: #111;
+}
+
+.input:focus {
+  border-color: rgba(85, 155, 255, 0.28);
+  background: rgba(255, 255, 255, 0.92);
+ /* box-shadow:
+    var(--shadowB),
+    var(--insetTop),
+    0 0 0 4px rgba(85, 155, 255, 0.14);*/
+}
+
+.radioRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+}
+
+.chipBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  background: rgba(255, 255, 255, 0.62);
+  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.06);
+  font-size: 12px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.chipBtnActive {
+  border: 1px solid rgba(0, 0, 0, 0.16);
+  background: rgba(17, 17, 17, 0.92);
+  color: #fff;
+}
+
+.formActions {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+}
+
+.btnPrimary {
+  padding: 12px 16px;
+  border-radius: 999px;
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  background: #111;
+  color: #fff;
+  font-weight: 800;
+  cursor: pointer;
+  user-select: none;
+  box-shadow: 0 16px 30px rgba(0, 0, 0, 0.18);
+}
+
+.btnCircle {
+  width: 44px;
+  height: 44px;
+  border-radius: 999px;
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  background: #111;
+  color: #fff;
+  cursor: pointer;
+  user-select: none;
+  box-shadow: 0 16px 30px rgba(0, 0, 0, 0.18);
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+}
+
+.btnDisabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.listWrap {
+  margin-top: 12px;
+  display: grid;
+  gap: 10px;
+}
+
+.listHeader {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 6px;
+}
+
+.sectionTitle {
+  font-size: 18px;
+  font-weight: 900;
+  opacity: 0.85;
+  letter-spacing: -0.2px;
+}
+
+.empty {
+  opacity: 0.7;
+  padding: 6px 2px;
+}
+
+.list {
+  display: grid;
+  gap: 12px;
+}
+
+.listItem {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  justify-content: space-between;
+  border-radius: 20px;
+  padding: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.72);
+  background: rgba(255, 255, 255, 0.62);
+  box-shadow: 0 16px 34px rgba(0, 0, 0, 0.01);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+.listItemMain {
+  display: grid;
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
+}
+
+.titleText {
+  font-weight: 900;
+  font-size: 16px;
+  line-height: 1.2;
+  user-select: text;
+  word-break: break-word;
+}
+
+.metaRow {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 2px;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(0, 0, 0, 0.07);
+  background: rgba(255, 255, 255, 0.62);
+  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.06);
+  font-size: 12px;
+  opacity: 0.55;
+}
+
+.trashBtn {
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-top: 2px;
+  opacity: 0.55;
+}
+
+.trashBtn:hover {
+  opacity: 0.85;
+}
+
+.hintBox {
+  border-radius: 18px;
+  padding: 12px;
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  background: rgba(255, 255, 255, 0.55);
+}
+
+.hintTitle {
+  font-weight: 900;
+  font-size: 12px;
+  opacity: 0.8;
+  /*margin-bottom: 8px;*/
+}
+
+.hintDanger {
+  font-weight: 900;
+  font-size: 12px;
+  color: rgba(160, 0, 0, 0.85);
+}
+
+.suggestList {
+  display: grid;
+  gap: 8px;
+}
+
+.suggestItem {
+  width: 100%;
+  text-align: left;
+  border-radius: 16px;
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.72);
+  background: rgba(255, 255, 255, 0.62);
+  box-shadow: 0 10px 22px rgba(0, 0, 0, 0.05);
+  cursor: pointer;
+}
+
+.suggestName {
+  font-weight: 900;
+  font-size: 14px;
+  line-height: 1.2;
+}
+
+.suggestMeta {
+  margin-top: 4px;
+  font-size: 12px;
+  opacity: 0.6;
+}
+
+.inputRow {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.inputGrow {
+  flex: 1;
+  min-width: 0;
+}
+
+/* ===== Sport page extras (tabs icons, hero, KPI, calendar) ===== */
+
+.tabIcon {
+  width: 16px;
+  height: 16px;
+  display: block;
+}
+
+/* привет */
+.heroHello {
+  font-size: 22px;
+  font-weight: 900;
+  letter-spacing: -0.2px;
+  margin-bottom: 12px;
+}
+
+/* большая CTA кнопка */
+.bigCta {
+  width: 100%;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  background: #111111eb;
+  border-radius: 22px;
+  padding: 16px;
+  box-shadow: 0 14px 34px rgba(0, 0, 0, 0.07);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  cursor: pointer;
+  text-align: left;
+  user-select: none;
+  color: #fff;
+}
+
+.bigCta:active {
+  transform: translateY(1px);
+}
+
+.bigCtaTitle {
+  font-size: 18px;
+  font-weight: 900;
+  letter-spacing: -0.2px;
+  margin-bottom: 6px;
+}
+
+.bigCtaSub {
+  font-size: 12px;
+  opacity: 0.7;
+  line-height: 1.35;
+}
+
+/* KPI блоки (цель/вес) */
+.kpiGrid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.kpiItem {
+  border-radius: 18px;
+  padding: 12px 14px;
+  border: 1px solid rgba(255, 255, 255, 0.75);
+  background: rgba(255, 255, 255, 0.55);
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.05);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+
+.kpiLabel {
+  font-size: 12px;
+  opacity: 0.65;
+  margin-top: 6px;
+}
+
+.kpiValue {
+  font-size: 16px;
+  font-weight: 900;
+  letter-spacing: -0.2px;
+  line-height: 1.2;
+  word-break: break-word;
+}
+
+/* на широких экранах можно в 2 колонки */
+@media (min-width: 520px) {
+  .kpiGrid {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+/* календарь */
+.calHeader {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.calTitle {
+  font-size: 16px;
+  font-weight: 900;
+  letter-spacing: -0.2px;
+  text-transform: capitalize;
+}
+
+.calWeekdays {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.calWeekday {
+  font-size: 11px;
+  opacity: 0.55;
+  text-align: center;
+  font-weight: 800;
+}
+
+.calGrid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 6px;
+}
+
+.calCell,
+.calCellEmpty {
+  height: 42px;
+  border-radius: 14px;
+}
+
+.calCellEmpty {
+  background: transparent;
+}
+
+.calCell {
+  position: relative;
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  background: rgba(255, 255, 255, 0.58);
+  box-shadow: 0 10px 22px rgba(0, 0, 0, 0.05);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  display: grid;
+  place-items: center;
+}
+
+.calCellToday {
+  border: 1px solid rgba(0, 0, 0, 0.14);
+  background: rgba(255, 255, 255, 0.72);
+}
+
+.calDayNum {
+  font-size: 13px;
+  font-weight: 900;
+  opacity: 0.85;
+  line-height: 1;
+}
+
+/* кружок тренировки */
+.calDot {
+  position: absolute;
+  bottom: 8px;
+  right: 8px;
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  background: rgba(64, 153, 255, 0.85);
+  box-shadow: 0 0 0 4px rgba(64, 153, 255, 0.12);
+}

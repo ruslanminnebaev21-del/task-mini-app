@@ -1,0 +1,171 @@
+/* app/page.module.css */
+
+.shell {
+  min-height: 100vh;
+  position: relative;
+  overflow-x: hidden;
+  overflow-y: visible;
+}
+
+.container {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 16px;
+  font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, Apple Color Emoji,
+    Segoe UI Emoji;
+  color: #111;
+  position: relative;
+  z-index: 2;
+}
+
+/* фон как в задачнике */
+.bgFixed {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background: radial-gradient(900px 420px at 70% 20%, rgba(77, 165, 255, 0.22), transparent 60%),
+    radial-gradient(750px 380px at 15% 35%, rgba(0, 0, 0, 0.06), transparent 60%),
+    linear-gradient(180deg, #f7f6f2, #f3f1ed);
+}
+
+.orb {
+  position: fixed;
+  width: 420px;
+  height: 420px;
+  border-radius: 999px;
+  filter: blur(6px);
+  opacity: 0.9;
+  z-index: 1;
+  pointer-events: none;
+}
+
+.orbA {
+  left: -160px;
+  top: 260px;
+  background: radial-gradient(circle at 35% 35%, rgba(0, 0, 0, 0.18), rgba(0, 0, 0, 0.05) 55%, transparent 70%);
+  transform: rotate(10deg);
+}
+
+.orbB {
+  right: -180px;
+  top: 170px;
+  background: radial-gradient(
+    circle at 55% 45%,
+    rgba(64, 153, 255, 0.55),
+    rgba(64, 153, 255, 0.18) 48%,
+    transparent 70%
+  );
+  transform: rotate(-8deg);
+}
+
+.headerRow {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.h1 {
+  font-size: 34px;
+  letter-spacing: -0.6px;
+  margin: 0;
+  line-height: 44px;
+  font-weight: 900;
+}
+
+.muted {
+  font-size: 12px;
+  opacity: 0.65;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 14px;
+  margin-top: 12px;
+}
+
+@media (min-width: 520px) {
+  .grid {
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+  }
+}
+
+/* плитка в стиле taskItem/card */
+.tile {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 12px;
+
+  border-radius: 22px;
+  padding: 16px;
+
+  background: rgba(255, 255, 255, 0.62);
+  border: 1px solid rgba(255, 255, 255, 0.7);
+  box-shadow: 0 18px 45px rgba(0, 0, 0, 0.08), 0 2px 0 rgba(255, 255, 255, 0.55) inset,
+    0 -1px 0 rgba(0, 0, 0, 0.03) inset;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+
+  text-decoration: none;
+  color: inherit;
+
+  transition: transform 180ms ease, box-shadow 180ms ease, border-color 180ms ease;
+}
+
+.tile:hover {
+  transform: translateY(-2px);
+  border-color: rgba(0, 0, 0, 0.08);
+  box-shadow: 0 22px 55px rgba(0, 0, 0, 0.1), 0 2px 0 rgba(255, 255, 255, 0.55) inset,
+    0 -1px 0 rgba(0, 0, 0, 0.03) inset;
+}
+
+.tile:active {
+  transform: translateY(0px) scale(0.99);
+}
+
+.tileTop {
+  display: grid;
+  gap: 6px;
+}
+
+.tileTitle {
+  font-weight: 900;
+  font-size: 18px;
+  letter-spacing: -0.2px;
+  line-height: 1.2;
+}
+
+.tileHint {
+  font-size: 12px;
+  opacity: 0.65;
+  line-height: 1.35;
+}
+
+.tileMeta {
+  display: inline-flex;
+  align-self: flex-start;
+
+  padding: 6px 12px;
+  border-radius: 999px;
+
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  background: rgba(255, 255, 255, 0.62);
+  box-shadow: 0 10px 20px rgba(0, 0, 0, 0.06);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+
+  font-size: 13px;
+  font-weight: 700;
+  color: #111;
+}
+
+.footerNote {
+  margin-top: 14px;
+  font-size: 12px;
+  opacity: 0.55;
+}

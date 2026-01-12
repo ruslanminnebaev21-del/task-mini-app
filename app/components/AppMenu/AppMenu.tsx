@@ -1,0 +1,118 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import Link from "next/link";
+import { usePathname, useRouter } from "next/navigation";
+import styles from "./AppMenu.module.css";
+import { IconTrash, IconPlus, IconRotate, IconEdit } from "@/app/components/icons";
+
+type Item = { label: string; href: string };
+
+const DEFAULT_ITEMS: Item[] = [
+  { label: "Главная", href: "/" },
+  { label: "Задачи", href: "/tasks" },
+  { label: "Дневник тренировок", href: "/sport" },
+];
+
+export default function AppMenu({
+  items = DEFAULT_ITEMS,
+}: {
+  items?: Item[];
+}) {
+  const [open, setOpen] = useState(false);
+  const pathname = usePathname();
+  const router = useRouter();
+
+  useEffect(() => {
+    setOpen(false);
+  }, [pathname]);
+
+  useEffect(() => {
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key === "Escape") setOpen(false);
+    }
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, []);
+
+  function refreshPage() {
+    router.refresh();
+  }
+
+  return (
+    <>
+      {/* верхняя панель */}
+      <div className={styles.topBar}>
+        <button
+          type="button"
+          className={styles.iconBtn}
+          onClick={refreshPage}
+          aria-label="Обновить"
+          title="Обновить"
+        >
+          {/* refresh */}
+          <IconRotate size={18} style={{ color: "#000000" }} />
+        </button>
+        
+        <button
+          type="button"
+          className={styles.iconBtn}
+          onClick={() => setOpen(true)}
+          aria-label="Открыть меню"
+          title="Меню"
+        >
+          {/* burger */}
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+            <path d="M4 7h16M4 12h16M4 17h16" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+          </svg>
+        </button>
+
+        
+      </div>
+
+      {/* overlay */}
+      <div
+        className={`${styles.overlay} ${open ? styles.overlayOpen : ""}`}
+        onClick={() => setOpen(false)}
+        aria-hidden={!open}
+      />
+
+      {/* шторка справа */}
+      <aside className={`${styles.drawer} ${open ? styles.drawerOpen : ""}`} role="dialog" aria-label="Меню">
+        <div className={styles.drawerHeader}>
+          <div className={styles.drawerTitle}>Меню</div>
+          <button
+            type="button"
+            className={styles.closeBtn}
+            onClick={() => setOpen(false)}
+            aria-label="Закрыть"
+            title="Закрыть"
+          >
+            ✕
+          </button>
+        </div>
+
+        <nav className={styles.nav}>
+          {items.map((it) => {
+            const active = pathname === it.href;
+            return (
+              <Link
+                key={it.href}
+                href={it.href}
+                className={`${styles.navItem} ${active ? styles.navItemActive : ""}`}
+              >
+                {it.label}
+              </Link>
+            );
+          })}
+        </nav>
+
+        <div className={styles.drawerFooter}>
+          <button type="button" className={styles.ghostBtn} onClick={refreshPage}>
+            Обновить
+          </button>
+        </div>
+      </aside>
+    </>
+  );
+}
