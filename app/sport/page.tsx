@@ -2,17 +2,17 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
-import { useMemo, useState } from "react";
+import { usePathname, useRouter } from "next/navigation";
+import { useEffect, useMemo, useState } from "react";
 import AppMenu from "@/app/components/AppMenu/AppMenu";
 import styles from "./sport.module.css";
-import { IconUser, IconStats } from "@/app/components/icons";
+import { IconUser, IconStats, IconArrow } from "@/app/components/icons";
 
 type Tab = {
   label: string;
   href: string;
-  showDot: boolean; // нужна ли точка
-  icon?: "stats" | "user" | "dumbbell"; // какие иконки поддерживаем
+  showDot: boolean;
+  icon?: "stats" | "user" | "dumbbell";
 };
 
 const TABS: Tab[] = [
@@ -21,6 +21,29 @@ const TABS: Tab[] = [
   { label: "Статистика", href: "/sport/stats", showDot: false, icon: "stats" },
   { label: "Профиль", href: "/sport/profile", showDot: false, icon: "user" },
 ];
+
+type WorkoutType = "strength" | "cardio";
+
+type Workout = {
+  id: number;
+  title: string;
+  workout_date: string;
+  type: WorkoutType;
+  duration_min?: number | null;
+  status?: "draft" | "done";
+  completed_at?: string | null;
+  created_at?: string | null;
+};
+
+function typeLabel(w: WorkoutType) {
+  return w === "strength" ? "Силовая" : "Кардио";
+}
+
+function formatDateRu(dateStr: string) {
+  if (!dateStr) return "";
+  const [y, m, d] = dateStr.split("-");
+  return `${d}.${m}.${y}`;
+}
 
 function isActiveTab(pathname: string, href: string) {
   if (href === "/sport") return pathname === "/sport";
@@ -55,23 +78,36 @@ function ymd(d: Date) {
 
 export default function SportPage() {
   const pathname = usePathname();
+  const router = useRouter();
 
-  // пока без бэка: заглушки (потом подцепим из профиля/таблиц)
-  const [firstName] = useState<string>(""); // например: "Руслан"
-  const [goal] = useState<string>("Набрать форму к отпуску");
-  const [weight] = useState<number | null>(82.4);
+  const [firstName, setFirstName] = useState("");
+  const [goal, setGoal] = useState("");
+  const [weight, setWeight] = useState<number | null>(null);
 
+  const [loading, setLoading] = useState(false);
+  const [hint, setHint] = useState<string | null>(null);
+  const [workouts, setWorkouts] = useState<Workout[]>([]);
+
+  const todayKey = useMemo(() => ymd(new Date()), []);
   const now = useMemo(() => new Date(), []);
   const year = now.getFullYear();
   const month = now.getMonth();
 
-  // мок: дни с тренировками (потом заменим на данные из БД)
+  // только завершённые, только с completed_at
+  const doneWorkouts = useMemo(
+    () => workouts.filter((w) => w.status === "done" && Boolean(w.completed_at)),
+    [workouts]
+  );
+
+  // точки календаря по completed_at
   const workoutDays = useMemo(() => {
-    const a = new Date(year, month, 2);
-    const b = new Date(year, month, 6);
-    const c = new Date(year, month, 10);
-    return new Set([ymd(a), ymd(b), ymd(c)]);
-  }, [year, month]);
+    const s = new Set<string>();
+    for (const w of doneWorkouts) {
+      const d = new Date(w.completed_at!);
+      s.add(ymd(d));
+    }
+    return s;
+  }, [doneWorkouts]);
 
   const trainingsThisMonth = useMemo(() => {
     const prefix = `${year}-${String(month + 1).padStart(2, "0")}-`;
@@ -87,9 +123,8 @@ export default function SportPage() {
     const last = new Date(year, month + 1, 0);
     const daysInMonth = last.getDate();
 
-    // понедельник = первый день
-    const jsDay = first.getDay(); // 0..6 (вс..сб)
-    const startOffset = (jsDay + 6) % 7; // 0..6 (пн..вс)
+    const jsDay = first.getDay();
+    const startOffset = (jsDay + 6) % 7;
 
     const cells: Array<{ date: Date | null; key: string }> = [];
     for (let i = 0; i < startOffset; i++) cells.push({ date: null, key: `e-${i}` });
@@ -99,12 +134,58 @@ export default function SportPage() {
       cells.push({ date: d, key: ymd(d) });
     }
 
-    // while (cells.length < 42) cells.push({ date: null, key: `t-${cells.length}` });
-
     return cells;
   }, [year, month]);
 
-  const hello = firstName?.trim() ? `Привет, ${firstName.trim()}!` : "Привет!";
+  // список “этого месяца” тоже по completed_at
+  const workoutsThisMonthSorted = useMemo(() => {
+    const prefix = `${year}-${String(month + 1).padStart(2, "0")}-`;
+
+    return doneWorkouts
+      .filter((w) => ymd(new Date(w.completed_at!)).startsWith(prefix))
+      .sort((a, b) => String(b.completed_at).localeCompare(String(a.completed_at)));
+  }, [doneWorkouts, year, month]);
+
+  const hello = firstName.trim() ? `Привет, ${firstName.trim()}!` : "Привет!";
+
+  useEffect(() => {
+    (async () => {
+      setLoading(true);
+      setHint(null);
+
+      try {
+        const r = await fetch("/api/sport/overview", { credentials: "include" });
+        const j = await r.json().catch(() => ({} as any));
+
+        if (!r.ok || !j.ok) {
+          if (j?.reason === "NO_SESSION") return;
+          setHint(j?.error || j?.reason || "Не смог загрузить обзор");
+          return;
+        }
+
+        setFirstName(String(j.first_name || j.firstName || "").trim());
+        setGoal(String(j.goal || "").trim());
+        setWeight(j.weight === null || j.weight === undefined ? null : Number(j.weight));
+
+        const mapped: Workout[] = (j.workouts || []).map((x: any) => ({
+          id: Number(x.id),
+          title: String(x.title || "").trim() || "Без названия",
+          workout_date: String(x.workout_date || ""),
+          type: x.type === "cardio" ? "cardio" : "strength",
+          duration_min: x.duration_min == null ? null : Number(x.duration_min),
+          status: x.status === "done" ? "done" : "draft",
+          completed_at: x.completed_at == null ? null : String(x.completed_at),
+          created_at: x.created_at == null ? null : String(x.created_at),
+        }));
+
+        setWorkouts(mapped);
+      } catch (e: any) {
+        setHint(String(e?.message || e));
+      } finally {
+        setLoading(false);
+      }
+    })();
+  }, []);
 
   return (
     <div className={styles.shell}>
@@ -131,40 +212,37 @@ export default function SportPage() {
                 className={`${styles.tabBadge} ${active ? styles.tabBadgeActive : ""}`}
                 title={t.label}
               >
-                {t.showDot ? <span className={`${styles.dot} ${active ? styles.dotActive : ""}`} /> : null}
+                {t.showDot ? (
+                  <span className={`${styles.dot} ${active ? styles.dotActive : ""}`} />
+                ) : null}
                 {hasIcon ? renderTabIcon(t.icon) : t.label}
               </Link>
             );
           })}
         </nav>
 
-        {/* Верхний блок */}
-        {/*<section className={styles.card}>*/}
-          <div className={styles.heroHello}>{hello}</div>
-          <div className={styles.kpiGrid}>
-            <div className={styles.kpiItem}>
-              <div className={styles.kpiValue}>{goal || "Не задана"}</div>
-              <div className={styles.kpiLabel}>Текущая цель</div>
-            </div>
-            <div className={styles.kpiItem}>
-              <div className={styles.kpiValue}>{weight === null ? "—" : `${weight} кг`}</div>
-              <div className={styles.kpiLabel}>Текущий вес</div>
-            </div>
-          <button
-            type="button"
-            className={styles.bigCta}
-            onClick={() => {
-              // позже: открываем модалку/страницу создания тренировки
-              alert("Тут откроем создание тренировки");
-            }}
-          >
-            <div className={styles.bigCtaTitle}>Сделай тренировку</div>
-            <div className={styles.bigCtaSub}>Два подхода и ты уже другой человек.</div>
-          </button>
+        <div className={styles.heroHello}>{hello}</div>
+        <div className={styles.kpiGrid}>
+          <div className={styles.kpiItem}>
+            <div className={styles.kpiLabel}>Текущая цель</div>
+            <div className={styles.kpiValue}>{goal || "Не задана"}</div>
           </div>
-        {/*</section>*/}
 
-        {/* Календарь */}
+          <div className={styles.kpiItem}>
+            <div className={styles.kpiLabel}>Текущий вес</div>
+            <div className={styles.kpiValue}>{weight === null ? "—" : `${weight} кг`}</div>
+          </div>
+
+          <button type="button" className={styles.bigCta} onClick={() => router.push("/sport/workouts")}>
+            <div className={styles.bigCtaRow}>
+              <span className={styles.bigCtaText}>Тренировка</span>
+              <span className={styles.bigCtaIcon}>
+                <IconArrow size={25} style={{ color: "#ffffff" }} />
+              </span>
+            </div>
+          </button>
+        </div>
+
         <section className={styles.card} style={{ marginTop: 14 }}>
           <div className={styles.calHeader}>
             <div className={styles.calTitle}>{monthLabel(now)}</div>
@@ -185,7 +263,7 @@ export default function SportPage() {
 
               const key = ymd(cell.date);
               const hasWorkout = workoutDays.has(key);
-              const isToday = key === ymd(new Date());
+              const isToday = key === todayKey;
 
               return (
                 <div
@@ -199,6 +277,56 @@ export default function SportPage() {
               );
             })}
           </div>
+        </section>
+
+        <section className={styles.listWrap} style={{ marginTop: 14 }}>
+          <div className={styles.listHeader}>
+            <div className={styles.sectionTitle}>Тренировки этого месяца</div>
+            <div className={styles.muted}>{workoutsThisMonthSorted.length} шт.</div>
+          </div>
+
+          {hint ? <div className={styles.hintDanger}>{hint}</div> : null}
+
+          {loading ? (
+            <div className={styles.muted}>Загружаю…</div>
+          ) : workoutsThisMonthSorted.length === 0 ? (
+            <div className={styles.empty}>В этом месяце тренировок пока нет.</div>
+          ) : (
+            <div className={styles.list}>
+              {workoutsThisMonthSorted.map((w) => {
+                const dateKey = ymd(new Date(w.completed_at!));
+
+                return (
+                  <div
+                    key={w.id}
+                    className={styles.listItem}
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => alert(`Открыть тренировку #${w.id}`)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        alert(`Открыть тренировку #${w.id}`);
+                      }
+                    }}
+                    title="Открыть тренировку"
+                  >
+                    <div className={styles.listItemMain}>
+                      <div className={styles.titleText}>{w.title || "Без названия"}</div>
+
+                      <div className={styles.metaRow}>
+                        <span className={styles.chip}>{formatDateRu(dateKey)}</span>
+                        <span className={styles.chip}>{typeLabel(w.type)}</span>
+                        {w.duration_min ? <span className={styles.chip}>{w.duration_min} мин</span> : null}
+                      </div>
+                    </div>
+
+                    <span className={styles.listChevron}>›</span>
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </section>
       </main>
     </div>
