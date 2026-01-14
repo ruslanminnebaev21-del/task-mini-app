@@ -179,19 +179,6 @@ async function updateExercisePRFromWorkout(opts: { uid: number; workoutId: numbe
       if (!shouldUpdate) continue;
 
     }
-
-    const { error: upErr } = await supabaseAdmin
-      .from("exercises")
-      .update({
-        best_weight: candidate.weight,
-        best_reps: candidate.reps,
-        best_workout_id: workoutId,
-        best_set_at: new Date().toISOString(),
-      })
-      .eq("user_id", uid)
-      .eq("id", exerciseId);
-
-    if (upErr) throw new Error(`EX_UPDATE_FAILED(${exerciseId}): ${upErr.message}`);
   }
 
 
