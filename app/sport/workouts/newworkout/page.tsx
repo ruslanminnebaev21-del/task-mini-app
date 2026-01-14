@@ -572,9 +572,12 @@ function NewWorkoutInner() {
                         }}
                       >
                         <div className={styles.exerciseInputWrap}>
-                          {focusedExerciseId !== we.id && we.bestResult ? (
+                        {focusedExerciseId !== we.id &&
+                          we.exerciseId != null &&
+                          ((we.bestWeight ?? 0) > 0 || (we.bestReps ?? 0) > 0) ? (
                             <div className={styles.bestOverlay}>
-                              <span cclassName={styles.chip}
+                              <span
+                                className={styles.chip}
                                 style={{
                                   position: "absolute",
                                   right: 8,
@@ -582,8 +585,9 @@ function NewWorkoutInner() {
                                   transform: "translateY(-50%)",
                                   pointerEvents: "none",
                                   zIndex: 2,
-                                }}>
-                                Лучший: {we.bestResult}
+                                }}
+                              >
+                                Лучший: {(we.bestReps ?? 0)}×{(we.bestWeight ?? 0)}кг
                               </span>
                               <span className={styles.bestSep}>|</span>
                             </div>
