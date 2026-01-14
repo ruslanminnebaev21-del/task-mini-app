@@ -13,6 +13,8 @@ type WorkoutType = "strength" | "cardio";
 type Suggestion = {
   id: number;
   name: string;
+  best_weight?: number | null;
+  best_reps?: number | null;
 };
 
 type LiftSet = {
@@ -22,9 +24,11 @@ type LiftSet = {
 };
 
 type WorkoutExercise = {
-  id: string; // локальный id блока упражнения
+  id: string;
   exerciseId: number | null;
   exerciseName: string;
+  bestWeight?: number | null;
+  bestReps?: number | null;
   sets: LiftSet[];
 };
 
@@ -102,7 +106,7 @@ function NewWorkoutInner() {
   const [activeExerciseId, setActiveExerciseId] = useState<string | null>(
     workoutExercises[0]?.id ?? null
   );
-
+  const [focusedExerciseId, setFocusedExerciseId] = useState<string | null>(null);
   const [suggestionsByEx, setSuggestionsByEx] = useState<Record<string, Suggestion[]>>({});
   const [suggestLoadingByEx, setSuggestLoadingByEx] = useState<Record<string, boolean>>({});
   const [openSuggestFor, setOpenSuggestFor] = useState<string | null>(null);
@@ -216,8 +220,13 @@ function NewWorkoutInner() {
           return;
         }
 
-        const arr: Suggestion[] = (j.exercises || [])
-          .map((x: any) => ({ id: Number(x.id), name: String(x.name || "").trim() }))
+          const arr: Suggestion[] = (j.exercises || [])
+            .map((x: any) => ({
+              id: Number(x.id),
+              name: String(x.name || "").trim(),
+              best_weight: x.best_weight == null ? null : Number(x.best_weight),
+              best_reps: x.best_reps == null ? null : Number(x.best_reps),
+            }))
           .filter((x: Suggestion) => Number.isFinite(x.id) && x.name);
 
         setSuggestionsByEx((prev) => ({ ...prev, [exBlockId]: arr.slice(0, 8) }));
@@ -342,7 +351,7 @@ function NewWorkoutInner() {
     });
 
     if (badIndex !== -1) {
-      showToast(`Упражнение #${badIndex + 1}: выбери из списка`);
+      showToast(`Упражнение №${badIndex + 1}: выбери из списка`);
       return false;
     }
     return true;
@@ -562,24 +571,66 @@ function NewWorkoutInner() {
                           }, 140);
                         }}
                       >
-                        <input
-                          className={`${styles.input} ${styles.exerciseInput}`}
-                          value={we.exerciseName}
-                          onFocus={() => {
-                            setActiveExerciseId(we.id);
-                            setOpenSuggestFor(we.id);
-                            fetchExerciseSuggestions(we.id, we.exerciseName);
-                          }}
-                          onChange={(e) => {
-                            const v = e.target.value;
-                            updateExercise(we.id, { exerciseName: v, exerciseId: null });
-                            setActiveExerciseId(we.id);
-                            setOpenSuggestFor(we.id);
-                            fetchExerciseSuggestions(we.id, v);
-                          }}
-                          placeholder={loading ? "Ищу…" : `Упражнение №${idx + 1}`}
-                          disabled={loadingDraft}
-                        />
+                        <div className={styles.exerciseInputWrap}>
+                          {focusedExerciseId !== we.id && we.bestResult ? (
+                            <div className={styles.bestOverlay}>
+                              <span cclassName={styles.chip}
+                                style={{
+                                  position: "absolute",
+                                  right: 8,
+                                  top: "50%",
+                                  transform: "translateY(-50%)",
+                                  pointerEvents: "none",
+                                  zIndex: 2,
+                                }}>
+                                Лучший: {we.bestResult}
+                              </span>
+                              <span className={styles.bestSep}>|</span>
+                            </div>
+                          ) : null}
+                          {focusedExerciseId !== we.id &&
+                            we.exerciseId != null &&
+                            ((we.bestWeight ?? 0) > 0 || (we.bestReps ?? 0) > 0) ? (
+                              <span
+                                className={styles.chip}
+                                style={{
+                                  position: "absolute",
+                                  right: 8,
+                                  top: "50%",
+                                  transform: "translateY(-50%)",
+                                  pointerEvents: "none",
+                                  zIndex: 2,
+
+                                }}
+                              >
+                                Лучший: {(we.bestReps ?? 0)}×{(we.bestWeight ?? 0)}кг
+                              </span>
+                            ) : null}                       
+
+                          <input
+                            className={`${styles.input} ${styles.exerciseInput} ${focusedExerciseId !== we.id ? styles.withBestPadding : ""}`}
+                            value={we.exerciseName}
+                            onFocus={() => {
+                              setFocusedExerciseId(we.id);
+
+                              setActiveExerciseId(we.id);
+                              setOpenSuggestFor(we.id);
+                              fetchExerciseSuggestions(we.id, we.exerciseName);
+                            }}
+                            onBlur={() => {
+                              setFocusedExerciseId((cur) => (cur === we.id ? null : cur));
+                            }}
+                            onChange={(e) => {
+                              const v = e.target.value;
+                              updateExercise(we.id, { exerciseName: v, exerciseId: null });
+                              setActiveExerciseId(we.id);
+                              setOpenSuggestFor(we.id);
+                              fetchExerciseSuggestions(we.id, v);
+                            }}
+                            placeholder={loading ? "Ищу…" : `Упражнение №${idx + 1}`}
+                            disabled={loadingDraft}
+                          />
+                        </div>
 
                         {showSuggestions ? (
                           <div className={styles.suggestionBox}>
@@ -589,7 +640,12 @@ function NewWorkoutInner() {
                                 type="button"
                                 className={styles.suggestionItem}
                                 onClick={() => {
-                                  updateExercise(we.id, { exerciseId: e.id, exerciseName: e.name });
+                                  updateExercise(we.id, {
+                                    exerciseId: e.id,
+                                    exerciseName: e.name,
+                                    bestWeight: e.best_weight ?? null,
+                                    bestReps: e.best_reps ?? null,
+                                  });
                                   setActiveExerciseId(we.id);
                                   setOpenSuggestFor(null);
                                   setSuggestionsByEx((prev) => ({ ...prev, [we.id]: [] }));

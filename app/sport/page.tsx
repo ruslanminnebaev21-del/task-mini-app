@@ -7,6 +7,7 @@ import { useEffect, useMemo, useState } from "react";
 import AppMenu from "@/app/components/AppMenu/AppMenu";
 import styles from "./sport.module.css";
 import { IconUser, IconStats, IconArrow } from "@/app/components/icons";
+import { useWorkoutStats } from "@/app/hooks/useWorkoutStats";
 
 type Tab = {
   label: string;
@@ -145,6 +146,12 @@ export default function SportPage() {
       .filter((w) => ymd(new Date(w.completed_at!)).startsWith(prefix))
       .sort((a, b) => String(b.completed_at).localeCompare(String(a.completed_at)));
   }, [doneWorkouts, year, month]);
+
+  const statsIds = useMemo(
+  () => workoutsThisMonthSorted.filter((w) => w.type === "strength").map((w) => w.id),
+  [workoutsThisMonthSorted]
+  );
+  const { loading: statsLoading, data: statsByWorkoutId } = useWorkoutStats(statsIds);
 
   const hello = firstName.trim() ? `Привет, ${firstName.trim()}!` : "Привет!";
 
@@ -302,11 +309,11 @@ export default function SportPage() {
                     className={styles.listItem}
                     role="button"
                     tabIndex={0}
-                    onClick={() => alert(`Открыть тренировку #${w.id}`)}
+                    onClick={() => router.push(`/sport/workouts/curworkout?workout_id=${w.id}`)}
                     onKeyDown={(e) => {
                       if (e.key === "Enter" || e.key === " ") {
                         e.preventDefault();
-                        alert(`Открыть тренировку #${w.id}`);
+                        router.push(`/sport/workouts/curworkout?workout_id=${w.id}`);
                       }
                     }}
                     title="Открыть тренировку"
@@ -318,7 +325,18 @@ export default function SportPage() {
                         <span className={styles.chip}>{formatDateRu(dateKey)}</span>
                         <span className={styles.chip}>{typeLabel(w.type)}</span>
                         {w.duration_min ? <span className={styles.chip}>{w.duration_min} мин</span> : null}
+                        {w.type === "strength" ? (
+                        statsLoading ? (
+                          <span className={styles.chip}>Считаю…</span>
+                        ) : statsByWorkoutId?.[w.id] ? (
+                          <>
+                            <span className={styles.chip}>{statsByWorkoutId[w.id].exerciseCount} упр</span>
+                            <span className={styles.chip}>{Math.round(statsByWorkoutId[w.id].totalWeight)} кг</span>
+                          </>
+                          ) : null
+                        ) : null}  
                       </div>
+
                     </div>
 
                     <span className={styles.listChevron}>›</span>

@@ -1,9 +1,11 @@
+// app/tasks/page.tsx
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties } from "react";
-import { IconTrash, IconPlus, IconRotate, IconEdit } from "@/app/components/icons";
+import { IconTrash, IconPlus, IconEdit } from "@/app/components/icons";
 import AppMenu from "@/app/components/AppMenu/AppMenu";
+import { useTelegramAuth } from "@/app/hooks/useTelegramAuth";
 
 type Task = {
   id: number;
@@ -21,28 +23,10 @@ type Project = {
   created_at: string;
 };
 
-function getTelegramWebApp() {
-  // @ts-ignore
-  return typeof window !== "undefined" ? window.Telegram?.WebApp : null;
-}
-
 function fmtDate(d: string) {
   const [y, m, day] = d.split("-").map((x) => Number(x));
   if (!y || !m || !day) return d;
   return `${day.toString().padStart(2, "0")}.${m.toString().padStart(2, "0")}.${y}`;
-}
-
-function fmtDateTimeLocal(iso?: string | null) {
-  if (!iso) return "";
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return "";
-  return new Intl.DateTimeFormat(undefined, {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  }).format(d);
 }
 
 function isoDayFromTs(ts?: string | null) {
@@ -50,7 +34,6 @@ function isoDayFromTs(ts?: string | null) {
   const d = new Date(ts);
   if (Number.isNaN(d.getTime())) return null;
 
-  // важное: берем локальный день устройства, а не UTC
   const y = d.getFullYear();
   const m = String(d.getMonth() + 1).padStart(2, "0");
   const day = String(d.getDate()).padStart(2, "0");
@@ -58,7 +41,10 @@ function isoDayFromTs(ts?: string | null) {
 }
 
 export default function HomePage() {
-  const [ready, setReady] = useState(false);
+  // ✅ auth теперь в хуке
+  const { ready: authReady, hint: authHint } = useTelegramAuth();
+
+  // локальный hint для ошибок проектов/тасков/сети
   const [hint, setHint] = useState<string | null>(null);
 
   // projects
@@ -102,7 +88,6 @@ export default function HomePage() {
   const [editDueDate, setEditDueDate] = useState<string | null>(null);
   const editDueDateRef = useRef<HTMLInputElement | null>(null);
 
-  // дата необязательна
   const [dueDate, setDueDate] = useState<string | null>(null);
 
   const [loadingTasks, setLoadingTasks] = useState(false);
@@ -116,8 +101,6 @@ export default function HomePage() {
 
   const isAllTasks = activeProjectId === null;
 
-  const DEV_LOCAL_AUTH = process.env.NEXT_PUBLIC_DEV_LOCAL_AUTH === "true";
-
   const dateISO = (d: Date) => d.toISOString().slice(0, 10);
 
   const todayISO = useMemo(() => dateISO(new Date()), []);
@@ -126,7 +109,6 @@ export default function HomePage() {
     d.setDate(d.getDate() + 1);
     return dateISO(d);
   }, []);
-
   const yesterdayISO = useMemo(() => {
     const d = new Date();
     d.setDate(d.getDate() - 1);
@@ -144,7 +126,7 @@ export default function HomePage() {
     const byKey = new Map<string, Task[]>();
 
     for (const t of tasks) {
-      if (t.done) continue; // ✅ выполненные не показываем в “Все задачи”
+      if (t.done) continue;
       const key = t.due_date || "NO_DATE";
       const arr = byKey.get(key) || [];
       arr.push(t);
@@ -153,7 +135,6 @@ export default function HomePage() {
 
     const sections: TaskSection[] = [];
 
-    // ✅ 1) просроченные: всё, что строго меньше todayISO
     const overdueDates = Array.from(byKey.keys())
       .filter((k) => k !== "NO_DATE" && k < todayISO)
       .sort((a, b) => a.localeCompare(b));
@@ -165,15 +146,9 @@ export default function HomePage() {
     }
 
     if (overdueTasks.length > 0) {
-      sections.push({
-        key: "OVERDUE",
-        label: "Вышел срок",
-        tasks: overdueTasks,
-        count: overdueTasks.length,
-      });
+      sections.push({ key: "OVERDUE", label: "Вышел срок", tasks: overdueTasks, count: overdueTasks.length });
     }
 
-    // ✅ 2) сегодня/завтра/остальные будущие даты как было
     if (byKey.has(todayISO)) {
       const todayTasks = byKey.get(todayISO)!;
       sections.push({ key: todayISO, label: "Сегодня", tasks: todayTasks, count: todayTasks.length });
@@ -207,7 +182,6 @@ export default function HomePage() {
   const completedSections = useMemo<TaskSection[]>(() => {
     const doneTasks = tasks
       .filter((t) => t.done && t.completed_at)
-      // сортируем по дате закрытия: новые сверху
       .sort((a, b) => String(b.completed_at).localeCompare(String(a.completed_at)));
 
     const byKey = new Map<string, Task[]>();
@@ -235,7 +209,6 @@ export default function HomePage() {
 
     const otherDates = Array.from(byKey.keys())
       .filter((k) => k !== "NO_DATE")
-      // новые даты сверху
       .sort((a, b) => b.localeCompare(a));
 
     for (const d of otherDates) {
@@ -243,7 +216,6 @@ export default function HomePage() {
       sections.push({ key: d, label: fmtDate(d), tasks: arr, count: arr.length });
     }
 
-    // на всякий случай, если вдруг есть done без completed_at
     if (byKey.has("NO_DATE")) {
       const arr = byKey.get("NO_DATE")!;
       sections.push({ key: "NO_DATE", label: "Без даты", tasks: arr, count: arr.length });
@@ -331,7 +303,6 @@ export default function HomePage() {
       WebkitBackdropFilter: "blur(12px)",
     } as CSSProperties,
 
-    // ✅ фикс “полос” и внутреннего скролла
     listsWrap: {
       marginTop: 12,
       position: "relative",
@@ -522,25 +493,6 @@ export default function HomePage() {
       flex: "0 0 auto",
     } as CSSProperties,
 
-    refresh: {
-      width: 44,
-      height: 44,
-      borderRadius: 999,
-      border: "1px solid rgba(0,0,0,0.08)",
-      background: "rgba(255,255,255,0.62)",
-      boxShadow: "0 14px 28px rgba(0,0,0,0.07)",
-      backdropFilter: "blur(10px)",
-      WebkitBackdropFilter: "blur(10px)",
-      color: "#111",
-      fontWeight: 900,
-      fontSize: 18,
-      cursor: "pointer",
-      userSelect: "none",
-      display: "grid",
-      placeItems: "center",
-      flex: "0 0 auto",
-    } as CSSProperties,
-
     segmented: {
       display: "flex",
       alignItems: "center",
@@ -621,17 +573,9 @@ export default function HomePage() {
       WebkitBackdropFilter: "blur(12px)",
     } as CSSProperties,
 
-    taskItemBase: {
-      background: "rgba(255,255,255,0.62)",
-    } as CSSProperties,
-
-    taskItemDone: {
-      background: "rgba(255,255,255,0.55)",
-    } as CSSProperties,
-
-    taskItemOverdue: {
-      background: "rgba(255, 0, 0, 0.1)",
-    } as CSSProperties,
+    taskItemBase: { background: "rgba(255,255,255,0.62)" } as CSSProperties,
+    taskItemDone: { background: "rgba(255,255,255,0.55)" } as CSSProperties,
+    taskItemOverdue: { background: "rgba(255, 0, 0, 0.1)" } as CSSProperties,
 
     notePreview: {
       fontSize: 12,
@@ -688,68 +632,9 @@ export default function HomePage() {
     };
   }
 
-  async function authIfPossible() {
-    const tg = getTelegramWebApp();
-    const initData = tg?.initData || "";
-
-    if (tg) {
-      try {
-        tg.ready();
-        tg.expand();
-      } catch {}
-    }
-
-    if (!initData) {
-      if (DEV_LOCAL_AUTH) {
-        try {
-          const r = await fetch("/api/auth", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            credentials: "include",
-            body: JSON.stringify({ initData: "dev" }),
-          });
-
-          const j = await r.json().catch(() => ({} as any));
-          if (!r.ok || !j.ok) {
-            setHint(`Dev auth не прошёл: ${j.reason || r.status}${j.error ? " | " + j.error : ""}`);
-          } else {
-            setHint(null);
-          }
-        } catch (e: any) {
-          setHint(`Dev auth запрос упал: ${String(e?.message || e)}`);
-        }
-
-        setReady(true);
-        return;
-      }
-
-      setHint("Открой мини-апп кнопкой в боте, тогда появится сохранение.");
-      setReady(true);
-      return;
-    }
-
-    try {
-      const r = await fetch("/api/auth", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({ initData }),
-      });
-
-      const j = await r.json().catch(() => ({} as any));
-      if (!r.ok || !j.ok) {
-        setHint(`Auth не прошёл: ${j.reason || r.status}${j.error ? " | " + j.error : ""}`);
-      } else {
-        setHint(null);
-      }
-    } catch (e: any) {
-      setHint(`Auth запрос упал: ${String(e?.message || e)}`);
-    }
-
-    setReady(true);
-  }
-
   async function loadProjects() {
+    if (!authReady) return;
+
     setLoadingProjects(true);
     try {
       const r = await fetch("/api/projects", { credentials: "include" });
@@ -778,6 +663,32 @@ export default function HomePage() {
       setHint(`Не смог загрузить проекты: ${String(e?.message || e)}`);
     } finally {
       setLoadingProjects(false);
+    }
+  }
+
+  async function loadTasks() {
+    if (!authReady) return;
+
+    setLoadingTasks(true);
+    try {
+      const url = new URL("/api/tasks", window.location.origin);
+      url.searchParams.set("view", "all");
+      if (activeProjectId) url.searchParams.set("projectId", String(activeProjectId));
+
+      const r = await fetch(url.toString(), { credentials: "include" });
+      const j = await r.json().catch(() => ({} as any));
+
+      if (j.ok) {
+        setTasks(j.tasks || []);
+        return;
+      }
+
+      if (j.reason === "NO_SESSION") return;
+      setHint(j.error || j.reason || "Не смог загрузить задачи");
+    } catch (e: any) {
+      setHint(`Ошибка загрузки задач: ${String(e?.message || e)}`);
+    } finally {
+      setLoadingTasks(false);
     }
   }
 
@@ -843,30 +754,6 @@ export default function HomePage() {
       setHint(`Ошибка сети: ${String(e?.message || e)}`);
     } finally {
       setSavingProjectsEdit(false);
-    }
-  }
-
-  async function loadTasks() {
-    setLoadingTasks(true);
-    try {
-      const url = new URL("/api/tasks", window.location.origin);
-      url.searchParams.set("view", "all");
-      if (activeProjectId) url.searchParams.set("projectId", String(activeProjectId));
-
-      const r = await fetch(url.toString(), { credentials: "include" });
-      const j = await r.json().catch(() => ({} as any));
-
-      if (j.ok) {
-        setTasks(j.tasks || []);
-        return;
-      }
-
-      if (j.reason === "NO_SESSION") return;
-      setHint(j.error || j.reason || "Не смог загрузить задачи");
-    } catch (e: any) {
-      setHint(`Ошибка загрузки задач: ${String(e?.message || e)}`);
-    } finally {
-      setLoadingTasks(false);
     }
   }
 
@@ -943,7 +830,6 @@ export default function HomePage() {
     setHint(j.error || "Ошибка при добавлении задачи");
   }
 
-  // ✅ без плавного удаления: обновляем сразу после ответа API
   async function toggleDone(id: number, done: boolean) {
     if (togglingIds.has(id)) return;
 
@@ -970,18 +856,13 @@ export default function HomePage() {
       });
 
       const j = await r.json().catch(() => ({} as any));
-      if (!r.ok || !j.ok) {
-        setHint(j.error || j.reason || "Не смог обновить задачу");
-      } else {
-        okUpdate = true;
-      }
+      if (!r.ok || !j.ok) setHint(j.error || j.reason || "Не смог обновить задачу");
+      else okUpdate = true;
     } catch (e: any) {
       setHint(`Ошибка сети при обновлении: ${String(e?.message || e)}`);
     } finally {
       if (okUpdate) {
-        setTasks((prevTasks) =>
-          prevTasks.map((t) => (t.id === id ? { ...t, done, completed_at: nextCompletedAt } : t))
-        );
+        setTasks((prevTasks) => prevTasks.map((t) => (t.id === id ? { ...t, done, completed_at: nextCompletedAt } : t)));
       } else {
         setTasks((prevTasks) =>
           prevTasks.map((t) => (t.id === id ? { ...t, done: Boolean(prevDone), completed_at: prevCompletedAt } : t))
@@ -1104,9 +985,7 @@ export default function HomePage() {
 
     setSavingEditTask(true);
 
-    setTasks((list) =>
-      list.map((t) => (t.id === id ? { ...t, title: nextTitle, note: nextNote, due_date: nextDueDate } : t))
-    );
+    setTasks((list) => list.map((t) => (t.id === id ? { ...t, title: nextTitle, note: nextNote, due_date: nextDueDate } : t)));
 
     try {
       const r = await fetch("/api/tasks", {
@@ -1118,9 +997,7 @@ export default function HomePage() {
 
       const j = await r.json().catch(() => ({} as any));
       if (!r.ok || !j.ok) {
-        setTasks((list) =>
-          list.map((t) => (t.id === id ? { ...t, title: prevTitle, note: prevNote, due_date: prevDueDate } : t))
-        );
+        setTasks((list) => list.map((t) => (t.id === id ? { ...t, title: prevTitle, note: prevNote, due_date: prevDueDate } : t)));
         setHint(j.error || j.reason || "Не смог сохранить изменения");
         return;
       }
@@ -1256,26 +1133,27 @@ export default function HomePage() {
     );
   }
 
+  // ✅ проекты грузим только когда authReady стал true
   useEffect(() => {
-    (async () => {
-      await authIfPossible();
-      await loadProjects();
-    })();
+    if (!authReady) return;
+    loadProjects();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [authReady]);
 
+  // ✅ задачи грузим только когда authReady true и есть активный проект
   useEffect(() => {
-    if (!ready) return;
+    if (!authReady) return;
     loadTasks();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ready, activeProjectId]);
+  }, [authReady, activeProjectId]);
 
   const editIsToday = editDueDate === todayISO;
   const editIsTomorrow = editDueDate === tomorrowISO;
   const editHasCustomDate = Boolean(editDueDate && !editIsToday && !editIsTomorrow);
 
-  return (
+  const shownHint = hint || authHint;
 
+  return (
     <div style={ui.shell}>
       <AppMenu />
       <div style={ui.bgFixed} />
@@ -1283,35 +1161,19 @@ export default function HomePage() {
       <div style={{ ...ui.orb, ...ui.orbB }} />
 
       <main style={ui.container}>
-        {/* Header */}
         <div style={ui.headerRow}>
           <h1 style={ui.h1}>Задачи</h1>
-
-          {/*<button
-            type="button"
-            onClick={() => loadTasks()}
-            disabled={loadingTasks}
-            style={{
-              ...ui.refresh,
-              opacity: loadingTasks ? 0.6 : 1,
-              cursor: loadingTasks ? "not-allowed" : "pointer",
-            }}
-            title="Обновить"
-          >
-            <IconRotate size={18} style={{ color: "#000000" }} />
-          </button>*/}
         </div>
 
-        {/* Tabs */}
         <div style={ui.tabWrap}>
           <button
             type="button"
             onClick={openCreateProject}
-            disabled={creatingProject || loadingProjects}
+            disabled={creatingProject || loadingProjects || !authReady}
             style={{
               ...ui.tabPlus,
-              opacity: creatingProject || loadingProjects ? 0.6 : 1,
-              cursor: creatingProject || loadingProjects ? "not-allowed" : "pointer",
+              opacity: creatingProject || loadingProjects || !authReady ? 0.6 : 1,
+              cursor: creatingProject || loadingProjects || !authReady ? "not-allowed" : "pointer",
             }}
             title="Новый проект"
           >
@@ -1321,11 +1183,11 @@ export default function HomePage() {
           <button
             type="button"
             onClick={openEditProjects}
-            disabled={creatingProject || loadingProjects}
+            disabled={creatingProject || loadingProjects || !authReady}
             style={{
               ...ui.tabPlus,
-              opacity: creatingProject || loadingProjects ? 0.6 : 1,
-              cursor: creatingProject || loadingProjects ? "not-allowed" : "pointer",
+              opacity: creatingProject || loadingProjects || !authReady ? 0.6 : 1,
+              cursor: creatingProject || loadingProjects || !authReady ? "not-allowed" : "pointer",
             }}
             title="Редактировать проекты"
           >
@@ -1378,7 +1240,7 @@ export default function HomePage() {
           {projects.length === 0 && <div style={ui.muted}>Проектов пока нет, нажми + и создай первый.</div>}
         </div>
 
-        {hint && (
+        {shownHint && (
           <div
             style={{
               ...ui.cardTight,
@@ -1387,13 +1249,13 @@ export default function HomePage() {
             }}
           >
             <div style={{ fontWeight: 900, marginBottom: 6 }}>Сообщение</div>
-            <div style={{ lineHeight: 1.35 }}>{hint}</div>
+            <div style={{ lineHeight: 1.35 }}>{shownHint}</div>
           </div>
         )}
 
         {/* Add task */}
         {viewMode === "all" && (
-          <section style={{ ...ui.card, marginTop: 14 }}>
+          <section style={{ ...ui.card, marginTop: 14, opacity: authReady ? 1 : 0.7 }}>
             <div style={{ display: "grid", gap: 10 }}>
               <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
                 <input
@@ -1401,7 +1263,7 @@ export default function HomePage() {
                   value={title}
                   onChange={(e) => setTitle(e.target.value)}
                   placeholder={isAllTasks ? "Выбери проект табом сверху…" : "Добавьте новую задачу"}
-                  disabled={isAllTasks || !activeProjectId}
+                  disabled={!authReady || isAllTasks || !activeProjectId}
                   autoCorrect="on"
                   autoCapitalize="sentences"
                   spellCheck={true}
@@ -1409,18 +1271,18 @@ export default function HomePage() {
                   style={{
                     ...ui.input,
                     flex: 1,
-                    opacity: isAllTasks || !activeProjectId ? 0.55 : 1,
+                    opacity: !authReady || isAllTasks || !activeProjectId ? 0.55 : 1,
                   }}
                 />
 
                 <button
                   type="button"
                   onClick={addTask}
-                  disabled={!canAddTask}
+                  disabled={!authReady || !canAddTask}
                   style={{
                     ...ui.btnCircle,
-                    opacity: canAddTask ? 1 : 0.45,
-                    cursor: canAddTask ? "pointer" : "not-allowed",
+                    opacity: authReady && canAddTask ? 1 : 0.45,
+                    cursor: authReady && canAddTask ? "pointer" : "not-allowed",
                   }}
                   title="Добавить"
                 >
@@ -1431,13 +1293,13 @@ export default function HomePage() {
               <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
                 <button
                   type="button"
-                  disabled={isAllTasks || !activeProjectId}
+                  disabled={!authReady || isAllTasks || !activeProjectId}
                   onClick={() => setDueDate((prev) => (prev === todayISO ? null : todayISO))}
                   style={{
                     ...ui.chipBtn,
                     ...(isToday ? ui.chipBtnActive : null),
-                    opacity: isAllTasks || !activeProjectId ? 0.55 : 1,
-                    cursor: isAllTasks || !activeProjectId ? "not-allowed" : "pointer",
+                    opacity: !authReady || isAllTasks || !activeProjectId ? 0.55 : 1,
+                    cursor: !authReady || isAllTasks || !activeProjectId ? "not-allowed" : "pointer",
                   }}
                 >
                   Сегодня
@@ -1445,13 +1307,13 @@ export default function HomePage() {
 
                 <button
                   type="button"
-                  disabled={isAllTasks || !activeProjectId}
+                  disabled={!authReady || isAllTasks || !activeProjectId}
                   onClick={() => setDueDate((prev) => (prev === tomorrowISO ? null : tomorrowISO))}
                   style={{
                     ...ui.chipBtn,
                     ...(isTomorrow ? ui.chipBtnActive : null),
-                    opacity: isAllTasks || !activeProjectId ? 0.55 : 1,
-                    cursor: isAllTasks || !activeProjectId ? "not-allowed" : "pointer",
+                    opacity: !authReady || isAllTasks || !activeProjectId ? 0.55 : 1,
+                    cursor: !authReady || isAllTasks || !activeProjectId ? "not-allowed" : "pointer",
                   }}
                 >
                   Завтра
@@ -1460,7 +1322,7 @@ export default function HomePage() {
                 <div style={{ position: "relative", display: "inline-flex" }}>
                   <button
                     type="button"
-                    disabled={isAllTasks || !activeProjectId}
+                    disabled={!authReady || isAllTasks || !activeProjectId}
                     onClick={() => {
                       if (hasCustomDate) {
                         setDueDate(null);
@@ -1474,8 +1336,8 @@ export default function HomePage() {
                     style={{
                       ...ui.chipBtn,
                       ...(hasCustomDate ? ui.chipBtnActive : null),
-                      opacity: isAllTasks || !activeProjectId ? 0.55 : 1,
-                      cursor: isAllTasks || !activeProjectId ? "not-allowed" : "pointer",
+                      opacity: !authReady || isAllTasks || !activeProjectId ? 0.55 : 1,
+                      cursor: !authReady || isAllTasks || !activeProjectId ? "not-allowed" : "pointer",
                     }}
                     title={dueDate ? `Дата: ${fmtDate(dueDate)}` : "Выбрать дату"}
                   >
@@ -1488,7 +1350,7 @@ export default function HomePage() {
                     name="dueDatePicker"
                     type="date"
                     value={dueDate || ""}
-                    disabled={isAllTasks || !activeProjectId}
+                    disabled={!authReady || isAllTasks || !activeProjectId}
                     onChange={(e) => {
                       const v = e.target.value || null;
                       setDueDate(v);
@@ -1505,7 +1367,7 @@ export default function HomePage() {
                       height: "100%",
                       border: "none",
                       background: "transparent",
-                      cursor: isAllTasks || !activeProjectId ? "not-allowed" : "pointer",
+                      cursor: !authReady || isAllTasks || !activeProjectId ? "not-allowed" : "pointer",
                     }}
                   />
                 </div>
@@ -1521,7 +1383,7 @@ export default function HomePage() {
         )}
 
         {/* Mode switch */}
-        {ready && viewMode === "all" && (
+        {authReady && viewMode === "all" && (
           <div style={{ marginTop: 12 }}>
             <div
               style={ui.segmented}
@@ -1588,9 +1450,8 @@ export default function HomePage() {
         )}
 
         {/* Lists */}
-        {ready && (
+        {authReady && (
           <div style={ui.listsWrap}>
-            {/* PANEL: completed */}
             {viewMode === "completed" && (
               <div style={{ display: "grid", gap: 18 }}>
                 {completedSections.length === 0 ? (
@@ -1614,7 +1475,6 @@ export default function HomePage() {
               </div>
             )}
 
-            {/* PANEL: schedule */}
             {viewMode === "all" && (
               <div
                 style={{
@@ -1668,7 +1528,6 @@ export default function HomePage() {
               </div>
             )}
 
-            {/* PANEL: no_date */}
             {viewMode === "all" && (
               <div
                 style={{

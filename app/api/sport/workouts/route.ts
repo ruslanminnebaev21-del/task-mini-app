@@ -77,6 +77,124 @@ async function assertExercisesBelongToUser(uid: number, rawExercises: any[]) {
   return { ok: true as const, ids };
 }
 
+// helper-функция для записи лушчего результата упражнению
+type BestSet = { weight: number; reps: number };
+
+function isBetterSet(a: BestSet, b: BestSet) {
+  // true если a лучше b (макс вес, при равенстве макс повторы)
+  if (a.weight !== b.weight) return a.weight > b.weight;
+  return a.reps > b.reps;
+}
+
+async function updateExercisePRFromWorkout(opts: { uid: number; workoutId: number }) {
+  const { uid, workoutId } = opts;
+
+  // 1) берём все упражнения в тренировке
+  const { data: wexRows, error: wexErr } = await supabaseAdmin
+    .from("workout_exercises")
+    .select("id, exercise_id")
+    .eq("workout_id", workoutId);
+
+  if (wexErr) throw new Error(`WEX_SELECT_FAILED: ${wexErr.message}`);
+
+  const wex = (wexRows || [])
+    .map((x: any) => ({ id: Number(x.id), exercise_id: Number(x.exercise_id) }))
+    .filter((x) => Number.isFinite(x.id) && Number.isFinite(x.exercise_id) && x.exercise_id > 0);
+
+  if (wex.length === 0) return;
+
+  const wexIds = wex.map((x) => x.id);
+  const exerciseIds = Array.from(new Set(wex.map((x) => x.exercise_id)));
+
+  // 2) берём все сеты по этим workout_exercises
+  const { data: setsRows, error: setsErr } = await supabaseAdmin
+    .from("workout_sets")
+    .select("workout_exercise_id, weight, reps")
+    .in("workout_exercise_id", wexIds);
+
+  if (setsErr) throw new Error(`SETS_SELECT_FAILED: ${setsErr.message}`);
+
+  // map: workout_exercise_id -> exercise_id
+  const exByWexId = new Map<number, number>();
+  for (const x of wex) exByWexId.set(x.id, x.exercise_id);
+
+  // 3) считаем best set на каждое exercise_id внутри этой тренировки
+  const bestByExerciseId = new Map<number, BestSet>();
+
+  for (const row of setsRows || []) {
+    const wexId = Number((row as any).workout_exercise_id);
+    const exerciseId = exByWexId.get(wexId);
+    if (!exerciseId) continue;
+
+    const rawWeight = (row as any).weight;
+    const rawReps = (row as any).reps;
+
+    const reps = Number(rawReps || 0);
+    if (!Number.isFinite(reps) || reps <= 0) continue;
+
+    // weight может быть null, это ок
+    const weight = rawWeight == null ? 0 : Number(rawWeight);
+    if (!Number.isFinite(weight) || weight < 0) continue;
+
+    const candidate: BestSet = { weight, reps };
+    const prev = bestByExerciseId.get(exerciseId);
+
+    if (!prev || isBetterSet(candidate, prev)) {
+      bestByExerciseId.set(exerciseId, candidate);
+    }
+  }
+
+  if (bestByExerciseId.size === 0) return;
+
+  // 4) читаем текущие PR у этих exercises (и проверка user_id)
+  const { data: exRows, error: exErr } = await supabaseAdmin
+    .from("exercises")
+    .select("id, best_weight, best_reps")
+    .eq("user_id", uid)
+    .in("id", exerciseIds);
+
+  if (exErr) throw new Error(`EX_SELECT_FAILED: ${exErr.message}`);
+
+  const currentById = new Map<number, { best_weight: number | null; best_reps: number | null }>();
+  for (const r of exRows || []) {
+    currentById.set(Number((r as any).id), {
+      best_weight: (r as any).best_weight == null ? null : Number((r as any).best_weight),
+      best_reps: (r as any).best_reps == null ? null : Number((r as any).best_reps),
+    });
+  }
+
+  // 5) апдейтим только там, где стало лучше
+    for (const [exerciseId, candidate] of bestByExerciseId.entries()) {
+      const cur = currentById.get(exerciseId);
+
+      const curWeight = cur?.best_weight == null ? 0 : Number(cur.best_weight);
+      const curReps = cur?.best_reps == null ? 0 : Number(cur.best_reps);
+
+      const curSet: BestSet | null =
+        cur && Number.isFinite(curWeight) && Number.isFinite(curReps) && (curWeight > 0 || curReps > 0)
+          ? { weight: curWeight, reps: curReps }
+          : null;
+
+      const shouldUpdate = !curSet || isBetterSet(candidate, curSet);
+      if (!shouldUpdate) continue;
+
+    }
+
+    const { error: upErr } = await supabaseAdmin
+      .from("exercises")
+      .update({
+        best_weight: candidate.weight,
+        best_reps: candidate.reps,
+        best_workout_id: workoutId,
+        best_set_at: new Date().toISOString(),
+      })
+      .eq("user_id", uid)
+      .eq("id", exerciseId);
+
+    if (upErr) throw new Error(`EX_UPDATE_FAILED(${exerciseId}): ${upErr.message}`);
+  }
+
+
 /**
  * GET /api/sport/workouts
  * - /api/sport/workouts?status=draft|done      -> список тренировок
@@ -183,8 +301,7 @@ export async function GET(req: Request) {
 
     const { data, error } = await supabaseAdmin
       .from("exercises")
-      .select("id, name")
-      .eq("user_id", uid)
+      .select("id, name, best_weight, best_reps")      .eq("user_id", uid)
       .ilike("name", `%${exerciseQ}%`)
       .order("name", { ascending: true })
       .limit(8);
@@ -300,6 +417,7 @@ export async function POST(req: Request) {
   }
 
   if (type !== "strength" || !hasExercises) {
+
     return NextResponse.json({ ok: true, workout });
   }
 
@@ -355,8 +473,27 @@ export async function POST(req: Request) {
       { status: 500 }
     );
   }
+   if (type === "strength" && status === "done") {
+      try {
+        await updateExercisePRFromWorkout({ uid, workoutId });
+      } catch (e: any) {
+        console.log("PR_UPDATE_FAILED(POST):", String(e?.message || e));
+      }
+    }
+let prError: string | null = null;
 
-  return NextResponse.json({ ok: true, workout });
+if (type === "strength" && status === "done") {
+  try {
+    await updateExercisePRFromWorkout({ uid, workoutId });
+  } catch (e: any) {
+    prError = String(e?.message || e);
+    console.log("PR_UPDATE_FAILED(POST):", prError);
+  }
+}   
+
+  
+
+  return NextResponse.json({ ok: true, workout, prError });
 }
 
 /**
@@ -559,6 +696,14 @@ export async function PUT(req: Request) {
       { ok: false, reason: "SAVE_DETAILS_FAILED", error: msg },
       { status: 500 }
     );
+  }
+  
+  if (type === "strength" && status === "done") {
+    try {
+      await updateExercisePRFromWorkout({ uid, workoutId });
+    } catch (e: any) {
+      console.log("PR_UPDATE_FAILED(PUT):", String(e?.message || e));
+    }
   }
 
   return NextResponse.json({ ok: true, workout: updated });

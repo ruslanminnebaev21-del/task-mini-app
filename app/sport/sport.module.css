@@ -1025,6 +1025,10 @@
   height:44px;
   width: 100%;
   min-width: 0;
+  /*padding-right: 135px;*/
+}
+.withBestPadding {
+  padding-right: 140px; /* место под чип */
 }
 
 /* маленькие колонки кг/повт */

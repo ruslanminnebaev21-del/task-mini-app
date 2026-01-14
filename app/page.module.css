@@ -1,5 +1,56 @@
 /* app/page.module.css */
 
+.tileDisabled {
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+.hint {
+  margin-top: 12px;
+  padding: 12px 14px;
+  border-radius: 16px;
+  background: rgba(255, 250, 240, 0.7);
+  border: 1px solid rgba(240, 195, 109, 0.55);
+  font-size: 13px;
+  line-height: 1.35;
+}
+
+.loader {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 3px solid rgba(0, 0, 0, 0.15);
+  border-top-color: rgba(0, 0, 0, 0.6);
+  animation: spin 0.8s linear infinite;
+  margin: 0 auto;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.authOverlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(6px);
+}
+
+.authLoaderBox {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+}
+
 .shell {
   min-height: 100vh;
   position: relative;
@@ -168,4 +219,42 @@
   margin-top: 14px;
   font-size: 12px;
   opacity: 0.55;
+}
+
+.exerciseInputWrap{
+  position: relative;
+}
+
+.bestOverlay{
+  position: absolute;
+  right: 14px;          /* ты как раз там красным отметил */
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  pointer-events: none;
+  opacity: 0.9;
+}
+
+.bestSep{
+  opacity: 0.4;
+  font-size: 14px;
+}
+
+/* чтобы текст не залезал под overlay */
+.exerciseInput{
+  padding-right: 140px; /* под длину "Лучший: 30×80 кг |" */
+}
+
+.exInputWrap {
+  position: relative;
+}
+.bestChip{
+  position: "absolute",
+  right: 8,
+  top: "50%",
+  transform: "translateY(-50%)",
+  pointerEvents: "none",
+  zIndex: 2,
 }

@@ -11,6 +11,7 @@ export async function requireSession() {
     userId: number;
     telegramId: number;
   };
+  console.log("SESSION PAYLOAD", payload);
 
   return payload;
 }
