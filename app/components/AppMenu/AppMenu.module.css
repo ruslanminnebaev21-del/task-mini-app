@@ -62,13 +62,13 @@
   top: 0;
   right: 0;
   height: 100vh;
-  width: min(360px, 92vw);
+  width: 50vw;
   z-index: 70;
 
   transform: translateX(110%);
   transition: transform 220ms cubic-bezier(0.18,0.9,0.2,1);
 
-  background: rgba(255,255,255,0.62);
+  background: rgba(255,255,255,1);
   border-left: 1px solid rgba(255,255,255,0.75);
   box-shadow: -20px 0 60px rgba(0,0,0,0.25);
   backdrop-filter: blur(14px);
@@ -110,12 +110,18 @@
 
 .nav {
   display: grid;
+  grid-auto-rows: max-content;
+  align-content: flex-start;
   gap: 10px;
   padding-top: 4px;
 }
 
 .navItem {
-  display: block;
+  display: inline-flex;
+  align-items: center;
+  height: auto;
+  align-self: flex-start;
+
   text-decoration: none;
   color: #111;
 
@@ -158,4 +164,45 @@
 
   font-weight: 900;
   cursor: pointer;
+}
+
+.tabBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 12px;
+  border-radius: 16px;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  background: rgba(255, 255, 255, 0.62);
+  /*box-shadow: 0 10px 20px rgba(0, 0, 0, 0.06);*/
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  font-weight: 500;
+  font-size: 13px;
+  user-select: none;
+  white-space: nowrap;
+  height: 36px;
+  color: #111;
+  text-decoration: none;
+}
+
+.tabBadgeActive {
+  /*border: 1px solid rgba(0, 0, 0, 0.16);
+  background: rgba(17, 17, 17, 0.92);
+  color: #fff;*/
+}
+
+.dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: #bdbdbd;
+  flex: 0 0 auto;
+  box-shadow: 0 0 0 3px rgba(0, 0, 0, 0.04);
+
+}
+
+.dotActive {
+  background: rgba(64, 153, 255, 0.85);
+  box-shadow: 0 0 0 4px rgba(64, 153, 255, 0.12);
 }

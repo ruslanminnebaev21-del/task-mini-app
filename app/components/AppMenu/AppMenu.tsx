@@ -11,7 +11,7 @@ type Item = { label: string; href: string };
 const DEFAULT_ITEMS: Item[] = [
   { label: "Главная", href: "/" },
   { label: "Задачи", href: "/tasks" },
-  { label: "Дневник тренировок", href: "/sport" },
+  { label: "Дневник тренировок", href: "/sport/overview" },
 ];
 
 export default function AppMenu({
@@ -99,19 +99,17 @@ export default function AppMenu({
               <Link
                 key={it.href}
                 href={it.href}
-                className={`${styles.navItem} ${active ? styles.navItemActive : ""}`}
+                className={`${styles.tabBadge} ${active ? styles.tabBadgeActive : ""}`}
               >
+                <span className={`${styles.dot} ${active ? styles.dotActive : ""}`} />
                 {it.label}
+
               </Link>
             );
           })}
         </nav>
 
-        <div className={styles.drawerFooter}>
-          <button type="button" className={styles.ghostBtn} onClick={refreshPage}>
-            Обновить
-          </button>
-        </div>
+        
       </aside>
     </>
   );
