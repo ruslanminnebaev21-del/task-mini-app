@@ -25,6 +25,13 @@ async function getUidFromSession(): Promise<number | null> {
 function isYmd(s: string) {
   return /^\d{4}-\d{2}-\d{2}$/.test(s);
 }
+function todayYmd() {
+  const d = new Date();
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
 
 function toNumOrNull(v: any): number | null {
   if (v === null || v === undefined) return null;
@@ -338,6 +345,158 @@ export async function POST(req: Request) {
   if (!uid) return NextResponse.json({ ok: false, reason: "NO_SESSION" }, { status: 401 });
 
   const body = await req.json().catch(() => ({} as any));
+    // ===== COPY MODE =====
+    if (String(body?.action || "").trim() === "copy") {
+      const sourceId = toIdOrNull(body?.source_id);
+      if (!sourceId) {
+        return NextResponse.json({ ok: false, reason: "BAD_SOURCE_ID" }, { status: 400 });
+      }
+
+      // 1) берём исходную тренировку (и проверяем user_id)
+      const { data: src, error: srcErr } = await supabaseAdmin
+        .from("workouts")
+        .select("id, title, type, duration_min")
+        .eq("id", sourceId)
+        .eq("user_id", uid)
+        .single();
+
+      if (srcErr || !src) {
+        return NextResponse.json(
+          { ok: false, reason: "WORKOUT_NOT_FOUND", error: srcErr?.message },
+          { status: 404 }
+        );
+      }
+
+      const srcType: WorkoutType = src.type === "cardio" ? "cardio" : "strength";
+      const newTitle = `Копия ${String(src.title || "").trim() || "Без названия"}`;
+
+      // 2) создаём новую тренировку как draft
+      const { data: created, error: cErr } = await supabaseAdmin
+        .from("workouts")
+        .insert({
+          user_id: uid,
+          workout_date: todayYmd(),
+          type: srcType,
+          title: newTitle,
+          status: "draft",
+          duration_min: srcType === "cardio" ? (src.duration_min == null ? null : Number(src.duration_min)) : null,
+          completed_at: null,
+        })
+        .select("id, title, workout_date, type, duration_min, status, created_at")
+        .single();
+
+      if (cErr || !created?.id) {
+        return NextResponse.json(
+          { ok: false, reason: "DB_ERROR", error: cErr?.message || "Workout copy insert failed" },
+          { status: 500 }
+        );
+      }
+
+      const newWorkoutId = Number(created.id);
+
+      // 3) если кардио, то всё, возвращаем
+      if (srcType !== "strength") {
+        return NextResponse.json({ ok: true, workout: created, new_workout_id: newWorkoutId });
+      }
+
+      // 4) силовая: копируем упражнения и сеты
+      try {
+        const { data: srcWex, error: wexErr } = await supabaseAdmin
+          .from("workout_exercises")
+          .select("id, exercise_id, order_index, note")
+          .eq("workout_id", sourceId)
+          .order("order_index", { ascending: true });
+
+        if (wexErr) throw new Error(`WEX_SELECT_FAILED: ${wexErr.message}`);
+
+        const srcWexRows = (srcWex || []).map((x: any) => ({
+          id: Number(x.id),
+          exercise_id: x.exercise_id == null ? null : Number(x.exercise_id),
+          order_index: x.order_index == null ? 0 : Number(x.order_index),
+          note: x.note ?? null,
+        }));
+
+        if (srcWexRows.length === 0) {
+          // нет упражнений, просто вернём созданный draft
+          return NextResponse.json({ ok: true, workout: created, new_workout_id: newWorkoutId });
+        }
+
+        const srcWexIds = srcWexRows.map((x) => x.id);
+
+        const { data: srcSets, error: setsErr } = await supabaseAdmin
+          .from("workout_sets")
+          .select("workout_exercise_id, set_index, weight, reps")
+          .in("workout_exercise_id", srcWexIds)
+          .order("set_index", { ascending: true });
+
+        if (setsErr) throw new Error(`SETS_SELECT_FAILED: ${setsErr.message}`);
+
+        // группируем сеты по старому wex id
+        const setsByOldWex = new Map<number, any[]>();
+        for (const s of srcSets || []) {
+          const k = Number((s as any).workout_exercise_id);
+          if (!setsByOldWex.has(k)) setsByOldWex.set(k, []);
+          setsByOldWex.get(k)!.push(s);
+        }
+
+        // копируем каждый workout_exercise и его сеты
+        for (const old of srcWexRows) {
+          const exerciseId = Number(old.exercise_id);
+          if (!Number.isFinite(exerciseId) || exerciseId <= 0) continue;
+
+          const { data: newWex, error: insWexErr } = await supabaseAdmin
+            .from("workout_exercises")
+            .insert({
+              workout_id: newWorkoutId,
+              exercise_id: exerciseId,
+              order_index: old.order_index || 1,
+              note: old.note,
+            })
+            .select("id")
+            .single();
+
+          if (insWexErr || !newWex?.id) {
+            throw new Error(insWexErr?.message || "WEX_INSERT_FAILED");
+          }
+
+          const newWexId = Number(newWex.id);
+          const oldSets = setsByOldWex.get(old.id) || [];
+
+          if (oldSets.length) {
+            const payload = oldSets.map((s: any) => ({
+              workout_exercise_id: newWexId,
+              set_index: s.set_index == null ? null : Number(s.set_index),
+              weight: s.weight == null ? null : Number(s.weight),
+              reps: s.reps == null ? null : Number(s.reps),
+            }));
+
+            const { error: insSetsErr } = await supabaseAdmin.from("workout_sets").insert(payload);
+            if (insSetsErr) throw new Error(insSetsErr.message || "SETS_INSERT_FAILED");
+          }
+        }
+
+        return NextResponse.json({ ok: true, workout: created, new_workout_id: newWorkoutId });
+      } catch (e: any) {
+        // если копирование деталей упало, чистим созданную тренировку
+        const msg = String(e?.message || e);
+
+        // best-effort cleanup
+        const { data: wexRows } = await supabaseAdmin
+          .from("workout_exercises")
+          .select("id")
+          .eq("workout_id", newWorkoutId);
+
+        const ids = (wexRows || []).map((x: any) => Number(x.id)).filter((n: number) => Number.isFinite(n) && n > 0);
+        if (ids.length) {
+          await supabaseAdmin.from("workout_sets").delete().in("workout_exercise_id", ids);
+        }
+        await supabaseAdmin.from("workout_exercises").delete().eq("workout_id", newWorkoutId);
+        await supabaseAdmin.from("workouts").delete().eq("id", newWorkoutId).eq("user_id", uid);
+
+        return NextResponse.json({ ok: false, reason: "COPY_FAILED", error: msg }, { status: 500 });
+      }
+    }
+    // ===== END COPY MODE =====
 
   const workout_date = String(body?.workout_date || "").trim();
   const type = String(body?.type || "").trim() as WorkoutType;
@@ -694,4 +853,85 @@ export async function PUT(req: Request) {
   }
 
   return NextResponse.json({ ok: true, workout: updated });
+}
+
+/**
+ * DELETE /api/sport/workouts?id=123
+ * Удаляет тренировку + связанные workout_exercises + workout_sets
+ */
+export async function DELETE(req: Request) {
+  const uid = await getUidFromSession();
+  if (!uid) return NextResponse.json({ ok: false, reason: "NO_SESSION" }, { status: 401 });
+
+  const url = new URL(req.url);
+  const idParam = String(url.searchParams.get("id") || "").trim();
+  const workoutId = toIdOrNull(idParam);
+
+  if (!workoutId) {
+    return NextResponse.json({ ok: false, reason: "BAD_ID" }, { status: 400 });
+  }
+
+  // проверяем что тренировка принадлежит юзеру
+  const { data: existing, error: exErr } = await supabaseAdmin
+    .from("workouts")
+    .select("id, status, type")
+    .eq("id", workoutId)
+    .eq("user_id", uid)
+    .single();
+
+  if (exErr || !existing) {
+    return NextResponse.json(
+      { ok: false, reason: "WORKOUT_NOT_FOUND", error: exErr?.message },
+      { status: 404 }
+    );
+  }
+
+  // 1) находим workout_exercises
+  const { data: wexRows, error: wexErr } = await supabaseAdmin
+    .from("workout_exercises")
+    .select("id")
+    .eq("workout_id", workoutId);
+
+  if (wexErr) {
+    return NextResponse.json({ ok: false, reason: "DB_ERROR", error: wexErr.message }, { status: 500 });
+  }
+
+  const wexIds = (wexRows || [])
+    .map((x: any) => Number(x.id))
+    .filter((n: number) => Number.isFinite(n) && n > 0);
+
+  // 2) удаляем sets
+  if (wexIds.length) {
+    const { error: delSetsErr } = await supabaseAdmin
+      .from("workout_sets")
+      .delete()
+      .in("workout_exercise_id", wexIds);
+
+    if (delSetsErr) {
+      return NextResponse.json({ ok: false, reason: "DB_ERROR", error: delSetsErr.message }, { status: 500 });
+    }
+  }
+
+  // 3) удаляем workout_exercises
+  const { error: delWexErr } = await supabaseAdmin
+    .from("workout_exercises")
+    .delete()
+    .eq("workout_id", workoutId);
+
+  if (delWexErr) {
+    return NextResponse.json({ ok: false, reason: "DB_ERROR", error: delWexErr.message }, { status: 500 });
+  }
+
+  // 4) удаляем саму тренировку
+  const { error: delWorkoutErr } = await supabaseAdmin
+    .from("workouts")
+    .delete()
+    .eq("id", workoutId)
+    .eq("user_id", uid);
+
+  if (delWorkoutErr) {
+    return NextResponse.json({ ok: false, reason: "DB_ERROR", error: delWorkoutErr.message }, { status: 500 });
+  }
+
+  return NextResponse.json({ ok: true });
 }

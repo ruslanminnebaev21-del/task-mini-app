@@ -434,7 +434,7 @@ function NewWorkoutInner() {
         setTimeout(() => router.push("/sport/workouts"), 1000);
       } else {
         showToast("Тренировка записана");
-        setTimeout(() => router.push("/sport"), 1000);
+        setTimeout(() => router.push("/sport/workouts"), 1000);
       }
     } catch (e: any) {
       showToast(String(e?.message || e));
@@ -589,7 +589,7 @@ function NewWorkoutInner() {
                               >
                                 Лучший: {(we.bestReps ?? 0)}×{(we.bestWeight ?? 0)}кг
                               </span>
-                              <span className={styles.bestSep}>|</span>
+                             
                             </div>
                           ) : null}
                           {focusedExerciseId !== we.id &&

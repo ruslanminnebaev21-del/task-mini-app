@@ -38,7 +38,7 @@ export async function GET() {
 
   const { data, error } = await supabaseAdmin
     .from("exercises")
-    .select("id,name,load_type,created_at")
+    .select("id,name,load_type,created_at,best_weight,best_reps")
     .eq("user_id", uid)
     .order("created_at", { ascending: false });
 
@@ -98,7 +98,7 @@ export async function POST(req: Request) {
   const { data, error } = await supabaseAdmin
     .from("exercises")
     .insert({ user_id: uid, name, load_type: loadType })
-    .select("id,name,load_type,created_at")
+    .select("id,name,load_type,created_at,best_weight,best_reps")
     .single();
 
   if (error) {

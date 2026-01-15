@@ -70,3 +70,65 @@ html {
   background-position: 200% 0;
   animation: skeletonMove 2.4s ease-in-out infinite;
 }
+
+/* ===== Confirm modal ===== */
+
+.modalOverlay {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  background: rgba(0, 0, 0, 0.35);
+  backdrop-filter: blur(4px);
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.modalBox {
+  width: 100%;
+  max-width: 340px;
+  background: #fff;
+  border-radius: 18px;
+  padding: 18px 16px;
+
+  box-shadow: 0 25px 60px rgba(0, 0, 0, 0.25);
+}
+
+.modalTitle {
+  font-size: 18px;
+  font-weight: 800;
+  margin-bottom: 6px;
+}
+
+.modalText {
+  font-size: 13px;
+  opacity: 0.7;
+  line-height: 1.4;
+  margin-bottom: 14px;
+}
+
+.modalActions {
+  display: flex;
+  gap: 10px;
+}
+
+.modalBtn {
+  flex: 1;
+  border-radius: 12px;
+  padding: 10px 0;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  border: none;
+}
+
+.modalCancel {
+  background: rgba(0, 0, 0, 0.06);
+  color: #111;
+}
+
+.modalDelete {
+  background: #ef4444;
+  color: #fff;
+}

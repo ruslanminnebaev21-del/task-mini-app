@@ -7,6 +7,9 @@ import { useSearchParams } from "next/navigation";
 import AppMenu from "@/app/components/AppMenu/AppMenu";
 import styles from "../../sport.module.css";
 import { useRouter } from "next/navigation";
+import { useCopyWorkout } from "@/app/hooks/useCopyWorkout";
+import { useDeleteWorkout } from "@/app/hooks/useDeleteWorkout";
+import { IconTrash, IconArrow, IconUser, IconStats, IconCopy } from "@/app/components/icons";
 
 type WorkoutType = "strength" | "cardio";
 
@@ -76,7 +79,30 @@ export default function Page() {
 
 function CurWorkoutInner() {
   const sp = useSearchParams();
+  async function onCopy() {
+    if (!workout?.id || copyLoading) return;
+
+    // 1) сразу показать процесс
+    setCopyToast("Копирую…");
+
+    const res = await copyWorkout(workout.id);
+
+    // 2) результат
+    if (!res.ok) {
+      setCopyToast(res.error || "Не смог скопировать тренировку");
+      return;
+    }
+
+    setCopyToast("Скопировано в черновики");
+    setTimeout(() => router.push("/sport/workouts"), 1000);
+  }
+  const { deleteWorkout, loading: deleteLoading, error: deleteError } = useDeleteWorkout();
+
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [deleteToast, setDeleteToast] = useState<string | null>(null);
   const router = useRouter();
+  const { copyWorkout, loading: copyLoading, error: copyError } = useCopyWorkout();
+  const [copyToast, setCopyToast] = useState<string | null>(null);
   const id = useMemo(() => {
     const a = String(sp.get("workout_id") || "").trim();
     const b = String(sp.get("id") || "").trim();
@@ -90,6 +116,20 @@ function CurWorkoutInner() {
   const [workout, setWorkout] = useState<ApiWorkout | null>(null);
   const [exercises, setExercises] = useState<ApiExercise[]>([]);
   const [totals, setTotals] = useState<ApiTotals>({ exCount: 0, setCount: 0, totalVolume: 0 });
+
+  useEffect(() => {
+    if (!deleteError) return;
+    setDeleteToast(deleteError);
+    const t = setTimeout(() => setDeleteToast(null), 3000);
+    return () => clearTimeout(t);
+  }, [deleteError]);
+
+  useEffect(() => {
+    if (!copyError) return;
+    setCopyToast(copyError);
+    const t = setTimeout(() => setCopyToast(null), 3000);
+    return () => clearTimeout(t);
+  }, [copyError]);  
 
   useEffect(() => {
     if (!id) {
@@ -136,6 +176,33 @@ function CurWorkoutInner() {
   const title = String(workout?.title || "").trim() || "Без названия";
   const wType: WorkoutType = workout?.type === "cardio" ? "cardio" : "strength";
 
+  function openDeleteConfirm() {
+    if (!workout?.id || deleteLoading) return;
+    setShowDeleteConfirm(true);
+  }
+
+  function closeDeleteConfirm() {
+    if (deleteLoading) return;
+    setShowDeleteConfirm(false);
+  }
+
+  async function onDelete() {
+    if (!workout?.id || deleteLoading) return;
+
+    const res = await deleteWorkout(workout.id);
+
+    if (!res.ok) {
+      setDeleteToast(res.error || "Не смог удалить тренировку");
+      return;
+    }
+
+    setShowDeleteConfirm(false);
+    setDeleteToast("Тренировка удалена");
+
+    // после удаления логичнее увести на список тренировок
+    setTimeout(() => router.push("/sport/workouts"), 1000);
+  }
+
   return (
     <div className={styles.shell}>
       <AppMenu />
@@ -150,16 +217,43 @@ function CurWorkoutInner() {
         </div>
 
         <nav className={styles.tabWrap} aria-label="Навигация">
-        <button
-          type="button"
-          className={styles.tabBadge}
-          onClick={() => router.back()}
-          title="Назад"
-        >
-          <span className={styles.dot} />
-          Назад
-        </button>
+          <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+            <button
+              type="button"
+              className={styles.tabBadge}
+              onClick={() => router.back()}
+              title="Назад"
+            >
+              <span className={styles.dot} />
+              Назад
+            </button>
+
+            <button
+              type="button"
+              className={styles.tabBadge}
+              onClick={onCopy}
+              disabled={copyLoading || !workout?.id}
+              title="Скопировать в черновик"
+              aria-label="Скопировать в черновик"
+              style={{ width: 44, justifyContent: "center" }}
+            >
+              <IconCopy size={15} />
+            </button>
+            <button
+              type="button"
+              className={styles.tabBadge}
+              onClick={openDeleteConfirm}
+              disabled={deleteLoading || !workout?.id}
+              title="Удалить тренировку"
+              aria-label="Удалить тренировку"
+              style={{ width: 44, justifyContent: "center" }}
+            >
+              <IconTrash size={15} />
+            </button>
+          </div>
         </nav>
+        {copyToast ? <div className={styles.toast}>{copyToast}</div> : null}
+        {deleteToast ? <div className={styles.toast}>{deleteToast}</div> : null}
 
         {hint ? <div className={styles.hintDanger}>{hint}</div> : null}
         {loading ? <div className={styles.muted}>Загружаю…</div> : null}
@@ -183,10 +277,7 @@ function CurWorkoutInner() {
                         <span className={styles.chip}>{workout.duration_min} мин</span>
                       ) : null}
 
-                      {workout.status ? <span className={styles.chip}>{workout.status}</span> : null}
-                    </div>
-
-                    <div className={styles.metaRow} style={{ marginTop: 8 }}>
+                      {/*{workout.status ? <span className={styles.chip}>{workout.status}</span> : null}*/}
                       <span className={styles.chip}>Упр: {totals.exCount}</span>
                       <span className={styles.chip}>Подходов: {totals.setCount}</span>
                       {wType === "strength" ? (
@@ -233,52 +324,52 @@ function CurWorkoutInner() {
                               {ex.name || "Без названия"}
                             </div>
 
-                            <div className={styles.metaRow} style={{ marginTop: 8 }}>
-                              <span className={styles.chip}>Подходов: {setsCount}</span>
-                              {bestText ? <span className={styles.chip}>Лучший: {bestText}</span> : null}
-                              <span className={styles.chip}>Объём: {fmtNum(vol)} кг</span>
+                            <div
+                              style={{
+                                display: "grid",
+                                gridTemplateColumns: "1fr 1fr",
+                                gap: 12,
+                                alignItems: "start",
+                              }}
+                            >
+                              {/* левый столбец: мета + заметка */}
+                              <div style={{ display: "grid", gap: 8 }}>
+                              <div style={{ display: "grid", gap: 6, justifyItems: "start"}}>
+                                <span className={styles.chip}>Подходов: {setsCount}</span>
+                                {bestText ? <span className={styles.chip}>Лучший: {bestText}</span> : null}
+                                <span className={styles.chip}>Объём: {fmtNum(vol)} кг</span>
+                              </div>
+
+                                {ex.note ? (
+                                  <div className={styles.muted} style={{ lineHeight: 1.35 }}>
+                                    {ex.note}
+                                  </div>
+                                ) : null}
+                              </div>
+
+                              {/* правый столбец: подходы в формате повт×вес кг */}
+                              {setsCount ? (
+                                <div style={{ display: "grid", gap: 6, justifyItems: "start" }}>
+                                  {sets
+                                    .slice()
+                                    .sort((a, b) => Number(a.set_index ?? 0) - Number(b.set_index ?? 0))
+                                    .map((s) => {
+                                      const reps = Number(s.reps ?? 0);
+                                      const weight = Number(s.weight ?? 0);
+                                      return (
+                                        <div key={s.id} className={styles.chip}>
+                                          {reps}×{fmtNum(weight)} кг
+                                        </div>
+                                      );
+                                    })}
+                                </div>
+                              ) : (
+                                <div className={styles.muted} style={{ justifySelf: "start" }}>
+                                  Подходов нет.
+                                </div>
+                              )}
                             </div>
 
-                            {ex.note ? (
-                              <div className={styles.muted} style={{ marginTop: 8, lineHeight: 1.35 }}>
-                                {ex.note}
-                              </div>
-                            ) : null}
-
-                            {setsCount ? (
-                              <div style={{ marginTop: 10, display: "grid", gap: 6 }}>
-                                {sets
-                                  .slice()
-                                  .sort((a, b) => Number(a.set_index ?? 0) - Number(b.set_index ?? 0))
-                                  .map((s, i) => (
-                                    <div
-                                      key={s.id}
-                                      style={{
-                                        display: "grid",
-                                        gridTemplateColumns: "32px 1fr 1fr",
-                                        gap: 8,
-                                        alignItems: "center",
-                                      }}
-                                    >
-                                      <div className={styles.muted} style={{ textAlign: "right" }}>
-                                        {s.set_index ?? i + 1}
-                                      </div>
-
-                                      <div className={styles.chip} style={{ justifySelf: "start" }}>
-                                        {s.weight == null ? "Доп вес: 0" : `вес: ${fmtNum(Number(s.weight))} кг`}
-                                      </div>
-
-                                      <div className={styles.chip} style={{ justifySelf: "start" }}>
-                                        {s.reps == null ? "повт: -" : `повт: ${Number(s.reps)}`}
-                                      </div>
-                                    </div>
-                                  ))}
-                              </div>
-                            ) : (
-                              <div className={styles.muted} style={{ marginTop: 8 }}>
-                                Подходов нет.
-                              </div>
-                            )}
                           </div>
                         </div>
                       );
@@ -311,6 +402,36 @@ function CurWorkoutInner() {
             )}
           </>
         ) : null}
+
+        {showDeleteConfirm && (
+          <div className={styles.modalOverlay} onClick={closeDeleteConfirm}>
+            <div className={styles.modalBox} onClick={(e) => e.stopPropagation()}>
+              <div className={styles.modalTitle}>Удалить тренировку?</div>
+              <div className={styles.modalText}>Это действие нельзя отменить.</div>
+
+              <div className={styles.modalActions}>
+                <button
+                  type="button"
+                  className={`${styles.modalBtn} ${styles.modalCancel}`}
+                  onClick={closeDeleteConfirm}
+                  disabled={deleteLoading}
+                >
+                  Отмена
+                </button>
+
+                <button
+                  type="button"
+                  className={`${styles.modalBtn} ${styles.modalDelete}`}
+                  onClick={onDelete}
+                  disabled={deleteLoading || !workout?.id}
+                >
+                  {deleteLoading ? "Удаляю..." : "Удалить"}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
       </main>
     </div>
   );

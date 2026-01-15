@@ -5,7 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import AppMenu from "@/app/components/AppMenu/AppMenu";
-import { IconPlus, IconTrash, IconUser, IconStats } from "@/app/components/icons";
+import { IconPlus, IconTrash, IconUser, IconStats, IconHome } from "@/app/components/icons";
 import styles from "../sport.module.css";
 
 
@@ -15,19 +15,21 @@ type Tab = {
   label: string;
   href: string;
   showDot: boolean;   // нужна ли точка
-  icon?:  "stats" | "user" | "dumbbell"; // какие иконки поддерживаем
+  icon?:  "home" | "user"; // какие иконки поддерживаем
 };
 type Exercise = {
   id: number;
   name: string;
   loadType: LoadType;
   created_at?: string;
+  bestWeight?: number | null;
+  bestReps?: number | null;
 };
 
 const TABS: Tab[] = [
-  { label: "Тренировки", href: "/sport", showDot: true },
-  { label: "Упражнения", href: "/sport/exercises", showDot: true },
-  { label: "Статистика", href: "/sport/stats", showDot: false, icon: "stats" },
+  { label: "Обзор", href: "/sport/overview", showDot: false, icon: "home"  },
+  { label: "Тренировки", href: "/sport/workouts", showDot: true },
+  { label: "Упражнения", href: "/sport/exercises", showDot: true},
   { label: "Профиль", href: "/sport/profile", showDot: false, icon: "user" },
 ];
 
@@ -41,8 +43,8 @@ function renderTabIcon(icon?: string) {
   switch (icon) {
     case "user":
       return <IconUser className={styles.tabIcon} />;
-    case "stats":
-      return <IconStats className={styles.tabIcon} />;
+    case "home":
+      return <IconHome className={styles.tabIcon} />;
     case "dumbbell":
       return <IconStats className={styles.tabIcon} />;
     default:
@@ -95,10 +97,12 @@ export default function SportExercisesPage() {
           return;
         }
 
-        const list = (j.exercises || []).map((x: any) => ({
-          id: String(x.id),
+        const list: Exercise[] = (j.exercises || []).map((x: any) => ({
+          id: Number(x.id),
           name: String(x.name || ""),
           loadType: (x.load_type as LoadType) || "external",
+          bestReps: x.best_reps == null ? null : Number(x.best_reps),
+          bestWeight: x.best_weight == null ? null : Number(x.best_weight),
         }));
 
         setItems(list);
@@ -370,6 +374,11 @@ export default function SportExercisesPage() {
                       <span className={styles.chip}>
                         {x.loadType === "external" ? "С отягощением" : "С собственным весом"}
                       </span>
+                      {x.bestReps && x.bestReps > 0 ? (
+                        <span className={styles.chip}>
+                          Лучший: {x.bestReps}×{x.bestWeight ?? 0}кг
+                        </span>
+                      ) : null}
                     </div>
                   </div>
 

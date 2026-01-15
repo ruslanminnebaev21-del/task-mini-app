@@ -81,7 +81,7 @@ export default function MenuPage() {
           </Link>
 
           <Link
-            href="/sport"
+            href="/sport/overview"
             className={`${styles.tile} ${!ready ? styles.tileDisabled : ""}`}
             aria-label="Открыть дневник тренировок"
             aria-disabled={!ready}
