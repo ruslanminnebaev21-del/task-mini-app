@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import styles from "./AppMenu.module.css";
-import { IconTrash, IconPlus, IconRotate, IconEdit } from "@/app/components/icons";
+import { IconRotate } from "@/app/components/icons";
 
 type Item = { label: string; href: string };
 
@@ -14,12 +14,10 @@ const DEFAULT_ITEMS: Item[] = [
   { label: "Дневник тренировок", href: "/sport/overview" },
 ];
 
-export default function AppMenu({
-  items = DEFAULT_ITEMS,
-}: {
-  items?: Item[];
-}) {
+export default function AppMenu({ items = DEFAULT_ITEMS }: { items?: Item[] }) {
   const [open, setOpen] = useState(false);
+  const [showTopBtn, setShowTopBtn] = useState(false);
+
   const pathname = usePathname();
   const router = useRouter();
 
@@ -35,8 +33,25 @@ export default function AppMenu({
     return () => document.removeEventListener("keydown", onKeyDown);
   }, []);
 
+  // показать кнопку "вверх" только после небольшого скролла
+  useEffect(() => {
+    function onScroll() {
+      const y = window.scrollY || document.documentElement.scrollTop || 0;
+      setShowTopBtn(y > 260);
+    }
+    onScroll();
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
+  }, []);
+
   function refreshPage() {
     router.refresh();
+  }
+
+  function scrollToTop() {
+    // на всякий: если пользователь в drawer - закрываем
+    setOpen(false);
+    window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
   return (
@@ -50,10 +65,9 @@ export default function AppMenu({
           aria-label="Обновить"
           title="Обновить"
         >
-          {/* refresh */}
           <IconRotate size={18} style={{ color: "#000000" }} />
         </button>
-        
+
         <button
           type="button"
           className={styles.iconBtn}
@@ -61,13 +75,10 @@ export default function AppMenu({
           aria-label="Открыть меню"
           title="Меню"
         >
-          {/* burger */}
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
             <path d="M4 7h16M4 12h16M4 17h16" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
           </svg>
         </button>
-
-        
       </div>
 
       {/* overlay */}
@@ -96,21 +107,28 @@ export default function AppMenu({
           {items.map((it) => {
             const active = pathname === it.href;
             return (
-              <Link
-                key={it.href}
-                href={it.href}
-                className={`${styles.tabBadge} ${active ? styles.tabBadgeActive : ""}`}
-              >
+              <Link key={it.href} href={it.href} className={`${styles.tabBadge} ${active ? styles.tabBadgeActive : ""}`}>
                 <span className={`${styles.dot} ${active ? styles.dotActive : ""}`} />
                 {it.label}
-
               </Link>
             );
           })}
         </nav>
-
-        
       </aside>
+
+      {/* кнопка "вверх" */}
+      <button
+        type="button"
+        onClick={scrollToTop}
+        className={`${styles.toTopBtn} ${showTopBtn ? styles.toTopBtnVisible : ""}`}
+        aria-label="Наверх"
+        title="Наверх"
+      >
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+          <path d="M12 5l7 7M12 5l-7 7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+          <path d="M12 5v14" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+        </svg>
+      </button>
     </>
   );
 }

@@ -6,7 +6,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import AppMenu from "@/app/components/AppMenu/AppMenu";
 import styles from "../sport.module.css";
-import { IconUser, IconStats, IconArrow, IconTrash, IconHome } from "@/app/components/icons";
+import { IconUser, IconStats, IconArrow, IconTrash, IconHome, IconEdit } from "@/app/components/icons";
 import { useWorkoutStats } from "@/app/hooks/useWorkoutStats";
 import { useDeleteWorkout } from "@/app/hooks/useDeleteWorkout";
 
@@ -471,12 +471,12 @@ export default function SportPage() {
         <div className={styles.heroHello}>{hello}</div>
 
         <div className={styles.kpiGrid}>
-          <div className={styles.kpiItem}>
+          <div className={styles.kpiItem} onClick={() => router.push("/sport/profile")}>
             <div className={styles.kpiLabel}>Текущая цель</div>
             <div className={styles.kpiValue}>{goal || "Не задана"}</div>
           </div>
 
-          <div className={styles.kpiItem}>
+          <div className={styles.kpiItem} onClick={() => router.push("/sport/profile")}>
             <div className={styles.kpiLabel}>Текущий вес</div>
             <div className={styles.kpiValue}>{weight === null ? "—" : `${fmtWeight(weight)} кг`}</div>
           </div>

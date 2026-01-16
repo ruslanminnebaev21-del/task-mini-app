@@ -9,7 +9,7 @@ import styles from "../../sport.module.css";
 import { useRouter } from "next/navigation";
 import { useCopyWorkout } from "@/app/hooks/useCopyWorkout";
 import { useDeleteWorkout } from "@/app/hooks/useDeleteWorkout";
-import { IconTrash, IconArrow, IconUser, IconStats, IconCopy } from "@/app/components/icons";
+import { IconTrash, IconArrow, IconUser, IconStats, IconCopy, IconEdit } from "@/app/components/icons";
 
 type WorkoutType = "strength" | "cardio";
 
@@ -238,6 +238,20 @@ function CurWorkoutInner() {
               style={{ width: 44, justifyContent: "center" }}
             >
               <IconCopy size={15} />
+            </button>
+            <button
+              type="button"
+              className={styles.tabBadge}
+              onClick={() => {
+                if (!workout?.id) return;
+                router.push(`/sport/workouts/newworkout?workout_id=${encodeURIComponent(String(workout.id))}`);
+              }}
+              disabled={!workout?.id}
+              title="Редактировать"
+              aria-label="Редактировать"
+              style={{ width: 44, justifyContent: "center" }}
+            >
+              <IconEdit size={15} />
             </button>
             <button
               type="button"

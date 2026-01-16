@@ -9,6 +9,7 @@ import styles from "../../sport.module.css";
 import { IconTrash } from "@/app/components/icons";
 
 type WorkoutType = "strength" | "cardio";
+type WorkoutStatus = "draft" | "done";
 
 type Suggestion = {
   id: number;
@@ -116,6 +117,10 @@ function NewWorkoutInner() {
   const [saving, setSaving] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
   const [loadingDraft, setLoadingDraft] = useState(false);
+  const [showDoneConfirm, setShowDoneConfirm] = useState(false);
+
+  // статус тренировки с сервера (нужен для заголовка/кнопок)
+  const [workoutStatus, setWorkoutStatus] = useState<WorkoutStatus | null>(null);
 
   useEffect(() => {
     if (!toast) return;
@@ -127,7 +132,7 @@ function NewWorkoutInner() {
     setToast(msg);
   }
 
-  // ---------- load draft by id ----------
+  // ---------- load draft/workout by id ----------
   useEffect(() => {
     if (!editId) return;
 
@@ -150,6 +155,10 @@ function NewWorkoutInner() {
 
         const w = j.workout || {};
         const wType: WorkoutType = w.type === "cardio" ? "cardio" : "strength";
+
+        const statusFromApi: WorkoutStatus =
+          String(w.status || "").trim() === "done" ? "done" : "draft";
+        setWorkoutStatus(statusFromApi);
 
         setTitle(String(w.title || "").trim());
         setType(wType);
@@ -220,13 +229,13 @@ function NewWorkoutInner() {
           return;
         }
 
-          const arr: Suggestion[] = (j.exercises || [])
-            .map((x: any) => ({
-              id: Number(x.id),
-              name: String(x.name || "").trim(),
-              best_weight: x.best_weight == null ? null : Number(x.best_weight),
-              best_reps: x.best_reps == null ? null : Number(x.best_reps),
-            }))
+        const arr: Suggestion[] = (j.exercises || [])
+          .map((x: any) => ({
+            id: Number(x.id),
+            name: String(x.name || "").trim(),
+            best_weight: x.best_weight == null ? null : Number(x.best_weight),
+            best_reps: x.best_reps == null ? null : Number(x.best_reps),
+          }))
           .filter((x: Suggestion) => Number.isFinite(x.id) && x.name);
 
         setSuggestionsByEx((prev) => ({ ...prev, [exBlockId]: arr.slice(0, 8) }));
@@ -252,6 +261,8 @@ function NewWorkoutInner() {
     setSuggestionsByEx({});
     setSuggestLoadingByEx({});
     setOpenSuggestFor(null);
+
+    setWorkoutStatus(null);
   }
 
   function updateExercise(exId: string, patch: Partial<WorkoutExercise>) {
@@ -381,7 +392,7 @@ function NewWorkoutInner() {
     }>;
   }
 
-  async function saveWorkout(status: "draft" | "done") {
+  async function saveWorkout(status: WorkoutStatus) {
     if (!canSave || saving || loadingDraft) return;
 
     if (type === "strength") {
@@ -433,7 +444,7 @@ function NewWorkoutInner() {
         showToast(isEdit ? "Черновик обновлён" : "Черновик сохранен");
         setTimeout(() => router.push("/sport/workouts"), 1000);
       } else {
-        showToast("Тренировка записана");
+        showToast(isEdit ? "Изменения сохранены" : "Тренировка записана");
         setTimeout(() => router.push("/sport/workouts"), 1000);
       }
     } catch (e: any) {
@@ -448,8 +459,29 @@ function NewWorkoutInner() {
   }
 
   function onDone() {
+    if (!canSave || saving || loadingDraft) return;
+    setShowDoneConfirm(true);
+  }
+
+  function closeDoneConfirm() {
+    if (saving || loadingDraft) return;
+    setShowDoneConfirm(false);
+  }
+
+  function confirmDone() {
+    if (saving || loadingDraft) return;
+    setShowDoneConfirm(false);
     void saveWorkout("done");
   }
+
+  const pageTitle = useMemo(() => {
+    if (!editId) return "Новая";
+    if (workoutStatus === "draft") return "Черновик";
+    return "Изменить";
+  }, [editId, workoutStatus]);
+
+  const isEdit = Boolean(editId);
+  const isEditingDoneWorkout = isEdit && workoutStatus === "done";
 
   return (
     <div className={styles.shell}>
@@ -460,7 +492,7 @@ function NewWorkoutInner() {
 
       <main className={styles.container}>
         <div className={styles.headerRow}>
-          <h1 className={styles.h1}>{editId ? "Черновик" : "Новая"}</h1>
+          <h1 className={styles.h1}>{pageTitle}</h1>
         </div>
 
         <nav className={styles.tabWrap} aria-label="Навигация">
@@ -478,7 +510,7 @@ function NewWorkoutInner() {
 
         {loadingDraft ? (
           <div className={styles.muted} style={{ marginTop: 10 }}>
-            Загружаю черновик…
+            Загружаю…
           </div>
         ) : null}
 
@@ -572,51 +604,31 @@ function NewWorkoutInner() {
                         }}
                       >
                         <div className={styles.exerciseInputWrap}>
-                        {focusedExerciseId !== we.id &&
+                          {focusedExerciseId !== we.id &&
                           we.exerciseId != null &&
                           ((we.bestWeight ?? 0) > 0 || (we.bestReps ?? 0) > 0) ? (
-                            <div className={styles.bestOverlay}>
-                              <span
-                                className={styles.chip}
-                                style={{
-                                  position: "absolute",
-                                  right: 8,
-                                  top: "50%",
-                                  transform: "translateY(-50%)",
-                                  pointerEvents: "none",
-                                  zIndex: 2,
-                                }}
-                              >
-                                Лучший: {(we.bestReps ?? 0)}×{(we.bestWeight ?? 0)}кг
-                              </span>
-                             
-                            </div>
+                            <span
+                              className={styles.chip}
+                              style={{
+                                position: "absolute",
+                                right: 8,
+                                top: "50%",
+                                transform: "translateY(-50%)",
+                                pointerEvents: "none",
+                                zIndex: 2,
+                              }}
+                            >
+                              Лучший: {(we.bestReps ?? 0)}×{(we.bestWeight ?? 0)}кг
+                            </span>
                           ) : null}
-                          {focusedExerciseId !== we.id &&
-                            we.exerciseId != null &&
-                            ((we.bestWeight ?? 0) > 0 || (we.bestReps ?? 0) > 0) ? (
-                              <span
-                                className={styles.chip}
-                                style={{
-                                  position: "absolute",
-                                  right: 8,
-                                  top: "50%",
-                                  transform: "translateY(-50%)",
-                                  pointerEvents: "none",
-                                  zIndex: 2,
-
-                                }}
-                              >
-                                Лучший: {(we.bestReps ?? 0)}×{(we.bestWeight ?? 0)}кг
-                              </span>
-                            ) : null}                       
 
                           <input
-                            className={`${styles.input} ${styles.exerciseInput} ${focusedExerciseId !== we.id ? styles.withBestPadding : ""}`}
+                            className={`${styles.input} ${styles.exerciseInput} ${
+                              focusedExerciseId !== we.id ? styles.withBestPadding : ""
+                            }`}
                             value={we.exerciseName}
                             onFocus={() => {
                               setFocusedExerciseId(we.id);
-
                               setActiveExerciseId(we.id);
                               setOpenSuggestFor(we.id);
                               fetchExerciseSuggestions(we.id, we.exerciseName);
@@ -705,7 +717,9 @@ function NewWorkoutInner() {
                             className={styles.smallInput}
                             value={s.weight}
                             onChange={(e) =>
-                              updateSet(we.id, s.id, { weight: e.target.value.replace(/[^\d.,]/g, "") })
+                              updateSet(we.id, s.id, {
+                                weight: e.target.value.replace(/[^\d.,]/g, ""),
+                              })
                             }
                             inputMode="decimal"
                             placeholder="0"
@@ -746,21 +760,11 @@ function NewWorkoutInner() {
 
               <div style={{ display: "flex", justifyContent: "center" }}>
                 <div className={styles.addButtonsRow}>
-                  <button
-                    type="button"
-                    className={styles.addSetBtn}
-                    onClick={addExercise}
-                    disabled={loadingDraft}
-                  >
+                  <button type="button" className={styles.addSetBtn} onClick={addExercise} disabled={loadingDraft}>
                     + Добавить упражнение
                   </button>
 
-                  <button
-                    type="button"
-                    className={styles.addSetBtn}
-                    onClick={addSetToActive}
-                    disabled={loadingDraft}
-                  >
+                  <button type="button" className={styles.addSetBtn} onClick={addSetToActive} disabled={loadingDraft}>
                     + Добавить подход
                   </button>
                 </div>
@@ -770,30 +774,77 @@ function NewWorkoutInner() {
         ) : null}
 
         <div className={styles.editorActions} style={{ marginTop: 30 }}>
-          <button type="button" className={styles.btnGhost} onClick={resetAll} disabled={saving || loadingDraft}>
-            Сбросить
-          </button>
+          {isEditingDoneWorkout ? (
+            <button
+              type="button"
+              className={`${styles.btnPrimary} ${
+                !canSave || saving || loadingDraft ? styles.btnDisabled : ""
+              }`}
+              onClick={() => void saveWorkout("done")}
+              disabled={!canSave || saving || loadingDraft}
+              title={!canSave ? "Введите название" : "Сохранить изменения"}
+            >
+              {saving ? "Сохраняю…" : "Сохранить изменения"}
+            </button>
+          ) : (
+            <>
+              <button type="button" className={styles.btnGhost} onClick={resetAll} disabled={saving || loadingDraft}>
+                Сбросить
+              </button>
 
-          <button
-            type="button"
-            className={`${styles.btnSoft} ${!canSave || saving || loadingDraft ? styles.btnDisabled : ""}`}
-            onClick={onSaveDraft}
-            disabled={!canSave || saving || loadingDraft}
-            title={!canSave ? "Введите название" : "Сохранить как черновик"}
-          >
-            {saving ? "Сохраняю…" : editId ? "Обновить" : "В черновик"}
-          </button>
+              <button
+                type="button"
+                className={`${styles.btnSoft} ${
+                  !canSave || saving || loadingDraft ? styles.btnDisabled : ""
+                }`}
+                onClick={onSaveDraft}
+                disabled={!canSave || saving || loadingDraft}
+              >
+                {saving ? "Сохраняю…" : "В черновик"}
+              </button>
 
-          <button
-            type="button"
-            className={`${styles.btnPrimary} ${!canSave || saving || loadingDraft ? styles.btnDisabled : ""}`}
-            onClick={onDone}
-            disabled={!canSave || saving || loadingDraft}
-            title={!canSave ? "Введите название" : "Отметить как выполнено"}
-          >
-            {saving ? "Сохраняю…" : "Выполнено"}
-          </button>
+              <button
+                type="button"
+                className={`${styles.btnPrimary} ${
+                  !canSave || saving || loadingDraft ? styles.btnDisabled : ""
+                }`}
+                onClick={onDone}
+                disabled={!canSave || saving || loadingDraft}
+              >
+                {saving ? "Сохраняю…" : "Выполнено"}
+              </button>
+            </>
+          )}
         </div>
+
+        {showDoneConfirm ? (
+          <div className={styles.modalOverlay} onClick={closeDoneConfirm}>
+            <div className={styles.modalBox} onClick={(e) => e.stopPropagation()}>
+              <div className={styles.modalTitle}>Сохранить?</div>
+              <div className={styles.modalText}>Тренировка будет отмечена как выполненная.</div>
+
+              <div className={styles.modalActions} style={{ marginTop: 14 }}>
+                <button
+                  type="button"
+                  className={`${styles.modalBtn} ${styles.modalCancel}`}
+                  onClick={closeDoneConfirm}
+                  disabled={saving || loadingDraft}
+                >
+                  Отмена
+                </button>
+
+                <button
+                  type="button"
+                  className={`${styles.modalBtn} ${styles.modalDelete}`}
+                  onClick={confirmDone}
+                  disabled={saving || loadingDraft}
+                >
+                  {saving ? "Сохраняю..." : "Сохранить"}
+                </button>
+              </div>
+            </div>
+          </div>
+        ) : null}
       </main>
     </div>
   );

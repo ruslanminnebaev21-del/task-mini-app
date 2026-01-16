@@ -5,7 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import AppMenu from "@/app/components/AppMenu/AppMenu";
 import styles from "../sport.module.css";
-import { IconTrash, IconArrow, IconUser, IconStats, IconCopy, IconHome } from "@/app/components/icons";
+import { IconTrash, IconArrow, IconUser, IconStats, IconCopy, IconHome, IconEdit } from "@/app/components/icons";
 import { useRouter, usePathname } from "next/navigation";
 import { useWorkoutStats } from "@/app/hooks/useWorkoutStats";
 import { useDeleteWorkout } from "@/app/hooks/useDeleteWorkout";
@@ -408,6 +408,7 @@ export default function SportWorkoutsPage() {
                   </div>
 
                   <div className={styles.itemActions}>
+                    
                     <button
                       type="button"
                       className={styles.trashBtn}
