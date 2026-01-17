@@ -96,6 +96,12 @@ function NewWorkoutInner() {
   const [title, setTitle] = useState("");
   const [type, setType] = useState<WorkoutType>("strength");
   const [durationMin, setDurationMin] = useState("");
+  // ===== ADD EXERCISE MODAL =====
+  const [showAddExerciseModal, setShowAddExerciseModal] = useState(false);
+  const [addExerciseName, setAddExerciseName] = useState("");
+  const [loadType, setLoadType] = useState<"external" | "bodyweight">("external");
+  const [addExerciseForId, setAddExerciseForId] = useState<string | null>(null);
+  const [addingExercise, setAddingExercise] = useState(false);  
 
   // важно: не затирать дату при редактировании
   const [workoutDate, setWorkoutDate] = useState<string>(todayYmd());
@@ -130,6 +136,87 @@ function NewWorkoutInner() {
 
   function showToast(msg: string) {
     setToast(msg);
+  }
+  function openAddExerciseModal(exBlockId: string, presetName: string) {
+    setAddExerciseForId(exBlockId);
+    setAddExerciseName(String(presetName || "").trim());
+    setLoadType("external");
+    setShowAddExerciseModal(true);
+  }
+
+  function closeAddExerciseModal() {
+    if (addingExercise) return;
+    setShowAddExerciseModal(false);
+  }
+
+  async function confirmAddExercise() {
+    if (addingExercise) return;
+
+    const name = String(addExerciseName || "").trim();
+    if (name.length < 2) {
+      showToast("Название слишком короткое");
+      return;
+    }
+
+    const targetId = addExerciseForId;
+    if (!targetId) {
+      showToast("Не понял, куда вставлять упражнение");
+      return;
+    }
+
+    setAddingExercise(true);
+    try {
+      const r = await fetch("/api/exercises", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ name, loadType }),
+      });
+
+      const j = await r.json().catch(() => ({} as any));
+
+      if (!r.ok || !j.ok) {
+        // если дубль — покажем норм сообщение
+        if (j?.reason === "DUPLICATE" && j?.duplicate?.id) {
+          showToast("Такое упражнение уже есть, выбери его из списка");
+        } else {
+          const msg =
+            j?.reason === "NO_SESSION"
+              ? "Нет сессии. Открой через Telegram."
+              : j?.error || j?.reason || `HTTP ${r.status}`;
+          showToast(msg);
+        }
+        return;
+      }
+
+      const ex = j.exercise || {};
+      const exId = Number(ex.id);
+      const exName = String(ex.name || "").trim();
+
+      if (!Number.isFinite(exId) || !exName) {
+        showToast("Не смог прочитать добавленное упражнение");
+        return;
+      }
+
+      // вставляем в текущий exerciseInput
+      updateExercise(targetId, {
+        exerciseId: exId,
+        exerciseName: exName,
+        bestWeight: null,
+        bestReps: null,
+      });
+
+      setActiveExerciseId(targetId);
+      setOpenSuggestFor(null);
+      setSuggestionsByEx((prev) => ({ ...prev, [targetId]: [] }));
+
+      setShowAddExerciseModal(false);
+      showToast("Упражнение добавлено");
+    } catch (e: any) {
+      showToast(String(e?.message || e));
+    } finally {
+      setAddingExercise(false);
+    }
   }
 
   // ---------- load draft/workout by id ----------
@@ -569,11 +656,18 @@ function NewWorkoutInner() {
                 const suggestions = suggestionsByEx[we.id] || [];
                 const loading = Boolean(suggestLoadingByEx[we.id]);
 
-                const showSuggestions =
+                const query = we.exerciseName.trim();
+
+                const showSuggestUI =
                   openSuggestFor === we.id &&
                   we.exerciseId == null &&
-                  we.exerciseName.trim().length >= 2 &&
-                  suggestions.length > 0;
+                  query.length >= 2;
+
+                const exactExists = suggestions.some(
+                  (s) => String(s.name || "").trim().toLowerCase() === query.toLowerCase()
+                );
+
+                const showAddBtn = showSuggestUI && suggestions.length === 0;
 
                 return (
                   <div key={we.id} style={{ display: "grid", gap: 10 }}>
@@ -647,29 +741,55 @@ function NewWorkoutInner() {
                             disabled={loadingDraft}
                           />
                         </div>
-
-                        {showSuggestions ? (
+                        {showSuggestUI ? (
                           <div className={styles.suggestionBox}>
-                            {suggestions.map((e) => (
-                              <button
-                                key={e.id}
-                                type="button"
-                                className={styles.suggestionItem}
-                                onClick={() => {
-                                  updateExercise(we.id, {
-                                    exerciseId: e.id,
-                                    exerciseName: e.name,
-                                    bestWeight: e.best_weight ?? null,
-                                    bestReps: e.best_reps ?? null,
-                                  });
-                                  setActiveExerciseId(we.id);
-                                  setOpenSuggestFor(null);
-                                  setSuggestionsByEx((prev) => ({ ...prev, [we.id]: [] }));
-                                }}
-                              >
-                                {e.name}
-                              </button>
-                            ))}
+                            {suggestions.length ? (
+                              <>
+                                {suggestions.map((e) => (
+                                  <button
+                                    key={e.id}
+                                    type="button"
+                                    className={styles.suggestionItem}
+                                    onClick={() => {
+                                      updateExercise(we.id, {
+                                        exerciseId: e.id,
+                                        exerciseName: e.name,
+                                        bestWeight: e.best_weight ?? null,
+                                        bestReps: e.best_reps ?? null,
+                                      });
+                                      setActiveExerciseId(we.id);
+                                      setOpenSuggestFor(null);
+                                      setSuggestionsByEx((prev) => ({ ...prev, [we.id]: [] }));
+                                    }}
+                                  >
+                                    {e.name}
+                                  </button>
+                                ))}
+
+                                {!exactExists && (
+                                  <>
+                                    <div className={styles.suggestionDivider} />
+                                    <button
+                                      type="button"
+                                      className={styles.suggestionItem}
+                                      onClick={() => openAddExerciseModal(we.id, query)}
+                                    >
+                                      + Добавить в базу
+                                    </button>
+                                  </>
+                                )}
+                              </>
+                            ) : (
+                              <>
+                                <button
+                                  type="button"
+                                  className={styles.suggestionItem}
+                                  onClick={() => openAddExerciseModal(we.id, query)}
+                                >
+                                  + Добавить в базу
+                                </button>
+                              </>
+                            )}
                           </div>
                         ) : null}
                       </div>
@@ -845,6 +965,64 @@ function NewWorkoutInner() {
             </div>
           </div>
         ) : null}
+        {showAddExerciseModal ? (
+          <div className={styles.modalOverlay} onClick={closeAddExerciseModal}>
+            <div className={styles.modalBox} onClick={(e) => e.stopPropagation()}>
+              <div className={styles.modalTitle}>Добавить упражнение</div>
+              <div className={styles.modalText}>Название и тип нагрузки.</div>
+
+              <div style={{ marginTop: 12 }}>
+                <input
+                  className={styles.input}
+                  value={addExerciseName}
+                  onChange={(e) => setAddExerciseName(e.target.value)}
+                  placeholder="Например: Жим гантелей"
+                  disabled={addingExercise}
+                />
+              </div>
+
+              <div className={styles.radioRow} role="radiogroup" aria-label="Тип нагрузки" style={{ marginTop: 12 }}>
+                <button
+                  type="button"
+                  className={`${styles.chipBtn} ${loadType === "external" ? styles.chipBtnActive : ""}`}
+                  onClick={() => setLoadType("external")}
+                  disabled={addingExercise}
+                >
+                  С отягощением
+                </button>
+
+                <button
+                  type="button"
+                  className={`${styles.chipBtn} ${loadType === "bodyweight" ? styles.chipBtnActive : ""}`}
+                  onClick={() => setLoadType("bodyweight")}
+                  disabled={addingExercise}
+                >
+                  С собственным весом
+                </button>
+              </div>
+
+              <div className={styles.modalActions} style={{ marginTop: 14 }}>
+                <button
+                  type="button"
+                  className={`${styles.modalBtn} ${styles.modalCancel}`}
+                  onClick={closeAddExerciseModal}
+                  disabled={addingExercise}
+                >
+                  Отмена
+                </button>
+
+                <button
+                  type="button"
+                  className={`${styles.modalBtn} ${styles.modalDelete}`}
+                  onClick={confirmAddExercise}
+                  disabled={addingExercise}
+                >
+                  {addingExercise ? "Добавляю..." : "Добавить"}
+                </button>
+              </div>
+            </div>
+          </div>
+        ) : null}        
       </main>
     </div>
   );

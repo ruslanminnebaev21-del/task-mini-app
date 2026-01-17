@@ -314,7 +314,7 @@ export default function SportExercisesPage() {
                   className={`${styles.chipBtn} ${loadType === "bodyweight" ? styles.chipBtnActive : ""}`}
                   onClick={() => setLoadType("bodyweight")}
                 >
-                  С собственны весом
+                  С собственным весом
                 </button>
               </div>
 

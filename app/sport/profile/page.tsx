@@ -454,6 +454,12 @@ export default function SportProfilePage() {
     if (savingAny) return;
     setShowCompModal(false);
   }
+  function fmtDate(d: string | null | undefined) {
+    if (!d) return "";
+    const [y, m, day] = String(d).split("-");
+    if (!y || !m || !day) return "";
+    return `${day}.${m}.${y}`;
+  }
 
   async function saveComp() {
     if (savingAny) return;
@@ -528,20 +534,26 @@ export default function SportProfilePage() {
   const sizesCardText = useMemo(() => {
     if (loading) return "Загружаю…";
     if (!bodySizes) return "Заполните замеры";
+
+    const date = fmtDate(bodySizes.measured_at);
+
     return fmt3(
       `Грудь: ${numToStr(bodySizes.chest) || "—"}`,
       `Талия: ${numToStr(bodySizes.waist) || "—"}`,
-      `Живот: ${numToStr(bodySizes.belly) || "—"}`
+      `Таз: ${numToStr(bodySizes.pelvis) || "—"}${date ? ` · ${date}` : ""}`
     );
   }, [loading, bodySizes]);
 
   const compCardText = useMemo(() => {
     if (loading) return "Загружаю…";
     if (!bodyComp) return "Заполните состав";
+
+    const date = fmtDate(bodyComp.measured_at);
+
     return fmt3(
       `% жира: ${numToStr(bodyComp.fat_percent) || "—"}`,
       `ИМТ: ${numToStr(bodyComp.bmi) || "—"}`,
-      `Висцеральный: ${numToStr(bodyComp.visceral_fat) || "—"}`
+      `Вода: ${numToStr(bodyComp.water) || "—"}${date ? ` · ${date}` : ""}`
     );
   }, [loading, bodyComp]);
 
