@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import ClientScripts from "./client-scripts";
+import { GlobalLoaderProvider } from "@/app/components/GlobalLoader/GlobalLoader";
 
 export const metadata: Metadata = {
   title: "TODO",
@@ -20,7 +21,13 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <head>
         <ClientScripts />
       </head>
-      <body>{children}</body>
+      <body>
+        <GlobalLoaderProvider>
+          {children}
+        </GlobalLoaderProvider>
+      </body>
     </html>
   );
 }
+
+

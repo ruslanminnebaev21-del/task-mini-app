@@ -6,7 +6,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import AppMenu from "@/app/components/AppMenu/AppMenu";
 import styles from "../sport.module.css";
-import { IconUser, IconStats, IconArrow, IconTrash, IconHome, IconEdit } from "@/app/components/icons";
+import { IconUser, IconArrow, IconTrash, IconHome } from "@/app/components/icons";
 import { useWorkoutStats } from "@/app/hooks/useWorkoutStats";
 import { useDeleteWorkout } from "@/app/hooks/useDeleteWorkout";
 
@@ -40,6 +40,11 @@ type Workout = {
 type WeightPoint = {
   value: number;
   measured_at: string; // ISO
+};
+
+type WorkoutSummary = {
+  workout: { id: number; title: string; completed_at: string | null };
+  exercises: Array<{ id: number; name: string }>;
 };
 
 function typeLabel(w: WorkoutType) {
@@ -87,6 +92,61 @@ function fmtWeight(n: number) {
   return String(s).replace(".", ",");
 }
 
+/* ================== CACHE + REV(APP) ================== */
+
+const OVERVIEW_CACHE_KEY = "sport_overview_cache_v3";
+const REV_URL = "/api/sport/rev";
+const OVERVIEW_CACHE_TTL_MS = 60 * 1000;
+
+type OverviewCache = {
+  savedAt: number;
+  revApp: number;
+  firstName: string;
+  goal: string;
+  weight: number | null;
+  workouts: Workout[];
+  weightPoints: WeightPoint[];
+};
+
+function readOverviewCache(): OverviewCache | null {
+  try {
+    const raw = sessionStorage.getItem(OVERVIEW_CACHE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as OverviewCache;
+    if (!parsed || typeof parsed.savedAt !== "number") return null;
+    if (typeof parsed.revApp !== "number") return null;
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+function writeOverviewCache(data: Omit<OverviewCache, "savedAt">) {
+  try {
+    const payload: OverviewCache = { savedAt: Date.now(), ...data };
+    sessionStorage.setItem(OVERVIEW_CACHE_KEY, JSON.stringify(payload));
+  } catch {}
+}
+
+function isCacheFresh(savedAt: number) {
+  return Date.now() - savedAt <= OVERVIEW_CACHE_TTL_MS;
+}
+
+async function fetchAppRev(signal?: AbortSignal): Promise<number | null> {
+  try {
+    const r = await fetch(REV_URL, { credentials: "include", cache: "no-store", signal });
+    const j = await r.json().catch(() => ({} as any));
+    if (!r.ok || !j?.ok) return null;
+
+    const t = Date.parse(String(j.updated_at || ""));
+    return Number.isFinite(t) ? t : null;
+  } catch {
+    return null;
+  }
+}
+
+/* ================== GRAPH ================== */
+
 function WeightSparkline({ points }: { points: WeightPoint[] }) {
   const ref = useRef<HTMLDivElement | null>(null);
   const [wPx, setWPx] = useState(0);
@@ -105,9 +165,7 @@ function WeightSparkline({ points }: { points: WeightPoint[] }) {
     return () => window.removeEventListener("resize", measure);
   }, []);
 
-  const vals = (points || [])
-    .map((p) => Number(p.value))
-    .filter((n) => Number.isFinite(n));
+  const vals = (points || []).map((p) => Number(p.value)).filter((n) => Number.isFinite(n));
 
   if (vals.length < 2) {
     return (
@@ -118,10 +176,10 @@ function WeightSparkline({ points }: { points: WeightPoint[] }) {
   }
 
   const W = Math.max(10, wPx);
-  const H = 140; // увеличили высоту под даты
+  const H = 140;
   const padX = 14;
   const padY = 12;
-  const axisBottom = H - 22; // линия X
+  const axisBottom = H - 22;
 
   const min = Math.min(...vals);
   const max = Math.max(...vals);
@@ -147,9 +205,7 @@ function WeightSparkline({ points }: { points: WeightPoint[] }) {
     return { x, y, v: p.value, date: fmtDate(p.measured_at) };
   });
 
-  const d = coords
-    .map((p, i) => `${i === 0 ? "M" : "L"} ${p.x.toFixed(2)} ${p.y.toFixed(2)}`)
-    .join(" ");
+  const d = coords.map((p, i) => `${i === 0 ? "M" : "L"} ${p.x.toFixed(2)} ${p.y.toFixed(2)}`).join(" ");
 
   const last = vals[vals.length - 1];
   const delta = last - vals[0];
@@ -167,7 +223,6 @@ function WeightSparkline({ points }: { points: WeightPoint[] }) {
           preserveAspectRatio="none"
           style={{ display: "block", width: "100%", height: H }}
         >
-          {/* горизонтальные пунктиры */}
           {Array.from({ length: gridY }).map((_, i) => {
             const y = padY + (i / (gridY - 1)) * (axisBottom - padY * 2);
             return (
@@ -183,7 +238,6 @@ function WeightSparkline({ points }: { points: WeightPoint[] }) {
             );
           })}
 
-          {/* вертикальные пунктиры */}
           {Array.from({ length: gridX }).map((_, i) => {
             const x = padX + (i / (gridX - 1)) * (W - padX * 2);
             return (
@@ -199,16 +253,8 @@ function WeightSparkline({ points }: { points: WeightPoint[] }) {
             );
           })}
 
-          {/* линия */}
-          <path
-            d={d}
-            fill="none"
-            stroke="rgba(0,0,0,0.6)"
-            strokeWidth="2"
-            strokeLinecap="round"
-          />
+          <path d={d} fill="none" stroke="rgba(0,0,0,0.6)" strokeWidth="2" strokeLinecap="round" />
 
-          {/* точки + значения */}
           {coords.map((p, i) => {
             const textDown = p.y < 24;
             const textY = textDown ? p.y + 14 : p.y - 10;
@@ -221,28 +267,16 @@ function WeightSparkline({ points }: { points: WeightPoint[] }) {
             return (
               <g key={i}>
                 <circle cx={p.x} cy={p.y} r="3.2" fill="rgba(0,0,0,0.65)" />
-                <text
-                  x={textX}
-                  y={textY}
-                  textAnchor={textAnchor}
-                  fontSize="10"
-                  fill="rgba(0,0,0,0.65)"
-                >
+                <text x={textX} y={textY} textAnchor={textAnchor} fontSize="10" fill="rgba(0,0,0,0.65)">
                   {fmtWeight(p.v)}
                 </text>
               </g>
             );
           })}
 
-          {/* подписи дат по оси X */}
           {coords.map((p, i) => {
-            const show =
-              i === 0 ||
-              i === coords.length - 1 ||
-              i === Math.floor(coords.length / 2);
-
+            const show = i === 0 || i === coords.length - 1 || i === Math.floor(coords.length / 2);
             if (!show) return null;
-
             return (
               <text
                 key={`dx-${i}`}
@@ -259,16 +293,15 @@ function WeightSparkline({ points }: { points: WeightPoint[] }) {
         </svg>
       )}
 
-      <div
-        className={styles.muted}
-        style={{ marginTop: 10, display: "flex", gap: 10, flexWrap: "wrap" }}
-      >
+      <div className={styles.muted} style={{ marginTop: 10, display: "flex", gap: 10, flexWrap: "wrap" }}>
         <span>Последний: {fmtWeight(last)} кг</span>
         <span>Результат: {deltaText}</span>
       </div>
     </div>
   );
 }
+
+/* ================== PAGE ================== */
 
 export default function SportPage() {
   const { deleteWorkout, loading: deleteLoading } = useDeleteWorkout();
@@ -284,20 +317,50 @@ export default function SportPage() {
   const [weight, setWeight] = useState<number | null>(null);
 
   const [weightPoints, setWeightPoints] = useState<WeightPoint[]>([]);
+  const [workouts, setWorkouts] = useState<Workout[]>([]);
 
   const [loading, setLoading] = useState(false);
   const [hint, setHint] = useState<string | null>(null);
-  const [workouts, setWorkouts] = useState<Workout[]>([]);
 
-  const todayKey = useMemo(() => ymd(new Date()), []);
+  const inFlightRef = useRef<AbortController | null>(null);
+
+  // ===== Calendar popup =====
+  const [calOpen, setCalOpen] = useState(false);
+  const [calDateKey, setCalDateKey] = useState<string | null>(null);
+  const [calWorkouts, setCalWorkouts] = useState<Workout[]>([]);
+  const [calActiveId, setCalActiveId] = useState<number | null>(null);
+  const [calLoading, setCalLoading] = useState(false);
+  const [calSummary, setCalSummary] = useState<WorkoutSummary | null>(null);
+
+  const [popPos, setPopPos] = useState({ left: 12, top: 12 });
+
+  const calAbortRef = useRef<AbortController | null>(null);
+  const calCacheRef = useRef(new Map<number, WorkoutSummary>());
+
+  // актуальные значения для записи кеша без устаревших замыканий
+  const stateRef = useRef({
+    revApp: 0,
+    firstName: "",
+    goal: "",
+    weight: null as number | null,
+    workouts: [] as Workout[],
+    weightPoints: [] as WeightPoint[],
+  });
+
+  useEffect(() => {
+    stateRef.current.firstName = firstName;
+    stateRef.current.goal = goal;
+    stateRef.current.weight = weight;
+    stateRef.current.workouts = workouts;
+    stateRef.current.weightPoints = weightPoints;
+  }, [firstName, goal, weight, workouts, weightPoints]);
+
   const now = useMemo(() => new Date(), []);
+  const todayKey = useMemo(() => ymd(new Date()), []);
   const year = now.getFullYear();
   const month = now.getMonth();
 
-  const doneWorkouts = useMemo(
-    () => workouts.filter((w) => w.status === "done" && Boolean(w.completed_at)),
-    [workouts]
-  );
+  const doneWorkouts = useMemo(() => workouts.filter((w) => w.status === "done" && Boolean(w.completed_at)), [workouts]);
 
   const workoutDays = useMemo(() => {
     const s = new Set<string>();
@@ -338,75 +401,161 @@ export default function SportPage() {
 
   const workoutsThisMonthSorted = useMemo(() => {
     const prefix = `${year}-${String(month + 1).padStart(2, "0")}-`;
-
     return doneWorkouts
       .filter((w) => ymd(new Date(w.completed_at!)).startsWith(prefix))
       .sort((a, b) => String(b.completed_at).localeCompare(String(a.completed_at)));
   }, [doneWorkouts, year, month]);
 
-  const statsIds = useMemo(
-    () => workoutsThisMonthSorted.filter((w) => w.type === "strength").map((w) => w.id),
-    [workoutsThisMonthSorted]
-  );
+  const statsIds = useMemo(() => workoutsThisMonthSorted.filter((w) => w.type === "strength").map((w) => w.id), [
+    workoutsThisMonthSorted,
+  ]);
   const { loading: statsLoading, data: statsByWorkoutId } = useWorkoutStats(statsIds);
 
   const hello = firstName.trim() ? `Привет, ${firstName.trim()}!` : "Привет!";
 
-  useEffect(() => {
-    (async () => {
-      setLoading(true);
-      setHint(null);
+  async function fetchAndApplyOverview(signal: AbortSignal) {
+    const r = await fetch("/api/sport/overview", {
+      credentials: "include",
+      signal,
+      cache: "no-store",
+    });
+    const j = await r.json().catch(() => ({} as any));
 
+    if (!r.ok || !j.ok) {
+      if (j?.reason === "NO_SESSION") return { ok: false as const, silent: true as const, msg: "" };
+      return { ok: false as const, silent: false as const, msg: j?.error || j?.reason || "Не смог загрузить обзор" };
+    }
+
+    const nextFirstName = String(j.first_name || j.firstName || "").trim();
+    const nextGoal = String(j.goal || "").trim();
+    const nextWeight = j.weight === null || j.weight === undefined ? null : Number(j.weight);
+
+    const workoutsMapped: Workout[] = (j.workouts || []).map((x: any) => ({
+      id: Number(x.id),
+      title: String(x.title || "").trim() || "Без названия",
+      workout_date: String(x.workout_date || ""),
+      type: x.type === "cardio" ? "cardio" : "strength",
+      duration_min: x.duration_min == null ? null : Number(x.duration_min),
+      status: x.status === "done" ? "done" : "draft",
+      completed_at: x.completed_at == null ? null : String(x.completed_at),
+      created_at: x.created_at == null ? null : String(x.created_at),
+    }));
+
+    let wp: WeightPoint[] = [];
+    const rP = await fetch("/api/sport/profile", {
+      credentials: "include",
+      signal,
+      cache: "no-store",
+    });
+    const jP = await rP.json().catch(() => ({} as any));
+
+    if (rP.ok && jP.ok && Array.isArray(jP.weight_history)) {
+      wp = jP.weight_history
+        .map((p: any) => ({
+          value: Number(p.value),
+          measured_at: String(p.measured_at || ""),
+        }))
+        .filter((p: any) => Number.isFinite(p.value) && p.measured_at);
+
+      wp.sort((a, b) => a.measured_at.localeCompare(b.measured_at));
+      wp = wp.slice(-15);
+    }
+
+    setFirstName(nextFirstName);
+    setGoal(nextGoal);
+    setWeight(nextWeight);
+    setWorkouts(workoutsMapped);
+    setWeightPoints(wp);
+
+    writeOverviewCache({
+      revApp: stateRef.current.revApp,
+      firstName: nextFirstName,
+      goal: nextGoal,
+      weight: nextWeight,
+      workouts: workoutsMapped,
+      weightPoints: wp,
+    });
+
+    return { ok: true as const };
+  }
+
+  async function loadOverview(opts?: { force?: boolean }) {
+    const force = Boolean(opts?.force);
+
+    const cached = !force ? readOverviewCache() : null;
+    if (cached) {
+      stateRef.current.revApp = cached.revApp;
+      setFirstName(cached.firstName);
+      setGoal(cached.goal);
+      setWeight(cached.weight);
+      setWorkouts(cached.workouts);
+      setWeightPoints(cached.weightPoints);
+    }
+
+    if (inFlightRef.current) {
       try {
-        // 1) overview
-        const r = await fetch("/api/sport/overview", { credentials: "include" });
-        const j = await r.json().catch(() => ({} as any));
+        inFlightRef.current.abort();
+      } catch {}
+    }
+    const ac = new AbortController();
+    inFlightRef.current = ac;
 
-        if (!r.ok || !j.ok) {
-          if (j?.reason === "NO_SESSION") return;
-          setHint(j?.error || j?.reason || "Не смог загрузить обзор");
-          return;
-        }
+    setHint(null);
+    if (!cached) setLoading(true);
 
-        setFirstName(String(j.first_name || j.firstName || "").trim());
-        setGoal(String(j.goal || "").trim());
-        setWeight(j.weight === null || j.weight === undefined ? null : Number(j.weight));
+    try {
+      const revNow = await fetchAppRev(ac.signal);
 
-        const mapped: Workout[] = (j.workouts || []).map((x: any) => ({
-          id: Number(x.id),
-          title: String(x.title || "").trim() || "Без названия",
-          workout_date: String(x.workout_date || ""),
-          type: x.type === "cardio" ? "cardio" : "strength",
-          duration_min: x.duration_min == null ? null : Number(x.duration_min),
-          status: x.status === "done" ? "done" : "draft",
-          completed_at: x.completed_at == null ? null : String(x.completed_at),
-          created_at: x.created_at == null ? null : String(x.created_at),
-        }));
-        setWorkouts(mapped);
-
-        // 2) веса для графика (последние 10)
-        const rP = await fetch("/api/sport/profile", { credentials: "include" });
-        const jP = await rP.json().catch(() => ({} as any));
-
-        if (rP.ok && jP.ok && Array.isArray(jP.weight_history)) {
-          const series: WeightPoint[] = jP.weight_history
-            .map((p: any) => ({
-              value: Number(p.value),
-              measured_at: String(p.measured_at || ""),
-            }))
-            .filter((p: any) => Number.isFinite(p.value) && p.measured_at);
-
-          series.sort((a, b) => a.measured_at.localeCompare(b.measured_at));
-          setWeightPoints(series.slice(-15));
-        } else {
-          setWeightPoints([]);
-        }
-      } catch (e: any) {
-        setHint(String(e?.message || e));
-      } finally {
-        setLoading(false);
+      if (revNow == null) {
+        if (cached && isCacheFresh(cached.savedAt)) return;
+      } else {
+        if (cached && !force && cached.revApp === revNow) return;
+        stateRef.current.revApp = revNow;
       }
-    })();
+
+      const res = await fetchAndApplyOverview(ac.signal);
+      if (!res.ok) {
+        if (!res.silent) setHint(res.msg);
+        return;
+      }
+    } catch (e: any) {
+      if (e?.name === "AbortError") return;
+      setHint(String(e?.message || e));
+    } finally {
+      if (inFlightRef.current === ac) inFlightRef.current = null;
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    loadOverview();
+
+    return () => {
+      if (inFlightRef.current) {
+        try {
+          inFlightRef.current.abort();
+        } catch {}
+      }
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    function onRefresh() {
+      loadOverview({ force: true });
+    }
+    window.addEventListener("sport:refresh", onRefresh as EventListener);
+    return () => window.removeEventListener("sport:refresh", onRefresh as EventListener);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    function onVis() {
+      if (document.visibilityState === "visible") loadOverview();
+    }
+    document.addEventListener("visibilitychange", onVis);
+    return () => document.removeEventListener("visibilitychange", onVis);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   function askDelete(id: number) {
@@ -433,7 +582,140 @@ export default function SportPage() {
 
     setShowConfirm(false);
     setDeleteId(null);
-    setWorkouts((prev) => prev.filter((w) => w.id !== id));
+
+    setWorkouts((prev) => {
+      const next = prev.filter((w) => w.id !== id);
+
+      writeOverviewCache({
+        revApp: stateRef.current.revApp,
+        firstName: stateRef.current.firstName,
+        goal: stateRef.current.goal,
+        weight: stateRef.current.weight,
+        workouts: next,
+        weightPoints: stateRef.current.weightPoints,
+      });
+
+      return next;
+    });
+
+    window.dispatchEvent(new Event("sport:refresh"));
+  }
+
+  function workoutsByDateKey(all: Workout[], dateKey: string) {
+    return all
+      .filter((w) => w.completed_at && ymd(new Date(w.completed_at)) === dateKey)
+      .sort((a, b) => String(b.completed_at).localeCompare(String(a.completed_at)));
+  }
+
+  async function fetchWorkoutSummary(workoutId: number, signal?: AbortSignal) {
+    const cached = calCacheRef.current.get(workoutId);
+    if (cached) return cached;
+
+    const r = await fetch(`/api/sport/workouts/summary?workout_id=${workoutId}`, {
+      credentials: "include",
+      cache: "no-store",
+      signal,
+    });
+
+    const j = await r.json().catch(() => ({} as any));
+    if (!r.ok || !j?.ok) throw new Error(j?.error || j?.reason || "Не смог загрузить тренировку");
+
+    const data: WorkoutSummary = {
+      workout: {
+        id: Number(j?.workout?.id),
+        title: String(j?.workout?.title || "").trim() || "Без названия",
+        completed_at: j?.workout?.completed_at ? String(j.workout.completed_at) : null,
+      },
+      exercises: Array.isArray(j?.exercises)
+        ? j.exercises
+            .map((x: any) => ({ id: Number(x.id), name: String(x.name || "").trim() }))
+            .filter((x: any) => Number.isFinite(x.id) && x.id > 0 && x.name)
+        : [],
+    };
+
+    calCacheRef.current.set(workoutId, data);
+    return data;
+  }
+
+  // ВАЖНО: anchorEl нужен, чтобы поставить попап "поверх" в нужном месте
+  async function openCalendarPopup(date: Date, anchorEl: HTMLElement) {
+    const wrap = anchorEl.closest(`.${styles.calWrap}`) as HTMLElement | null;
+    const wrapRect = wrap?.getBoundingClientRect();
+    const aRect = anchorEl.getBoundingClientRect();
+
+    const baseLeft = wrapRect ? aRect.left - wrapRect.left : 12;
+    const baseTop = wrapRect ? aRect.top - wrapRect.top : 12;
+
+    const popW = 270;
+    const popH = 240;
+
+    const wrapW = wrapRect?.width ?? 360;
+    const wrapH = wrapRect?.height ?? 420;
+
+    let left = baseLeft + aRect.width + 10;
+    let top = baseTop;
+
+    if (left + popW > wrapW - 8) left = Math.max(8, baseLeft - popW - 10);
+    if (top + popH > wrapH - 8) top = Math.max(8, wrapH - popH - 8);
+    if (top < 8) top = 8;
+
+    setPopPos({ left, top });
+
+    const key = ymd(date);
+    const list = workoutsByDateKey(workouts, key);
+
+    setCalDateKey(key);
+    setCalWorkouts(list);
+    setCalOpen(true);
+    setCalSummary(null);
+
+    const firstId = list[0]?.id ?? null;
+    setCalActiveId(firstId);
+
+    if (!firstId) return;
+
+    if (calAbortRef.current) {
+      try {
+        calAbortRef.current.abort();
+      } catch {}
+    }
+    const ac = new AbortController();
+    calAbortRef.current = ac;
+
+    setCalLoading(true);
+    try {
+      const s = await fetchWorkoutSummary(firstId, ac.signal);
+      setCalSummary(s);
+    } catch {
+      setCalSummary(null);
+    } finally {
+      if (calAbortRef.current === ac) calAbortRef.current = null;
+      setCalLoading(false);
+    }
+  }
+
+  async function switchPopupWorkout(workoutId: number) {
+    setCalActiveId(workoutId);
+    setCalSummary(null);
+
+    if (calAbortRef.current) {
+      try {
+        calAbortRef.current.abort();
+      } catch {}
+    }
+    const ac = new AbortController();
+    calAbortRef.current = ac;
+
+    setCalLoading(true);
+    try {
+      const s = await fetchWorkoutSummary(workoutId, ac.signal);
+      setCalSummary(s);
+    } catch {
+      setCalSummary(null);
+    } finally {
+      if (calAbortRef.current === ac) calAbortRef.current = null;
+      setCalLoading(false);
+    }
   }
 
   return (
@@ -507,33 +789,112 @@ export default function SportPage() {
             <div className={styles.muted}>Тренировок в этом месяце: {trainingsThisMonth}</div>
           </div>
 
-          <div className={styles.calWeekdays}>
-            {["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"].map((x) => (
-              <div key={x} className={styles.calWeekday}>
-                {x}
-              </div>
-            ))}
-          </div>
-
-          <div className={styles.calGrid}>
-            {calendar.map((cell) => {
-              if (!cell.date) return <div key={cell.key} className={styles.calCellEmpty} />;
-
-              const key = ymd(cell.date);
-              const hasWorkout = workoutDays.has(key);
-              const isToday = key === todayKey;
-
-              return (
-                <div
-                  key={cell.key}
-                  className={`${styles.calCell} ${isToday ? styles.calCellToday : ""}`}
-                  title={key}
-                >
-                  <span className={styles.calDayNum}>{cell.date.getDate()}</span>
-                  {hasWorkout ? <span className={styles.calDot} /> : null}
+          {/* ВАЖНО: обертка для абсолютного позиционирования попапа */}
+          <div className={styles.calWrap}>
+            <div className={styles.calWeekdays}>
+              {["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"].map((x) => (
+                <div key={x} className={styles.calWeekday}>
+                  {x}
                 </div>
-              );
-            })}
+              ))}
+            </div>
+
+            <div className={styles.calGrid}>
+              {calendar.map((cell) => {
+                if (!cell.date) return <div key={cell.key} className={styles.calCellEmpty} />;
+
+                const key = ymd(cell.date);
+                const hasWorkout = workoutDays.has(key);
+                const isToday = key === todayKey;
+
+                return (
+                  <button
+                    key={cell.key}
+                    type="button"
+                    className={`${styles.calCellBtn} ${styles.calCell} ${isToday ? styles.calCellToday : ""}`}
+                    title={key}
+                    onClick={(e) => openCalendarPopup(cell.date!, e.currentTarget)}
+                  >
+                    <span className={styles.calDayNum}>{cell.date.getDate()}</span>
+                    {hasWorkout ? <span className={styles.calDot} /> : null}
+                  </button>
+                );
+              })}
+            </div>
+
+            {calOpen && (
+              <>
+                {/* оверлей внутри календаря */}
+                <button
+                  type="button"
+                  className={styles.calOverlay}
+                  onClick={() => setCalOpen(false)}
+                  aria-label="Закрыть"
+                />
+
+                {/* попап поверх календаря */}
+                <div className={styles.calPopover} style={{ left: popPos.left, top: popPos.top }} role="dialog">
+                  <div className={styles.calPopupHead}>
+                    <div className={styles.calPopupTitle}>{calSummary?.workout?.title ? calSummary.workout.title : calLoading ? "Загружаю…" : "—"} </div>
+                    <button type="button" className={styles.calPopupClose} onClick={() => setCalOpen(false)}>
+                      ✕
+                    </button>
+                  </div>
+
+                  {calWorkouts.length === 0 ? (
+                    <div className={styles.muted}>В этот день тренировок нет</div>
+                  ) : (
+                    <>
+                      {calWorkouts.length > 1 && (
+                        <div className={styles.calPopupTabs}>
+                          {calWorkouts.map((w) => (
+                            <button
+                              key={w.id}
+                              type="button"
+                              className={`${styles.calPopupTab} ${
+                                calActiveId === w.id ? styles.calPopupTabActive : ""
+                              }`}
+                              onClick={() => switchPopupWorkout(w.id)}
+                            >
+                              {w.title || "Без названия"}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+
+                      {calLoading ? (
+                        <div className={styles.muted}>Загружаю…</div>
+                      ) : !calSummary ? (
+                        <div className={styles.muted}>Не удалось загрузить данные</div>
+                      ) : (
+                        <div className={styles.calPopupBody}>
+                          {/*<div className={styles.calPopupWorkoutTitle}>{calSummary.workout.title}</div>*/}
+                          <div className={styles.muted}>
+                            {calSummary.workout.completed_at
+                              ? new Date(calSummary.workout.completed_at).toLocaleString("ru-RU")
+                              : ""}
+                          </div>
+
+                          <div className={styles.calPopupSection}>
+                            {/*<div className={styles.calPopupSectionTitle}>Упражнения</div>*/}
+
+                            {calSummary.exercises.length ? (
+                              <ul className={styles.muted}>
+                                {calSummary.exercises.map((ex) => (
+                                  <li key={ex.id}>{ex.name}</li>
+                                ))}
+                              </ul>
+                            ) : (
+                              <div className={styles.muted}>Упражнений пока нет</div>
+                            )}
+                          </div>
+                        </div>
+                      )}
+                    </>
+                  )}
+                </div>
+              </>
+            )}
           </div>
         </section>
 

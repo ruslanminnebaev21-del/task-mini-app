@@ -45,10 +45,8 @@ function parseMeasuredDate(v: any): string | null {
   const s = String(v).trim();
   if (!s) return null;
 
-  // если уже YYYY-MM-DD
   if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
 
-  // если прилетел ISO/дата-строка
   const d = new Date(s);
   if (Number.isNaN(d.getTime())) return null;
 
@@ -94,7 +92,7 @@ async function upsertMeasurement(params: {
   uid: number;
   kind: string;
   value: number | null;
-  unit: string; // ВАЖНО: в таблице unit NOT NULL
+  unit: string; // NOT NULL
   measured_at: string; // YYYY-MM-DD
 }) {
   const { uid, kind, value, unit, measured_at } = params;
@@ -112,7 +110,6 @@ async function upsertMeasurement(params: {
     return { ok: true };
   }
 
-  // удалить старую запись на эту дату (если была)
   const { error: delErr } = await supabaseAdmin
     .from("sport_measurements")
     .delete()
@@ -122,17 +119,22 @@ async function upsertMeasurement(params: {
 
   if (delErr) return { ok: false, error: delErr.message };
 
-  // вставить новую
   const { error: insErr } = await supabaseAdmin.from("sport_measurements").insert({
     user_id: uid,
     kind,
     value,
-    unit, // NOT NULL
+    unit,
     measured_at,
   });
 
   if (insErr) return { ok: false, error: insErr.message };
   return { ok: true };
+}
+
+async function bumpAppRev(uid: number) {
+  // предполагаем, что у тебя есть функция bump_app_rev(p_uid bigint)
+  const { error } = await supabaseAdmin.rpc("bump_app_rev", { p_uid: uid });
+  if (error) throw new Error(error.message);
 }
 
 // GET /api/sport/profile
@@ -141,7 +143,6 @@ export async function GET() {
   if (!uid) return NextResponse.json({ ok: false, reason: "NO_SESSION" }, { status: 401 });
 
   try {
-    // 1) цель
     const { data: prof, error: profErr } = await supabaseAdmin
       .from("sport_profile")
       .select("goal")
@@ -152,7 +153,6 @@ export async function GET() {
       return NextResponse.json({ ok: false, reason: "DB_ERROR", error: profErr.message }, { status: 500 });
     }
 
-    // 2) история веса (последние 15 по дате)
     const { data: rows, error: wErr } = await supabaseAdmin
       .from("sport_measurements")
       .select("value, measured_at, created_at")
@@ -176,17 +176,13 @@ export async function GET() {
     mapped.sort((a, b) => a.measured_at.localeCompare(b.measured_at));
     const last = mapped.length ? mapped[mapped.length - 1] : null;
 
-    // 3) последние замеры тела и состава (по каждому kind берём самый свежий measured_at)
     const wantedKinds = [
-      // sizes
       "size_chest",
       "size_waist",
       "size_belly",
       "size_pelvis",
       "size_thigh",
       "size_arm",
-
-      // comp
       "comp_water",
       "comp_protein",
       "comp_minerals",
@@ -208,7 +204,6 @@ export async function GET() {
       return NextResponse.json({ ok: false, reason: "DB_ERROR", error: mErr.message }, { status: 500 });
     }
 
-    // берём первый попавшийся kind в отсортированном списке => это самый свежий
     const latestByKind = new Map<string, { value: number; measured_at: string; unit: string }>();
 
     for (const r of mRows || []) {
@@ -223,8 +218,8 @@ export async function GET() {
         String((r as any).measured_at || "").trim() || String((r as any).created_at || "").slice(0, 10);
 
       const unit = String((r as any).unit || "").trim() || "";
-
       if (!measured_at) continue;
+
       latestByKind.set(kind, { value, measured_at, unit });
     }
 
@@ -282,8 +277,6 @@ export async function GET() {
 }
 
 // PATCH /api/sport/profile
-// body: { goal?: string, weight?: number|string|null, measured_at?: string,
-//         body_sizes?: {..., measured_at: string}, body_comp?: {..., measured_at: string} }
 export async function PATCH(req: Request) {
   const uid = await getUidFromSession();
   if (!uid) return NextResponse.json({ ok: false, reason: "NO_SESSION" }, { status: 401 });
@@ -299,6 +292,9 @@ export async function PATCH(req: Request) {
     return NextResponse.json({ ok: false, reason: "NO_FIELDS" }, { status: 400 });
   }
 
+  // если хоть что-то реально успешно поменяли — bump в конце
+  let didMutate = false;
+
   // 1) цель
   if (hasGoal) {
     const goal = String(body?.goal ?? "").trim();
@@ -310,30 +306,32 @@ export async function PATCH(req: Request) {
     if (error) {
       return NextResponse.json({ ok: false, reason: "DB_ERROR", error: error.message }, { status: 500 });
     }
+
+    didMutate = true;
   }
 
-  // 2) вес
+  // 2) вес (важно: weight:null => удаляем запись на measured_at/сегодня)
   if (hasWeight) {
     const parsed = parseWeight(body?.weight);
     if (parsed === "BAD") {
       return NextResponse.json({ ok: false, reason: "BAD_WEIGHT" }, { status: 400 });
     }
 
-    if (parsed !== null) {
-      const measuredDate = parseMeasuredDate(body?.measured_at) || todayYmd();
+    const measuredDate = parseMeasuredDate(body?.measured_at) || todayYmd();
 
-      const res = await upsertMeasurement({
-        uid,
-        kind: "weight",
-        value: parsed,
-        unit: "kg",
-        measured_at: measuredDate,
-      });
+    const res = await upsertMeasurement({
+      uid,
+      kind: "weight",
+      value: parsed, // может быть null => удалить
+      unit: "kg",
+      measured_at: measuredDate,
+    });
 
-      if (!res.ok) {
-        return NextResponse.json({ ok: false, reason: "DB_ERROR", error: res.error }, { status: 500 });
-      }
+    if (!res.ok) {
+      return NextResponse.json({ ok: false, reason: "DB_ERROR", error: res.error }, { status: 500 });
     }
+
+    didMutate = true;
   }
 
   // 3) замеры тела (см)
@@ -368,6 +366,8 @@ export async function PATCH(req: Request) {
         return NextResponse.json({ ok: false, reason: "DB_ERROR", error: res.error }, { status: 500 });
       }
     }
+
+    didMutate = true;
   }
 
   // 4) состав тела
@@ -375,10 +375,6 @@ export async function PATCH(req: Request) {
     const bc = body?.body_comp || {};
     const measuredDate = parseMeasuredDate(bc?.measured_at) || todayYmd();
 
-    // единицы храним так:
-    // water/protein/minerals/fat_percent -> %
-    // body_fat -> kg (как ты сказал)
-    // bmi, visceral_fat -> unit тоже обязателен, дадим "idx"
     const map: Array<[string, any, { min?: number; max?: number }, string]> = [
       ["water", bc.water, { min: 0, max: 100 }, "%"],
       ["protein", bc.protein, { min: 0, max: 100 }, "%"],
@@ -399,13 +395,26 @@ export async function PATCH(req: Request) {
         uid,
         kind: `comp_${k}`,
         value: val,
-        unit, // NOT NULL, всегда строка
+        unit,
         measured_at: measuredDate,
       });
 
       if (!res.ok) {
         return NextResponse.json({ ok: false, reason: "DB_ERROR", error: res.error }, { status: 500 });
       }
+    }
+
+    didMutate = true;
+  }
+
+  // bump ревизии (чтобы app_updated_at прыгнул и кэши на всех страницах обновились)
+  if (didMutate) {
+    try {
+      await bumpAppRev(uid);
+    } catch (e: any) {
+      // данные уже сохранены, поэтому не роняем запрос.
+      // но если хочешь "жёстко", скажи — сделаем return 500 и будем чинить права/функцию.
+      console.log("BUMP_APP_REV_FAILED:", String(e?.message || e));
     }
   }
 

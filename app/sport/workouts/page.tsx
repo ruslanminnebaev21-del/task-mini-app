@@ -1,16 +1,16 @@
-// app/sport/workouts/page.tsx
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import AppMenu from "@/app/components/AppMenu/AppMenu";
 import styles from "../sport.module.css";
-import { IconTrash, IconArrow, IconUser, IconStats, IconCopy, IconHome, IconEdit } from "@/app/components/icons";
+import { IconTrash, IconArrow, IconUser, IconStats, IconHome } from "@/app/components/icons";
 import { useRouter, usePathname } from "next/navigation";
 import { useWorkoutStats } from "@/app/hooks/useWorkoutStats";
 import { useDeleteWorkout } from "@/app/hooks/useDeleteWorkout";
 import { useCopyWorkout } from "@/app/hooks/useCopyWorkout";
 
+/* ================== TABS ================== */
 
 type Tab = {
   label: string;
@@ -27,7 +27,6 @@ const TABS: Tab[] = [
 ];
 
 function isActiveTab(pathname: string, href: string) {
-  if (href === "/sport") return pathname === "/sport";
   return pathname === href || pathname.startsWith(href + "/");
 }
 
@@ -35,10 +34,10 @@ function renderTabIcon(icon?: Tab["icon"]) {
   if (!icon) return null;
 
   switch (icon) {
-    case "user":
-      return <IconUser className={styles.tabIcon} />;
     case "home":
       return <IconHome className={styles.tabIcon} />;
+    case "user":
+      return <IconUser className={styles.tabIcon} />;
     case "dumbbell":
       return <IconStats className={styles.tabIcon} />;
     default:
@@ -46,90 +45,87 @@ function renderTabIcon(icon?: Tab["icon"]) {
   }
 }
 
+/* ================== CACHE ================== */
+
+const WORKOUTS_CACHE_KEY = "sport_workouts_cache_v2"; // сменил ключ, чтобы не спорить со старым форматом
+
 type WorkoutType = "strength" | "cardio";
-type DraftStatus = "draft" | "done";
 
 type DraftWorkout = {
   id: number;
   title: string;
   type: WorkoutType;
-  workout_date: string; // YYYY-MM-DD
+  workout_date: string;
   duration_min?: number | null;
-  notes?: string | null;
-  status: DraftStatus;
+  status: "draft";
 };
 
 type DoneWorkout = {
   id: number;
   title: string;
   type: WorkoutType;
-  workout_date: string; // YYYY-MM-DD
+  workout_date: string;
   duration_min?: number | null;
-  notes?: string | null;
-  status: DraftStatus; // будет "done"
+  status: "done";
   completed_at?: string | null;
 };
 
-function formatDateRu(dateStr: string) {
-  if (!dateStr) return "";
-  const [y, m, d] = dateStr.split("-");
-  return `${d}.${m}.${y}`;
+type WorkoutsCache = {
+  savedAt: number;
+  revWorkouts: number;
+  drafts: DraftWorkout[];
+  done: DoneWorkout[];
+};
+
+function canUseStorage() {
+  return typeof window !== "undefined" && typeof sessionStorage !== "undefined";
 }
 
-function typeLabel(t: WorkoutType) {
-  return t === "strength" ? "Силовая" : "Кардио";
+function readCacheSafe(): WorkoutsCache | null {
+  if (!canUseStorage()) return null;
+
+  try {
+    const raw = sessionStorage.getItem(WORKOUTS_CACHE_KEY);
+    if (!raw) return null;
+
+    const parsed = JSON.parse(raw);
+    if (!parsed) return null;
+
+    if (typeof parsed.savedAt !== "number") return null;
+    if (typeof parsed.revWorkouts !== "number") return null;
+
+    return parsed as WorkoutsCache;
+  } catch {
+    return null;
+  }
 }
+
+function writeCacheSafe(data: Omit<WorkoutsCache, "savedAt">) {
+  if (!canUseStorage()) return;
+
+  try {
+    sessionStorage.setItem(
+      WORKOUTS_CACHE_KEY,
+      JSON.stringify({ savedAt: Date.now(), ...data })
+    );
+  } catch {}
+}
+
+function clearCacheSafe() {
+  if (!canUseStorage()) return;
+  try {
+    sessionStorage.removeItem(WORKOUTS_CACHE_KEY);
+  } catch {}
+}
+
+/* ================== PAGE ================== */
 
 export default function SportWorkoutsPage() {
   const router = useRouter();
   const pathname = usePathname();
+
   const { deleteWorkout, loading: deleteLoading } = useDeleteWorkout();
-
   const { copyWorkout, loading: copyLoading } = useCopyWorkout();
-  const [copyId, setCopyId] = useState<number | null>(null);
-
-  async function reloadDrafts() {
-    try {
-      const r = await fetch("/api/sport/workouts?status=draft", { credentials: "include" });
-      const j = await r.json().catch(() => ({} as any));
-      if (!r.ok || !j.ok) return;
-
-      const mapped: DraftWorkout[] = (j.workouts || []).map((x: any) => ({
-        id: Number(x.id),
-        title: String(x.title || "").trim() || "Без названия",
-        type: (x.type === "cardio" ? "cardio" : "strength") as WorkoutType,
-        workout_date: String(x.workout_date || ""),
-        duration_min: x.duration_min == null ? null : Number(x.duration_min),
-        notes: null,
-        status: "draft" as const,
-      }));
-
-      setDrafts(mapped);
-    } catch {}
-  }
-  async function handleCopy(id: number) {
-    if (copyLoading) return;
-
-    setHint(null);
-    setCopyId(id);
-
-    try {
-      const res = await copyWorkout(id);
-
-      if (!res?.ok) {
-        setHint(res?.error || "Не смог скопировать тренировку");
-        return;
-      }
-
-      // покажем результат сразу
-      await reloadDrafts();
-
-      // можно еще сделать мягкий текст
-      // setHint("Скопировано в черновики");
-    } finally {
-      setCopyId(null);
-    }
-  }  
 
   const [drafts, setDrafts] = useState<DraftWorkout[]>([]);
   const [done, setDone] = useState<DoneWorkout[]>([]);
@@ -139,75 +135,200 @@ export default function SportWorkoutsPage() {
   const [showConfirm, setShowConfirm] = useState(false);
   const [deleteId, setDeleteId] = useState<number | null>(null);
 
-  const draftItems = useMemo(() => drafts.filter((x) => x.status === "draft"), [drafts]);
-  const doneItems = useMemo(() => done.filter((x) => x.status === "done"), [done]);
+  const [copyId, setCopyId] = useState<number | null>(null);
 
-  // СТАТЫ СЧИТАЕМ ТОЛЬКО ДЛЯ ВЫПОЛНЕННЫХ (и только силовых)
+  const inFlightRef = useRef<AbortController | null>(null);
+
+  const mountedRef = useRef(false);
+
+  const revRef = useRef<number>(0); // актуальная ревизия с сервера (workouts)
+  const draftsRef = useRef<DraftWorkout[]>([]);
+  const doneRef = useRef<DoneWorkout[]>([]);
+
+  useEffect(() => {
+    draftsRef.current = drafts;
+  }, [drafts]);
+
+  useEffect(() => {
+    doneRef.current = done;
+  }, [done]);
+
+  const draftItems = useMemo(() => drafts, [drafts]);
+  const doneItems = useMemo(() => done, [done]);
+
   const statsIds = useMemo(
     () => doneItems.filter((w) => w.type === "strength").map((w) => w.id),
     [doneItems]
   );
-
   const { loading: statsLoading, data: statsByWorkoutId } = useWorkoutStats(statsIds);
 
-  useEffect(() => {
-    (async () => {
-      setLoading(true);
-      setHint(null);
+  /* ================== API ================== */
 
+  async function fetchRev(): Promise<number | null> {
+    try {
+      const r = await fetch("/api/sport/rev", { credentials: "include", cache: "no-store" });
+      const j = await r.json().catch(() => ({} as any));
+      if (!r.ok || !j?.ok) return null;
+      const n = Number(j?.rev?.workouts ?? 0);
+      return Number.isFinite(n) ? n : 0;
+    } catch {
+      return null;
+    }
+  }
+
+  async function fetchWorkoutsList(ac: AbortController) {
+    const [rDraft, rDone] = await Promise.all([
+      fetch("/api/sport/workouts?status=draft", {
+        credentials: "include",
+        signal: ac.signal,
+        cache: "no-store",
+      }),
+      fetch("/api/sport/workouts?status=done", {
+        credentials: "include",
+        signal: ac.signal,
+        cache: "no-store",
+      }),
+    ]);
+
+    const jDraft = await rDraft.json().catch(() => ({} as any));
+    const jDone = await rDone.json().catch(() => ({} as any));
+
+    if (!rDraft.ok || !jDraft.ok) throw new Error(jDraft?.error || "draft load failed");
+    if (!rDone.ok || !jDone.ok) throw new Error(jDone?.error || "done load failed");
+
+    const draftsMapped: DraftWorkout[] = (jDraft.workouts || []).map((x: any) => ({
+      id: Number(x.id),
+      title: String(x.title || "").trim() || "Без названия",
+      type: x.type === "cardio" ? "cardio" : "strength",
+      workout_date: String(x.workout_date || ""),
+      duration_min: x.duration_min ?? null,
+      status: "draft",
+    }));
+
+    const doneMapped: DoneWorkout[] = (jDone.workouts || [])
+      .map((x: any) => ({
+        id: Number(x.id),
+        title: String(x.title || "").trim() || "Без названия",
+        type: x.type === "cardio" ? "cardio" : "strength",
+        workout_date: String(x.workout_date || ""),
+        duration_min: x.duration_min ?? null,
+        status: "done",
+        completed_at: x.completed_at ?? null,
+      }))
+      .sort((a: { completed_at?: string | null }, b: { completed_at?: string | null }) =>
+        String(b.completed_at || "").localeCompare(String(a.completed_at || ""))
+      )
+
+    return { draftsMapped, doneMapped };
+  }
+
+  async function syncFromServer(opts?: { force?: boolean }) {
+    const force = Boolean(opts?.force);
+
+    // отменяем прошлый запрос (это нормально, что в Network будет "canceled")
+    if (inFlightRef.current) {
       try {
-        const r = await fetch("/api/sport/workouts?status=draft", { credentials: "include" });
-        const j = await r.json().catch(() => ({} as any));
+        inFlightRef.current.abort();
+      } catch {}
+    }
 
-        if (!r.ok || !j.ok) {
-          if (j?.reason === "NO_SESSION") {
-            setHint("Нет сессии (NO_SESSION). Открой миниапп через Telegram или проверь cookie session.");
-          } else {
-            setHint(j?.error || j?.reason || `HTTP ${r.status}`);
-          }
-          return;
+    const ac = new AbortController();
+    inFlightRef.current = ac;
+
+    setHint(null);
+
+    try {
+      // 1) берем ревизию
+      const serverRev = await fetchRev();
+      if (serverRev == null) {
+        // рев не получили — не убиваем UX, просто принудительно пробуем загрузить
+        if (force) {
+          setLoading(true);
+          const { draftsMapped, doneMapped } = await fetchWorkoutsList(ac);
+          setDrafts(draftsMapped);
+          setDone(doneMapped);
+          writeCacheSafe({ revWorkouts: revRef.current || 0, drafts: draftsMapped, done: doneMapped });
         }
-
-        const mapped: DraftWorkout[] = (j.workouts || []).map((x: any) => ({
-          id: Number(x.id),
-          title: String(x.title || "").trim() || "Без названия",
-          type: (x.type === "cardio" ? "cardio" : "strength") as WorkoutType,
-          workout_date: String(x.workout_date || ""),
-          duration_min: x.duration_min == null ? null : Number(x.duration_min),
-          notes: null,
-          status: "draft" as const,
-        }));
-
-        setDrafts(mapped);
-
-        const r2 = await fetch("/api/sport/workouts?status=done", { credentials: "include" });
-        const j2 = await r2.json().catch(() => ({} as any));
-
-        if (r2.ok && j2.ok) {
-          const mappedDone: DoneWorkout[] = (j2.workouts || []).map((x: any) => ({
-            id: Number(x.id),
-            title: String(x.title || "").trim() || "Без названия",
-            type: (x.type === "cardio" ? "cardio" : "strength") as WorkoutType,
-            workout_date: String(x.workout_date || ""),
-            duration_min: x.duration_min == null ? null : Number(x.duration_min),
-            notes: null,
-            status: "done" as const,
-            completed_at: x.completed_at == null ? null : String(x.completed_at),
-          }));
-
-          mappedDone.sort((a, b) =>
-            String(b.completed_at || "").localeCompare(String(a.completed_at || ""))
-          );
-
-          setDone(mappedDone);
-        }
-      } catch (e: any) {
-        setHint(String(e?.message || e));
-      } finally {
-        setLoading(false);
+        return;
       }
-    })();
+
+      // 2) если не force — сравниваем с кешем/локальной ревизией
+      const cached = readCacheSafe();
+      const localRev = cached?.revWorkouts ?? revRef.current ?? 0;
+
+      revRef.current = serverRev;
+
+      if (!force && cached && localRev === serverRev) {
+        // ничего не изменилось на сервере — не дергаем workouts
+        return;
+      }
+
+      // 3) иначе грузим список
+      setLoading(true);
+      const { draftsMapped, doneMapped } = await fetchWorkoutsList(ac);
+
+      setDrafts(draftsMapped);
+      setDone(doneMapped);
+
+      writeCacheSafe({ revWorkouts: serverRev, drafts: draftsMapped, done: doneMapped });
+    } catch (e: any) {
+      if (e?.name !== "AbortError") setHint(String(e?.message || e));
+    } finally {
+      if (inFlightRef.current === ac) inFlightRef.current = null;
+      setLoading(false);
+    }
+  }
+
+  /* ================== INIT ================== */
+
+  useEffect(() => {
+    mountedRef.current = true;
+
+    // 1) сначала мгновенно рисуем кеш, если есть
+    const cached = readCacheSafe();
+    if (cached) {
+      revRef.current = cached.revWorkouts || 0;
+      setDrafts(cached.drafts || []);
+      setDone(cached.done || []);
+    }
+
+    // 2) потом проверяем ревизию и при необходимости тянем список
+    syncFromServer();
+
+    return () => {
+      mountedRef.current = false;
+      if (inFlightRef.current) {
+        try {
+          inFlightRef.current.abort();
+        } catch {}
+      }
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // кнопка "Обновить" из меню
+  useEffect(() => {
+    function onRefresh() {
+      clearCacheSafe();
+      syncFromServer({ force: true });
+    }
+
+    window.addEventListener("sport:refresh", onRefresh as EventListener);
+    return () => window.removeEventListener("sport:refresh", onRefresh as EventListener);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  /* ================== HELPERS ================== */
+
+  function typeLabel(t: WorkoutType) {
+    return t === "strength" ? "Силовая" : "Кардио";
+  }
+
+  function formatDateRu(dateStr: string) {
+    if (!dateStr) return "";
+    const [y, m, d] = dateStr.split("-");
+    return `${d}.${m}.${y}`;
+  }
 
   function openDraft(id: number) {
     router.push(`/sport/workouts/newworkout?workout_id=${encodeURIComponent(String(id))}`);
@@ -235,6 +356,7 @@ export default function SportWorkoutsPage() {
     setDeleteId(id);
     setShowConfirm(true);
   }
+
   function closeConfirm() {
     if (deleteLoading) return;
     setShowConfirm(false);
@@ -247,20 +369,75 @@ export default function SportWorkoutsPage() {
     const id = deleteId;
 
     const res = await deleteWorkout(id);
-
     if (!res.ok) {
       setHint(res.error || "Не смог удалить тренировку");
       return;
     }
 
-    // закрываем модалку
-    setShowConfirm(false);
-    setDeleteId(null);
+    const nextDrafts = draftsRef.current.filter((w) => w.id !== id);
+    const nextDone = doneRef.current.filter((w) => w.id !== id);
 
-    // убираем из списков (и drafts, и done, вдруг id там окажется)
-    setDrafts((prev) => prev.filter((w) => w.id !== id));
-    setDone((prev) => prev.filter((w) => w.id !== id));
+    setDrafts(nextDrafts);
+    setDone(nextDone);
+
+    // сервер тоже бампнул app_rev, мы делаем тот же шаг локально (без лишних запросов)
+    const nextRev = (revRef.current || 0) + 1;
+    revRef.current = nextRev;
+
+    writeCacheSafe({ revWorkouts: nextRev, drafts: nextDrafts, done: nextDone });
+
+    closeConfirm();
   }
+
+  async function reloadDraftsOnly() {
+    // тут можно не дергать ревизию, это локальная UX-операция после copy
+    try {
+      const r = await fetch("/api/sport/workouts?status=draft", {
+        credentials: "include",
+        cache: "no-store",
+      });
+      const j = await r.json().catch(() => ({} as any));
+      if (!r.ok || !j.ok) return;
+
+      const mapped: DraftWorkout[] = (j.workouts || []).map((x: any) => ({
+        id: Number(x.id),
+        title: String(x.title || "").trim() || "Без названия",
+        type: x.type === "cardio" ? "cardio" : "strength",
+        workout_date: String(x.workout_date || ""),
+        duration_min: x.duration_min ?? null,
+        status: "draft",
+      }));
+
+      setDrafts(mapped);
+
+      const nextRev = (revRef.current || 0) + 1;
+      revRef.current = nextRev;
+
+      writeCacheSafe({ revWorkouts: nextRev, drafts: mapped, done: doneRef.current });
+    } catch {}
+  }
+
+  async function handleCopy(id: number) {
+    if (copyLoading) return;
+
+    setHint(null);
+    setCopyId(id);
+
+    try {
+      const res = await copyWorkout(id);
+
+      if (!res?.ok) {
+        setHint(res?.error || "Не смог скопировать тренировку");
+        return;
+      }
+
+      await reloadDraftsOnly();
+    } finally {
+      setCopyId(null);
+    }
+  }
+
+  /* ================== RENDER ================== */
 
   return (
     <div className={styles.shell}>
@@ -275,6 +452,8 @@ export default function SportWorkoutsPage() {
           <h1 className={styles.h1}>Тренировки</h1>
         </div>
 
+        {hint ? <div className={styles.hintDanger}>{hint}</div> : null}
+
         <nav className={styles.tabWrap} aria-label="Разделы дневника тренировок">
           {TABS.map((t) => {
             const active = isActiveTab(pathname, t.href);
@@ -287,9 +466,7 @@ export default function SportWorkoutsPage() {
                 className={`${styles.tabBadge} ${active ? styles.tabBadgeActive : ""}`}
                 title={t.label}
               >
-                {t.showDot ? (
-                  <span className={`${styles.dot} ${active ? styles.dotActive : ""}`} />
-                ) : null}
+                {t.showDot ? <span className={`${styles.dot} ${active ? styles.dotActive : ""}`} /> : null}
                 {hasIcon ? renderTabIcon(t.icon) : t.label}
               </Link>
             );
@@ -304,7 +481,7 @@ export default function SportWorkoutsPage() {
           <div className={styles.bigCtaRow}>
             <span className={styles.bigCtaText}>Создать тренировку</span>
             <span className={styles.bigCtaIcon}>
-              <IconArrow size={25} style={{ color: "#ffffff" }} />
+              <IconArrow size={25} style={{ color: "#fff" }} />
             </span>
           </div>
         </button>
@@ -315,12 +492,12 @@ export default function SportWorkoutsPage() {
             <div className={styles.muted}>{draftItems.length} шт.</div>
           </div>
 
-          {hint ? <div className={styles.hintDanger}>{hint}</div> : null}
-
           {loading ? (
             <div className={styles.muted}>Загружаю…</div>
           ) : draftItems.length === 0 ? (
-            <div className={styles.empty}>Для удобства вы можете создавать черновики заранее перед тренировкой.</div>
+            <div className={styles.empty}>
+              Для удобства вы можете создавать черновики заранее перед тренировкой.
+            </div>
           ) : (
             <div className={styles.list}>
               {draftItems.map((d) => (
@@ -358,8 +535,6 @@ export default function SportWorkoutsPage() {
                     >
                       <IconTrash size={15} />
                     </button>
-
-                    
                   </div>
                 </div>
               ))}
@@ -409,6 +584,7 @@ export default function SportWorkoutsPage() {
 
                   <div className={styles.itemActions}>
                     
+
                     <button
                       type="button"
                       className={styles.trashBtn}
@@ -423,12 +599,13 @@ export default function SportWorkoutsPage() {
                     >
                       <IconTrash size={15} />
                     </button>
-                  </div>                 
+                  </div>
                 </div>
               ))}
             </div>
           )}
         </section>
+
         {showConfirm && (
           <div className={styles.modalOverlay} onClick={closeConfirm}>
             <div className={styles.modalBox} onClick={(e) => e.stopPropagation()}>

@@ -45,29 +45,21 @@ export async function GET(req: Request) {
   const startISO = ymd(monthStart);
   const nextISO = ymd(monthNext);
 
-  const u = await supabaseAdmin
-    .from("users")
-    .select("first_name")
-    .eq("id", uid)
-    .maybeSingle();
+  const u = await supabaseAdmin.from("users").select("first_name").eq("id", uid).maybeSingle();
 
   if (u.error) {
     return NextResponse.json({ ok: false, reason: "DB_ERROR", error: u.error.message }, { status: 500 });
   }
 
-  const firstName = (u.data as any)?.first_name ?? null;
+  const firstName = String((u.data as any)?.first_name || "").trim() || null;
 
-  const p = await supabaseAdmin
-    .from("sport_profile")
-    .select("goal, updated_at")
-    .eq("user_id", uid)
-    .maybeSingle();
+  const p = await supabaseAdmin.from("sport_profile").select("goal").eq("user_id", uid).maybeSingle();
 
   if (p.error) {
     return NextResponse.json({ ok: false, reason: "DB_ERROR", error: p.error.message }, { status: 500 });
   }
 
-  const goal = (p.data as any)?.goal ?? null;
+  const goal = String((p.data as any)?.goal || "").trim() || null;
 
   const wLast = await supabaseAdmin
     .from("sport_measurements")
@@ -83,9 +75,9 @@ export async function GET(req: Request) {
     return NextResponse.json({ ok: false, reason: "DB_ERROR", error: wLast.error.message }, { status: 500 });
   }
 
-  const weight = wLast.data?.value ?? null;
+  const weightRaw = (wLast.data as any)?.value ?? null;
+  const weight = weightRaw === null ? null : Number(weightRaw);
 
-  // важно: добавил title/status/completed_at
   const { data: workouts, error: wErr } = await supabaseAdmin
     .from("workouts")
     .select("id, title, workout_date, type, duration_min, status, completed_at, created_at")
@@ -104,7 +96,7 @@ export async function GET(req: Request) {
     ok: true,
     firstName,
     goal,
-    weight,
+    weight: Number.isFinite(weight as any) ? weight : null,
     month: { year, month: month1, startISO, nextISO },
     workouts: workouts || [],
   });

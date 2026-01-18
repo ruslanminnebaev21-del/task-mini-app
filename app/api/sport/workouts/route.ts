@@ -22,6 +22,31 @@ async function getUidFromSession(): Promise<number | null> {
   }
 }
 
+async function bumpUserRev(uid: number) {
+  try {
+    // функция в public.users уже создана тобой
+    const { error } = await supabaseAdmin.rpc("bump_app_rev", { p_uid: uid });
+    if (error) console.log("BUMP_APP_REV_FAILED:", error.message);
+  } catch (e: any) {
+    console.log("BUMP_APP_REV_THROW:", String(e?.message || e));
+  }
+}
+
+/**
+ * Важно:
+ * - users.id у тебя bigint (number)
+ * - значит bump_app_rev должен принимать bigint, а не uuid
+ * - если функция у тебя сейчас uuid, этот rpc будет падать, пока не поправишь SQL
+ */
+async function bumpAppRev(uid: number) {
+  try {
+    const { error } = await supabaseAdmin.rpc("bump_app_rev", { p_uid: uid });
+    if (error) console.log("BUMP_APP_REV_FAILED:", error.message);
+  } catch (e: any) {
+    console.log("BUMP_APP_REV_THROW:", String(e?.message || e));
+  }
+}
+
 function isYmd(s: string) {
   return /^\d{4}-\d{2}-\d{2}$/.test(s);
 }
@@ -65,7 +90,11 @@ async function assertExercisesBelongToUser(uid: number, rawExercises: any[]) {
   }
 
   if (ids.length !== rawExercises.length) {
-    return { ok: false as const, reason: "BAD_EXERCISE_ID" as const, missing: [] as number[] };
+    return {
+      ok: false as const,
+      reason: "BAD_EXERCISE_ID" as const,
+      missing: [] as number[],
+    };
   }
 
   const { data: exRows, error: exErr } = await supabaseAdmin
@@ -75,7 +104,12 @@ async function assertExercisesBelongToUser(uid: number, rawExercises: any[]) {
     .in("id", ids);
 
   if (exErr) {
-    return { ok: false as const, reason: "DB_ERROR" as const, error: exErr.message, missing: [] as number[] };
+    return {
+      ok: false as const,
+      reason: "DB_ERROR" as const,
+      error: exErr.message,
+      missing: [] as number[],
+    };
   }
 
   const found = new Set((exRows || []).map((r: any) => Number(r.id)));
@@ -93,13 +127,11 @@ async function assertExercisesBelongToUser(uid: number, rawExercises: any[]) {
 type BestSet = { weight: number; reps: number };
 
 function isBetterSet(a: BestSet, b: BestSet) {
-  // лучше = больше вес, при равном весе больше повторов
   if (a.weight !== b.weight) return a.weight > b.weight;
   return a.reps > b.reps;
 }
 
 async function recomputeAllExercisePRForUser(uid: number) {
-  // 1) берём все workout_exercises из выполненных тренировок пользователя
   const { data: wexRows, error: wexErr } = await supabaseAdmin
     .from("workout_exercises")
     .select("id, exercise_id, workouts!inner(user_id, status)")
@@ -113,9 +145,14 @@ async function recomputeAllExercisePRForUser(uid: number) {
       id: Number(r.id),
       exercise_id: Number(r.exercise_id),
     }))
-    .filter((x) => Number.isFinite(x.id) && x.id > 0 && Number.isFinite(x.exercise_id) && x.exercise_id > 0);
+    .filter(
+      (x) =>
+        Number.isFinite(x.id) &&
+        x.id > 0 &&
+        Number.isFinite(x.exercise_id) &&
+        x.exercise_id > 0
+    );
 
-  // 2) если нет ни одного выполненного сета в истории — очищаем PR у всех упражнений юзера
   if (wex.length === 0) {
     const { error: clearErr } = await supabaseAdmin
       .from("exercises")
@@ -131,7 +168,6 @@ async function recomputeAllExercisePRForUser(uid: number) {
   const exByWexId = new Map<number, number>();
   for (const x of wex) exByWexId.set(x.id, x.exercise_id);
 
-  // 3) берём все сеты по этим workout_exercises
   const { data: setsRows, error: setsErr } = await supabaseAdmin
     .from("workout_sets")
     .select("workout_exercise_id, weight, reps")
@@ -139,7 +175,6 @@ async function recomputeAllExercisePRForUser(uid: number) {
 
   if (setsErr) throw new Error(`SETS_ALL_DONE_SELECT_FAILED: ${setsErr.message}`);
 
-  // 4) считаем лучший сет по каждому exercise_id
   const bestByExerciseId = new Map<number, BestSet>();
 
   for (const row of setsRows || []) {
@@ -158,8 +193,6 @@ async function recomputeAllExercisePRForUser(uid: number) {
     if (!prev || isBetterSet(candidate, prev)) bestByExerciseId.set(exerciseId, candidate);
   }
 
-  // 5) обновляем все exercises юзера:
-  // - если по упражнению нет ни одного валидного сета -> best_* = null
   const { data: exRows, error: exErr } = await supabaseAdmin
     .from("exercises")
     .select("id")
@@ -186,14 +219,15 @@ async function recomputeAllExercisePRForUser(uid: number) {
   }
 }
 
-async function recomputeExercisePRFromAllDoneWorkouts(opts: { uid: number; exerciseIds: number[] }) {
+async function recomputeExercisePRFromAllDoneWorkouts(opts: {
+  uid: number;
+  exerciseIds: number[];
+}) {
   const { uid, exerciseIds } = opts;
 
   const uniq = Array.from(new Set(exerciseIds.filter((x) => Number.isFinite(x) && x > 0)));
   if (uniq.length === 0) return;
 
-  // 1) берём все workout_exercises по этим exercise_id, но только из выполненных тренировок юзера
-  // Важно: inner join на workouts, чтобы фильтровать по user_id и status
   const { data: wexRows, error: wexErr } = await supabaseAdmin
     .from("workout_exercises")
     .select("id, exercise_id, workouts!inner(user_id, status)")
@@ -208,9 +242,14 @@ async function recomputeExercisePRFromAllDoneWorkouts(opts: { uid: number; exerc
       id: Number(r.id),
       exercise_id: Number(r.exercise_id),
     }))
-    .filter((x) => Number.isFinite(x.id) && x.id > 0 && Number.isFinite(x.exercise_id) && x.exercise_id > 0);
+    .filter(
+      (x) =>
+        Number.isFinite(x.id) &&
+        x.id > 0 &&
+        Number.isFinite(x.exercise_id) &&
+        x.exercise_id > 0
+    );
 
-  // если вообще нет выполненных сетов по этим упражнениям — PR должен стать null
   if (wex.length === 0) {
     for (const exId of uniq) {
       const { error: upErr } = await supabaseAdmin
@@ -229,7 +268,6 @@ async function recomputeExercisePRFromAllDoneWorkouts(opts: { uid: number; exerc
   const exByWexId = new Map<number, number>();
   for (const x of wex) exByWexId.set(x.id, x.exercise_id);
 
-  // 2) берём все сеты по найденным workout_exercises
   const { data: setsRows, error: setsErr } = await supabaseAdmin
     .from("workout_sets")
     .select("workout_exercise_id, weight, reps")
@@ -237,7 +275,6 @@ async function recomputeExercisePRFromAllDoneWorkouts(opts: { uid: number; exerc
 
   if (setsErr) throw new Error(`SETS_HISTORY_SELECT_FAILED: ${setsErr.message}`);
 
-  // 3) находим лучший сет по каждому exercise_id по всей истории выполненных
   const bestByExerciseId = new Map<number, BestSet>();
 
   for (const row of setsRows || []) {
@@ -256,8 +293,6 @@ async function recomputeExercisePRFromAllDoneWorkouts(opts: { uid: number; exerc
     if (!prev || isBetterSet(candidate, prev)) bestByExerciseId.set(exerciseId, candidate);
   }
 
-  // 4) апдейтим exercises: тут важно — мы НЕ “только если стало лучше”.
-  // Мы выставляем ровно то, что посчитали по истории (может и уменьшиться).
   for (const exId of uniq) {
     const best = bestByExerciseId.get(exId) || null;
 
@@ -266,10 +301,7 @@ async function recomputeExercisePRFromAllDoneWorkouts(opts: { uid: number; exerc
 
     const { error: upErr } = await supabaseAdmin
       .from("exercises")
-      .update({
-        best_weight: nextBestWeight,
-        best_reps: nextBestReps,
-      })
+      .update({ best_weight: nextBestWeight, best_reps: nextBestReps })
       .eq("id", exId)
       .eq("user_id", uid);
 
@@ -280,7 +312,6 @@ async function recomputeExercisePRFromAllDoneWorkouts(opts: { uid: number; exerc
 async function recomputePRForWorkout(opts: { uid: number; workoutId: number }) {
   const { uid, workoutId } = opts;
 
-  // Берём список упражнений из этой тренировки (это минимальный набор, который надо пересчитать)
   const { data: wexRows, error: wexErr } = await supabaseAdmin
     .from("workout_exercises")
     .select("exercise_id")
@@ -295,7 +326,12 @@ async function recomputePRForWorkout(opts: { uid: number; workoutId: number }) {
   await recomputeExercisePRFromAllDoneWorkouts({ uid, exerciseIds });
 }
 
-async function runPRIfDone(opts: { uid: number; workoutId: number; type: WorkoutType; status: WorkoutStatus }) {
+async function runPRIfDone(opts: {
+  uid: number;
+  workoutId: number;
+  type: WorkoutType;
+  status: WorkoutStatus;
+}) {
   if (opts.type !== "strength") return;
   if (opts.status !== "done") return;
 
@@ -318,7 +354,6 @@ export async function GET(req: Request) {
 
   const url = new URL(req.url);
 
-  // 0) Один workout по id
   const idParam = String(url.searchParams.get("id") || "").trim();
   if (idParam) {
     const workoutId = toIdOrNull(idParam);
@@ -332,7 +367,10 @@ export async function GET(req: Request) {
       .single();
 
     if (wErr || !workout) {
-      return NextResponse.json({ ok: false, reason: "WORKOUT_NOT_FOUND", error: wErr?.message }, { status: 404 });
+      return NextResponse.json(
+        { ok: false, reason: "WORKOUT_NOT_FOUND", error: wErr?.message },
+        { status: 404 }
+      );
     }
 
     const { data: wexRows, error: wexErr } = await supabaseAdmin
@@ -390,7 +428,6 @@ export async function GET(req: Request) {
     return NextResponse.json({ ok: true, workout, exercises });
   }
 
-  // 1) Подсказки упражнений
   const exerciseQ = String(url.searchParams.get("exercise_q") || "").trim();
   if (exerciseQ) {
     if (exerciseQ.length < 2) return NextResponse.json({ ok: true, exercises: [] });
@@ -408,7 +445,6 @@ export async function GET(req: Request) {
     return NextResponse.json({ ok: true, exercises: data || [] });
   }
 
-  // 2) Список тренировок
   const status = String(url.searchParams.get("status") || "").trim();
 
   let q = supabaseAdmin
@@ -478,6 +514,7 @@ export async function POST(req: Request) {
     const newWorkoutId = Number(created.id);
 
     if (srcType !== "strength") {
+      await bumpAppRev(uid);
       return NextResponse.json({ ok: true, workout: created, new_workout_id: newWorkoutId });
     }
 
@@ -498,6 +535,7 @@ export async function POST(req: Request) {
       }));
 
       if (srcWexRows.length === 0) {
+        await bumpAppRev(uid);
         return NextResponse.json({ ok: true, workout: created, new_workout_id: newWorkoutId });
       }
 
@@ -551,6 +589,7 @@ export async function POST(req: Request) {
         }
       }
 
+      await bumpAppRev(uid);
       return NextResponse.json({ ok: true, workout: created, new_workout_id: newWorkoutId });
     } catch (e: any) {
       const msg = String(e?.message || e);
@@ -585,9 +624,12 @@ export async function POST(req: Request) {
       ? null
       : Number(body?.duration_min);
 
-  if (!workout_date || !isYmd(workout_date)) return NextResponse.json({ ok: false, reason: "BAD_DATE" }, { status: 400 });
-  if (type !== "strength" && type !== "cardio") return NextResponse.json({ ok: false, reason: "BAD_TYPE" }, { status: 400 });
-  if (Number.isNaN(duration_min as any)) return NextResponse.json({ ok: false, reason: "BAD_DURATION" }, { status: 400 });
+  if (!workout_date || !isYmd(workout_date))
+    return NextResponse.json({ ok: false, reason: "BAD_DATE" }, { status: 400 });
+  if (type !== "strength" && type !== "cardio")
+    return NextResponse.json({ ok: false, reason: "BAD_TYPE" }, { status: 400 });
+  if (Number.isNaN(duration_min as any))
+    return NextResponse.json({ ok: false, reason: "BAD_DURATION" }, { status: 400 });
 
   const rawExercises = body?.exercises;
   const hasExercises = Array.isArray(rawExercises) && rawExercises.length > 0;
@@ -595,10 +637,16 @@ export async function POST(req: Request) {
   if (type === "strength" && hasExercises) {
     const check = await assertExercisesBelongToUser(uid, rawExercises);
     if (!check.ok) {
-      if (check.reason === "DB_ERROR") {
-        return NextResponse.json({ ok: false, reason: "DB_ERROR", error: (check as any).error }, { status: 500 });
+      if ((check as any).reason === "DB_ERROR") {
+        return NextResponse.json(
+          { ok: false, reason: "DB_ERROR", error: (check as any).error },
+          { status: 500 }
+        );
       }
-      return NextResponse.json({ ok: false, reason: check.reason, missing: (check as any).missing }, { status: 400 });
+      return NextResponse.json(
+        { ok: false, reason: (check as any).reason, missing: (check as any).missing },
+        { status: 400 }
+      );
     }
   }
 
@@ -617,13 +665,17 @@ export async function POST(req: Request) {
     .single();
 
   if (wErr || !workout?.id) {
-    return NextResponse.json({ ok: false, reason: "DB_ERROR", error: wErr?.message || "Workout insert failed" }, { status: 500 });
+    return NextResponse.json(
+      { ok: false, reason: "DB_ERROR", error: wErr?.message || "Workout insert failed" },
+      { status: 500 }
+    );
   }
 
   const workoutId = Number(workout.id);
 
   if (type !== "strength" || !hasExercises) {
     await runPRIfDone({ uid, workoutId, type, status });
+    await bumpAppRev(uid);
     return NextResponse.json({ ok: true, workout });
   }
 
@@ -668,13 +720,12 @@ export async function POST(req: Request) {
   }
 
   await runPRIfDone({ uid, workoutId, type, status });
+  await bumpAppRev(uid);
   return NextResponse.json({ ok: true, workout });
 }
 
 /**
  * PUT /api/sport/workouts?id=123
- * - полностью пересоздаёт детали
- * - если итоговый статус = done -> пересчитывает PR всегда (даже если тренировка уже была done)
  */
 export async function PUT(req: Request) {
   const uid = await getUidFromSession();
@@ -693,7 +744,10 @@ export async function PUT(req: Request) {
     .single();
 
   if (exWErr || !existing) {
-    return NextResponse.json({ ok: false, reason: "WORKOUT_NOT_FOUND", error: exWErr?.message }, { status: 404 });
+    return NextResponse.json(
+      { ok: false, reason: "WORKOUT_NOT_FOUND", error: exWErr?.message },
+      { status: 404 }
+    );
   }
 
   const body = await req.json().catch(() => ({} as any));
@@ -710,9 +764,12 @@ export async function PUT(req: Request) {
       ? null
       : Number(body?.duration_min);
 
-  if (!workout_date || !isYmd(workout_date)) return NextResponse.json({ ok: false, reason: "BAD_DATE" }, { status: 400 });
-  if (type !== "strength" && type !== "cardio") return NextResponse.json({ ok: false, reason: "BAD_TYPE" }, { status: 400 });
-  if (Number.isNaN(duration_min as any)) return NextResponse.json({ ok: false, reason: "BAD_DURATION" }, { status: 400 });
+  if (!workout_date || !isYmd(workout_date))
+    return NextResponse.json({ ok: false, reason: "BAD_DATE" }, { status: 400 });
+  if (type !== "strength" && type !== "cardio")
+    return NextResponse.json({ ok: false, reason: "BAD_TYPE" }, { status: 400 });
+  if (Number.isNaN(duration_min as any))
+    return NextResponse.json({ ok: false, reason: "BAD_DURATION" }, { status: 400 });
 
   const rawExercises = body?.exercises;
   const hasExercises = Array.isArray(rawExercises) && rawExercises.length > 0;
@@ -720,14 +777,19 @@ export async function PUT(req: Request) {
   if (type === "strength" && hasExercises) {
     const check = await assertExercisesBelongToUser(uid, rawExercises);
     if (!check.ok) {
-      if (check.reason === "DB_ERROR") {
-        return NextResponse.json({ ok: false, reason: "DB_ERROR", error: (check as any).error }, { status: 500 });
+      if ((check as any).reason === "DB_ERROR") {
+        return NextResponse.json(
+          { ok: false, reason: "DB_ERROR", error: (check as any).error },
+          { status: 500 }
+        );
       }
-      return NextResponse.json({ ok: false, reason: check.reason, missing: (check as any).missing }, { status: 400 });
+      return NextResponse.json(
+        { ok: false, reason: (check as any).reason, missing: (check as any).missing },
+        { status: 400 }
+      );
     }
   }
 
-  // completed_at: если уже done — не трогаем (чтоб "дата выполнения" не прыгала)
   const prevStatus: WorkoutStatus = (existing as any).status === "done" ? "done" : "draft";
   const prevCompletedAt = (existing as any).completed_at ? String((existing as any).completed_at) : null;
 
@@ -750,10 +812,12 @@ export async function PUT(req: Request) {
     .single();
 
   if (upErr || !updated) {
-    return NextResponse.json({ ok: false, reason: "DB_ERROR", error: upErr?.message || "Workout update failed" }, { status: 500 });
+    return NextResponse.json(
+      { ok: false, reason: "DB_ERROR", error: upErr?.message || "Workout update failed" },
+      { status: 500 }
+    );
   }
 
-  // чистим старые детали
   const { data: oldWex, error: oldWexErr } = await supabaseAdmin
     .from("workout_exercises")
     .select("id")
@@ -783,10 +847,10 @@ export async function PUT(req: Request) {
 
   if (type !== "strength" || !hasExercises) {
     await runPRIfDone({ uid, workoutId, type, status });
+    await bumpAppRev(uid);
     return NextResponse.json({ ok: true, workout: updated });
   }
 
-  // вставляем новые детали
   try {
     for (let exIndex = 0; exIndex < rawExercises.length; exIndex++) {
       const we = rawExercises[exIndex] || {};
@@ -826,8 +890,8 @@ export async function PUT(req: Request) {
     return NextResponse.json({ ok: false, reason: "SAVE_DETAILS_FAILED", error: msg }, { status: 500 });
   }
 
-  // главное: если в итоге done — пересчитываем ВСЕГДА
   await runPRIfDone({ uid, workoutId, type, status });
+  await bumpAppRev(uid);
 
   return NextResponse.json({ ok: true, workout: updated });
 }
@@ -854,6 +918,7 @@ export async function DELETE(req: Request) {
   if (exErr || !existing) {
     return NextResponse.json({ ok: false, reason: "WORKOUT_NOT_FOUND", error: exErr?.message }, { status: 404 });
   }
+
   const shouldRecomputePR = existing.type === "strength" && existing.status === "done";
 
   let exerciseIds: number[] = [];
@@ -897,15 +962,12 @@ export async function DELETE(req: Request) {
   const { error: delWexErr } = await supabaseAdmin.from("workout_exercises").delete().eq("workout_id", workoutId);
   if (delWexErr) return NextResponse.json({ ok: false, reason: "DB_ERROR", error: delWexErr.message }, { status: 500 });
 
-  const { error: delWorkoutErr } = await supabaseAdmin
-    .from("workouts")
-    .delete()
-    .eq("id", workoutId)
-    .eq("user_id", uid);
+  const { error: delWorkoutErr } = await supabaseAdmin.from("workouts").delete().eq("id", workoutId).eq("user_id", uid);
 
   if (delWorkoutErr) {
     return NextResponse.json({ ok: false, reason: "DB_ERROR", error: delWorkoutErr.message }, { status: 500 });
   }
+
   if (shouldRecomputePR && exerciseIds.length) {
     try {
       await recomputeExercisePRFromAllDoneWorkouts({ uid, exerciseIds });
@@ -913,5 +975,7 @@ export async function DELETE(req: Request) {
       console.log("PR_RECOMPUTE_AFTER_DELETE_FAILED:", String(e?.message || e));
     }
   }
+
+  await bumpAppRev(uid);
   return NextResponse.json({ ok: true });
 }
