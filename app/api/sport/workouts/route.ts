@@ -361,7 +361,7 @@ export async function GET(req: Request) {
 
     const { data: workout, error: wErr } = await supabaseAdmin
       .from("workouts")
-      .select("id, title, workout_date, type, duration_min, status, created_at, completed_at")
+      .select("id, title, workout_date, type, duration, status, created_at, completed_at")
       .eq("id", workoutId)
       .eq("user_id", uid)
       .single();
@@ -449,7 +449,7 @@ export async function GET(req: Request) {
 
   let q = supabaseAdmin
     .from("workouts")
-    .select("id, title, workout_date, type, duration_min, status, created_at, completed_at")
+    .select("id, title, workout_date, type, duration, status, created_at, completed_at")
     .eq("user_id", uid)
     .order("workout_date", { ascending: false })
     .order("created_at", { ascending: false });
@@ -478,7 +478,7 @@ export async function POST(req: Request) {
 
     const { data: src, error: srcErr } = await supabaseAdmin
       .from("workouts")
-      .select("id, title, type, duration_min")
+      .select("id, title, type, duration")
       .eq("id", sourceId)
       .eq("user_id", uid)
       .single();
@@ -498,10 +498,10 @@ export async function POST(req: Request) {
         type: srcType,
         title: newTitle,
         status: "draft",
-        duration_min: srcType === "cardio" ? (src.duration_min == null ? null : Number(src.duration_min)) : null,
+        duration: srcType === "cardio" ? (src.duration == null ? null : Number(src.duration)) : null,
         completed_at: null,
       })
-      .select("id, title, workout_date, type, duration_min, status, created_at, completed_at")
+      .select("id, title, workout_date, type, duration, status, created_at, completed_at")
       .single();
 
     if (cErr || !created?.id) {
@@ -619,16 +619,16 @@ export async function POST(req: Request) {
   const statusRaw = String(body?.status || "draft").trim() as WorkoutStatus;
   const status: WorkoutStatus = statusRaw === "done" ? "done" : "draft";
 
-  const duration_min =
-    body?.duration_min === null || body?.duration_min === undefined || body?.duration_min === ""
+  const duration =
+    body?.duration === null || body?.duration === undefined || body?.duration === ""
       ? null
-      : Number(body?.duration_min);
+      : Number(body?.duration);
 
   if (!workout_date || !isYmd(workout_date))
     return NextResponse.json({ ok: false, reason: "BAD_DATE" }, { status: 400 });
   if (type !== "strength" && type !== "cardio")
     return NextResponse.json({ ok: false, reason: "BAD_TYPE" }, { status: 400 });
-  if (Number.isNaN(duration_min as any))
+  if (Number.isNaN(duration as any))
     return NextResponse.json({ ok: false, reason: "BAD_DURATION" }, { status: 400 });
 
   const rawExercises = body?.exercises;
@@ -658,10 +658,10 @@ export async function POST(req: Request) {
       type,
       title: title || null,
       status,
-      duration_min,
+      duration,
       completed_at: status === "done" ? new Date().toISOString() : null,
     })
-    .select("id, title, workout_date, type, duration_min, status, created_at, completed_at")
+    .select("id, title, workout_date, type, duration, status, created_at, completed_at")
     .single();
 
   if (wErr || !workout?.id) {
@@ -759,16 +759,16 @@ export async function PUT(req: Request) {
   const statusRaw = String(body?.status || "draft").trim() as WorkoutStatus;
   const status: WorkoutStatus = statusRaw === "done" ? "done" : "draft";
 
-  const duration_min =
-    body?.duration_min === null || body?.duration_min === undefined || body?.duration_min === ""
+  const duration =
+    body?.duration === null || body?.duration === undefined || body?.duration === ""
       ? null
-      : Number(body?.duration_min);
+      : Number(body?.duration);
 
   if (!workout_date || !isYmd(workout_date))
     return NextResponse.json({ ok: false, reason: "BAD_DATE" }, { status: 400 });
   if (type !== "strength" && type !== "cardio")
     return NextResponse.json({ ok: false, reason: "BAD_TYPE" }, { status: 400 });
-  if (Number.isNaN(duration_min as any))
+  if (Number.isNaN(duration as any))
     return NextResponse.json({ ok: false, reason: "BAD_DURATION" }, { status: 400 });
 
   const rawExercises = body?.exercises;
@@ -803,12 +803,12 @@ export async function PUT(req: Request) {
       type,
       title: title || null,
       status,
-      duration_min,
+      duration,
       completed_at: nextCompletedAt,
     })
     .eq("id", workoutId)
     .eq("user_id", uid)
-    .select("id, title, workout_date, type, duration_min, status, created_at, completed_at")
+    .select("id, title, workout_date, type, duration, status, created_at, completed_at")
     .single();
 
   if (upErr || !updated) {

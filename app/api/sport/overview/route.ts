@@ -80,7 +80,7 @@ export async function GET(req: Request) {
 
   const { data: workouts, error: wErr } = await supabaseAdmin
     .from("workouts")
-    .select("id, title, workout_date, type, duration_min, status, completed_at, created_at")
+    .select("id, title, workout_date, type, duration, status, completed_at, created_at")
     .eq("user_id", uid)
     .gte("workout_date", startISO)
     .lt("workout_date", nextISO)

@@ -6,7 +6,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import AppMenu from "@/app/components/AppMenu/AppMenu";
 import styles from "../../sport.module.css";
-import { IconTrash, IconPlus } from "@/app/components/icons";
+import { IconTrash, IconPlus, IconPlay, IconPause } from "@/app/components/icons";
 
 type WorkoutType = "strength" | "cardio";
 type WorkoutStatus = "draft" | "done";
@@ -86,6 +86,9 @@ function NewWorkoutInner() {
   const router = useRouter();
   const sp = useSearchParams();
 
+  const [timerRunning, setTimerRunning] = useState(false);
+  const [seconds, setSeconds] = useState(0);
+
   // принимаем оба варианта, чтобы не ловить баги из-за несостыковки
   const editId = useMemo(() => {
     const a = String(sp.get("workout_id") || "").trim();
@@ -96,12 +99,13 @@ function NewWorkoutInner() {
   const [title, setTitle] = useState("");
   const [type, setType] = useState<WorkoutType>("strength");
   const [durationMin, setDurationMin] = useState("");
+
   // ===== ADD EXERCISE MODAL =====
   const [showAddExerciseModal, setShowAddExerciseModal] = useState(false);
   const [addExerciseName, setAddExerciseName] = useState("");
   const [loadType, setLoadType] = useState<"external" | "bodyweight">("external");
   const [addExerciseForId, setAddExerciseForId] = useState<string | null>(null);
-  const [addingExercise, setAddingExercise] = useState(false);  
+  const [addingExercise, setAddingExercise] = useState(false);
 
   // важно: не затирать дату при редактировании
   const [workoutDate, setWorkoutDate] = useState<string>(todayYmd());
@@ -134,41 +138,58 @@ function NewWorkoutInner() {
     return () => clearTimeout(t);
   }, [toast]);
 
+  // таймер тренировки
+  useEffect(() => {
+    if (!timerRunning) return;
 
-// ====== автоскролл ТОЛЬКО для exerciseInput к верху (30px) ======
-useEffect(() => {
-  const OFFSET_TOP = 30;
+    const id = setInterval(() => {
+      setSeconds((s) => s + 1);
+    }, 1000);
 
-  const isExerciseInput = (el: Element | null) => {
-    if (!el) return false;
-    if (!(el instanceof HTMLElement)) return false;
+    return () => clearInterval(id);
+  }, [timerRunning]);
 
-    // ловим только нужные инпуты по классу
-    return el.classList.contains(styles.exerciseInput);
-  };
+  function formatTime(total: number) {
+    const h = Math.floor(total / 3600);
+    const m = Math.floor((total % 3600) / 60);
+    const s = total % 60;
+    return `${h}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+  }
 
-  const onFocusIn = (e: FocusEvent) => {
-    const target = e.target as Element | null;
-    if (!isExerciseInput(target)) return;
+  // ====== автоскролл ТОЛЬКО для exerciseInput к верху (30px) ======
+  useEffect(() => {
+    const OFFSET_TOP = 30;
 
-    requestAnimationFrame(() => {
-      const el = target as HTMLElement;
-      const rect = el.getBoundingClientRect();
-      const top = rect.top + window.scrollY;
+    const isExerciseInput = (el: Element | null) => {
+      if (!el) return false;
+      if (!(el instanceof HTMLElement)) return false;
+      return el.classList.contains(styles.exerciseInput);
+    };
 
-      const desired = Math.max(0, top - OFFSET_TOP);
-      if (Math.abs(window.scrollY - desired) < 4) return;
+    const onFocusIn = (e: FocusEvent) => {
+      const target = e.target as Element | null;
+      if (!isExerciseInput(target)) return;
 
-      window.scrollTo({ top: desired, behavior: "smooth" });
-    });
-  };
+      requestAnimationFrame(() => {
+        const el = target as HTMLElement;
+        const rect = el.getBoundingClientRect();
+        const top = rect.top + window.scrollY;
 
-  document.addEventListener("focusin", onFocusIn, true);
-  return () => document.removeEventListener("focusin", onFocusIn, true);
-}, []);
+        const desired = Math.max(0, top - OFFSET_TOP);
+        if (Math.abs(window.scrollY - desired) < 4) return;
+
+        window.scrollTo({ top: desired, behavior: "smooth" });
+      });
+    };
+
+    document.addEventListener("focusin", onFocusIn, true);
+    return () => document.removeEventListener("focusin", onFocusIn, true);
+  }, []);
+
   function showToast(msg: string) {
     setToast(msg);
   }
+
   function openAddExerciseModal(exBlockId: string, presetName: string) {
     setAddExerciseForId(exBlockId);
     setAddExerciseName(String(presetName || "").trim());
@@ -208,7 +229,6 @@ useEffect(() => {
       const j = await r.json().catch(() => ({} as any));
 
       if (!r.ok || !j.ok) {
-        // если дубль — покажем норм сообщение
         if (j?.reason === "DUPLICATE" && j?.duplicate?.id) {
           showToast("Такое упражнение уже есть, выбери его из списка");
         } else {
@@ -230,7 +250,6 @@ useEffect(() => {
         return;
       }
 
-      // вставляем в текущий exerciseInput
       updateExercise(targetId, {
         exerciseId: exId,
         exerciseName: exName,
@@ -281,7 +300,15 @@ useEffect(() => {
 
         setTitle(String(w.title || "").trim());
         setType(wType);
-        setDurationMin(w.duration_min == null ? "" : String(w.duration_min));
+
+        // duration -> seconds (таймер), таймер при открытии не запускаем
+        const dur = w.duration == null ? 0 : Number(w.duration);
+        setSeconds(Number.isFinite(dur) && dur > 0 ? dur : 0);
+        setTimerRunning(false);
+
+        // durationMin пока оставим (потом уберешь UI)
+        setDurationMin(w.duration == null ? "" : String(w.duration));
+
         setWorkoutDate(String(w.workout_date || "").trim() || todayYmd());
 
         const exArr = Array.isArray(j.exercises) ? j.exercises : [];
@@ -311,7 +338,6 @@ useEffect(() => {
           setWorkoutExercises(safe);
           setActiveExerciseId(safe[0]?.id ?? null);
         } else {
-          // кардио: упражнения не нужны
           const first = makeEmptyExercise();
           setWorkoutExercises([first]);
           setActiveExerciseId(first.id);
@@ -372,6 +398,10 @@ useEffect(() => {
     setType("strength");
     setDurationMin("");
     setWorkoutDate(todayYmd());
+
+    // сброс таймера
+    setTimerRunning(false);
+    setSeconds(0);
 
     const first = makeEmptyExercise();
     setWorkoutExercises([first]);
@@ -438,7 +468,8 @@ useEffect(() => {
   }
 
   function addSetToActive() {
-    const targetId = activeExerciseId ?? workoutExercises[workoutExercises.length - 1]?.id ?? null;
+    const targetId =
+      activeExerciseId ?? workoutExercises[workoutExercises.length - 1]?.id ?? null;
     if (!targetId) {
       const first = makeEmptyExercise();
       setWorkoutExercises([first]);
@@ -526,13 +557,13 @@ useEffect(() => {
         type,
         title: title.trim(),
         status,
+        // duration всегда из таймера (секунды)
+        duration: seconds > 0 ? seconds : null,
       };
 
       if (type === "cardio") {
-        body.duration_min = durationMin.trim() ? Number(durationMin) : null;
         body.exercises = [];
       } else {
-        body.duration_min = null;
         body.exercises = buildStrengthPayload();
       }
 
@@ -589,6 +620,8 @@ useEffect(() => {
 
   function confirmDone() {
     if (saving || loadingDraft) return;
+    // стопаем таймер и сохраняем duration
+    setTimerRunning(false);
     setShowDoneConfirm(false);
     void saveWorkout("done");
   }
@@ -662,20 +695,36 @@ useEffect(() => {
             >
               Кардио
             </button>
+
+            {/* Таймер */}
+            <div className={`${styles.timerWrap} ${timerRunning ? styles.timerExpanded : ""}`}>
+              <div className={`${styles.timerValue} ${timerRunning ? styles.timerValueActive : ""}`}>
+                {formatTime(seconds)}
+              </div>
+
+              <button
+                type="button"
+                className={styles.timerBtn}
+                onClick={() => setTimerRunning((v) => !v)}
+                aria-label={timerRunning ? "Пауза" : "Старт"}
+              >
+                {timerRunning ? <IconPause size={17} /> : <IconPlay size={17} />}
+              </button>
+            </div>
           </div>
         </div>
 
         {type === "cardio" ? (
           <div className={styles.field} style={{ marginTop: 12 }}>
-            <div className={styles.sectionTitle}>Длительность, мин</div>
-            <input
+            <div className={styles.muted}>Запустите таймер перед началом тренировки</div>
+            {/*<input
               className={`${styles.input} ${styles.exerciseInput}`}
               value={durationMin}
               onChange={(e) => setDurationMin(e.target.value.replace(/[^\d]/g, ""))}
               placeholder="Например: 35"
               inputMode="numeric"
               disabled={loadingDraft}
-            />
+            />*/}
           </div>
         ) : null}
 
@@ -687,19 +736,14 @@ useEffect(() => {
               {workoutExercises.map((we, idx) => {
                 const suggestions = suggestionsByEx[we.id] || [];
                 const loading = Boolean(suggestLoadingByEx[we.id]);
-
                 const query = we.exerciseName.trim();
 
                 const showSuggestUI =
-                  openSuggestFor === we.id &&
-                  we.exerciseId == null &&
-                  query.length >= 2;
+                  openSuggestFor === we.id && we.exerciseId == null && query.length >= 2;
 
                 const exactExists = suggestions.some(
                   (s) => String(s.name || "").trim().toLowerCase() === query.toLowerCase()
                 );
-
-                const showAddBtn = showSuggestUI && suggestions.length === 0;
 
                 return (
                   <div key={we.id} style={{ display: "grid", gap: 10 }}>
@@ -773,6 +817,7 @@ useEffect(() => {
                             disabled={loadingDraft}
                           />
                         </div>
+
                         {showSuggestUI ? (
                           <div className={styles.suggestionBox}>
                             {suggestions.length ? (
@@ -812,15 +857,13 @@ useEffect(() => {
                                 )}
                               </>
                             ) : (
-                              <>
-                                <button
-                                  type="button"
-                                  className={styles.suggestionItem}
-                                  onClick={() => openAddExerciseModal(we.id, query)}
-                                >
-                                  + Добавить в базу
-                                </button>
-                              </>
+                              <button
+                                type="button"
+                                className={styles.suggestionItem}
+                                onClick={() => openAddExerciseModal(we.id, query)}
+                              >
+                                + Добавить в базу
+                              </button>
                             )}
                           </div>
                         ) : null}
@@ -906,16 +949,17 @@ useEffect(() => {
                           </button>
                         </div>
                       ))}
-                       <button
-                          type="button"
-                          onClick={() => addSetTo(we.id)}
-                          disabled={loadingDraft}
-                          title="Добавить подход"
-                          className={styles.addSetBtn}
-                          style={{ marginTop: -25}}
-                        >
-                          <IconPlus size={10} />
-                        </button>                      
+
+                      <button
+                        type="button"
+                        onClick={() => addSetTo(we.id)}
+                        disabled={loadingDraft}
+                        title="Добавить подход"
+                        className={styles.addSetBtn}
+                        style={{ marginTop: -25 }}
+                      >
+                        <IconPlus size={10} />
+                      </button>
                     </div>
                   </div>
                 );
@@ -923,7 +967,12 @@ useEffect(() => {
 
               <div style={{ display: "flex", justifyContent: "center" }}>
                 <div className={styles.addButtonsRow}>
-                  <button type="button" className={styles.addExBtn} onClick={addExercise} disabled={loadingDraft}>
+                  <button
+                    type="button"
+                    className={styles.addExBtn}
+                    onClick={addExercise}
+                    disabled={loadingDraft}
+                  >
                     + Добавить упражнение
                   </button>
                 </div>
@@ -947,7 +996,12 @@ useEffect(() => {
             </button>
           ) : (
             <>
-              <button type="button" className={styles.btnGhost} onClick={resetAll} disabled={saving || loadingDraft}>
+              <button
+                type="button"
+                className={styles.btnGhost}
+                onClick={resetAll}
+                disabled={saving || loadingDraft}
+              >
                 Сбросить
               </button>
 
@@ -1004,6 +1058,7 @@ useEffect(() => {
             </div>
           </div>
         ) : null}
+
         {showAddExerciseModal ? (
           <div className={styles.modalOverlay} onClick={closeAddExerciseModal}>
             <div className={styles.modalBox} onClick={(e) => e.stopPropagation()}>
@@ -1020,10 +1075,17 @@ useEffect(() => {
                 />
               </div>
 
-              <div className={styles.radioRow} role="radiogroup" aria-label="Тип нагрузки" style={{ marginTop: 12 }}>
+              <div
+                className={styles.radioRow}
+                role="radiogroup"
+                aria-label="Тип нагрузки"
+                style={{ marginTop: 12 }}
+              >
                 <button
                   type="button"
-                  className={`${styles.chipBtn} ${loadType === "external" ? styles.chipBtnActive : ""}`}
+                  className={`${styles.chipBtn} ${
+                    loadType === "external" ? styles.chipBtnActive : ""
+                  }`}
                   onClick={() => setLoadType("external")}
                   disabled={addingExercise}
                 >
@@ -1032,7 +1094,9 @@ useEffect(() => {
 
                 <button
                   type="button"
-                  className={`${styles.chipBtn} ${loadType === "bodyweight" ? styles.chipBtnActive : ""}`}
+                  className={`${styles.chipBtn} ${
+                    loadType === "bodyweight" ? styles.chipBtnActive : ""
+                  }`}
                   onClick={() => setLoadType("bodyweight")}
                   disabled={addingExercise}
                 >
@@ -1061,7 +1125,7 @@ useEffect(() => {
               </div>
             </div>
           </div>
-        ) : null}        
+        ) : null}
       </main>
     </div>
   );

@@ -1766,3 +1766,94 @@
   backdrop-filter: blur(10px);
   box-shadow: 0 14px 30px rgba(0, 0, 0, 0.14);
 }
+
+/*Таймер тренировки */
+.timerWrap {
+  display: inline-flex;
+  align-items: center;
+  height: 32px;
+  margin-left: auto;
+  overflow: hidden;
+
+  border-radius: 999px;
+  transition: width 0.25s ease, padding 0.25s ease;
+}
+.timerBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 32px;
+  background: transparent;
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  justify-self: end;
+  opacity: 0.55;
+  color:#111;
+
+  user-select: none;
+  white-space: nowrap;
+  text-decoration: none;
+}
+/*.timerExpanded {
+  padding: 0 8px 0 6px;
+}*/
+.timerPlayBtn {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+
+  font-size: 12px;
+  font-weight: 700;
+
+  border: 1px solid rgba(0,0,0,0.2);
+  background: transparent;
+  cursor: pointer;
+}
+.timerValue {
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.5px;
+  opacity: 0;
+  margin: 0 8px;
+  color: #4A4949;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum";
+
+  transform: translateX(6px);
+  transition:
+    opacity 180ms ease,
+    transform 180ms ease;
+  pointer-events: none;
+}
+.timerValueActive {
+  opacity: 0.55;
+  transform: translateX(0);
+  pointer-events: auto;
+}
+
+
+.timerPauseBtn {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+
+  font-size: 10px;
+  font-weight: 700;
+
+  border: 1px solid rgba(0,0,0,0.2);
+  background: transparent;
+  cursor: pointer;
+}
+

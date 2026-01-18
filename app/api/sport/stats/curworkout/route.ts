@@ -87,7 +87,7 @@ export async function GET(req: Request) {
   // 1) workout (и проверка user_id)
   const { data: workout, error: wErr } = await supabaseAdmin
     .from("workouts")
-    .select("id, title, workout_date, type, duration_min, status, created_at, completed_at")
+    .select("id, title, workout_date, type, duration, status, created_at, completed_at")
     .eq("id", workoutId)
     .eq("user_id", uid)
     .single();
@@ -194,7 +194,7 @@ export async function GET(req: Request) {
       title: workout.title ?? null,
       workout_date: String(workout.workout_date || ""),
       type: wType,
-      duration_min: workout.duration_min == null ? null : Number(workout.duration_min),
+      duration: workout.duration == null ? null : Number(workout.duration),
       status: workout.status ?? null,
       created_at: workout.created_at ?? null,
       completed_at: workout.completed_at ?? null,

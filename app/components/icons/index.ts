@@ -7,4 +7,6 @@ export { IconStats } from "./IconStats";
 export { IconArrow } from "./IconArrow";
 export { IconCopy } from "./IconCopy";
 export { IconHome } from "./IconHome";
+export { IconPlay } from "./IconPlay";
+export { IconPause } from "./IconPause";
 export type { IconProps } from "./IconBase";

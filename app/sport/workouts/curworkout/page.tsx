@@ -1,9 +1,7 @@
 // app/sport/workouts/curworkout/page.tsx
-
 "use client";
 
-
-import { Suspense, useEffect, useMemo, useState} from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useSearchParams, useRouter } from "next/navigation";
 import AppMenu from "@/app/components/AppMenu/AppMenu";
@@ -19,7 +17,7 @@ type ApiWorkout = {
   title: string | null;
   workout_date: string;
   type: WorkoutType;
-  duration_min: number | null;
+  duration: number | null; // seconds
   status?: string | null;
   created_at?: string | null;
   completed_at?: string | null;
@@ -42,7 +40,6 @@ type ApiExercise = {
   note: string | null;
   sets: ApiSet[];
 
-  // computed from API (/api/sport/stats/curworkout)
   best_set?: BestSet | null;
   volume?: number;
   sets_count?: number;
@@ -70,6 +67,17 @@ function fmtNum(n: number) {
   return String(n).replace(".", ",");
 }
 
+function formatDurationHms(totalSeconds: number | null | undefined) {
+  const t = Number(totalSeconds ?? 0);
+  const safe = Number.isFinite(t) && t > 0 ? Math.floor(t) : 0;
+
+  const h = Math.floor(safe / 3600);
+  const m = Math.floor((safe % 3600) / 60);
+  const s = safe % 60;
+
+  return `${h}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+}
+
 export default function Page() {
   return (
     <Suspense fallback={<div style={{ padding: 16 }}>Загрузка…</div>}>
@@ -81,15 +89,13 @@ export default function Page() {
 function CurWorkoutInner() {
   const router = useRouter();
   const sp = useSearchParams();
+
   async function onCopy() {
     if (!workout?.id || copyLoading) return;
 
-    // 1) сразу показать процесс
     setCopyToast("Копирую…");
-
     const res = await copyWorkout(workout.id);
 
-    // 2) результат
     if (!res.ok) {
       setCopyToast(res.error || "Не смог скопировать тренировку");
       return;
@@ -100,12 +106,12 @@ function CurWorkoutInner() {
   }
 
   const { deleteWorkout, loading: deleteLoading, error: deleteError } = useDeleteWorkout();
-
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deleteToast, setDeleteToast] = useState<string | null>(null);
 
   const { copyWorkout, loading: copyLoading, error: copyError } = useCopyWorkout();
   const [copyToast, setCopyToast] = useState<string | null>(null);
+
   const id = useMemo(() => {
     const a = String(sp.get("workout_id") || "").trim();
     const b = String(sp.get("id") || "").trim();
@@ -132,7 +138,7 @@ function CurWorkoutInner() {
     setCopyToast(copyError);
     const t = setTimeout(() => setCopyToast(null), 3000);
     return () => clearTimeout(t);
-  }, [copyError]);  
+  }, [copyError]);
 
   useEffect(() => {
     if (!id) {
@@ -201,8 +207,6 @@ function CurWorkoutInner() {
 
     setShowDeleteConfirm(false);
     setDeleteToast("Тренировка удалена");
-
-    // после удаления логичнее увести на список тренировок
     setTimeout(() => router.push("/sport/workouts"), 1000);
   }
 
@@ -221,12 +225,7 @@ function CurWorkoutInner() {
 
         <nav className={styles.tabWrap} aria-label="Навигация">
           <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
-            <button
-              type="button"
-              className={styles.tabBadge}
-              onClick={() => router.back()}
-              title="Назад"
-            >
+            <button type="button" className={styles.tabBadge} onClick={() => router.back()} title="Назад">
               <span className={styles.dot} />
               Назад
             </button>
@@ -242,6 +241,7 @@ function CurWorkoutInner() {
             >
               <IconCopy size={15} />
             </button>
+
             <button
               type="button"
               className={styles.tabBadge}
@@ -256,6 +256,7 @@ function CurWorkoutInner() {
             >
               <IconEdit size={15} />
             </button>
+
             <button
               type="button"
               className={styles.tabBadge}
@@ -269,6 +270,7 @@ function CurWorkoutInner() {
             </button>
           </div>
         </nav>
+
         {copyToast ? <div className={styles.toast}>{copyToast}</div> : null}
         {deleteToast ? <div className={styles.toast}>{deleteToast}</div> : null}
 
@@ -280,7 +282,7 @@ function CurWorkoutInner() {
             <section className={styles.listWrap} style={{ marginTop: 14 }}>
               <div className={styles.listHeader}>
                 <div className={styles.sectionTitle}>Сводка</div>
-                <div className={styles.muted}>ID: {workout.id}</div>
+                {/*<div className={styles.muted}>ID: {workout.id}</div>*/}
               </div>
 
               <div className={styles.list} style={{ gap: 10 }}>
@@ -290,15 +292,16 @@ function CurWorkoutInner() {
                       <span className={styles.chip}>{typeLabel(wType)}</span>
                       <span className={styles.chip}>{formatDateRu(workout.workout_date)}</span>
 
-                      {wType === "cardio" && workout.duration_min ? (
-                        <span className={styles.chip}>{workout.duration_min} мин</span>
-                      ) : null}
+                      {/* Длительность для любой тренировки: 0:00:00 */}
+                      <span className={styles.chip}>Время: {formatDurationHms(workout.duration)}</span>
 
-                      {/*{workout.status ? <span className={styles.chip}>{workout.status}</span> : null}*/}
                       <span className={styles.chip}>Упр: {totals.exCount}</span>
                       <span className={styles.chip}>Подходов: {totals.setCount}</span>
+
                       {wType === "strength" ? (
-                        <span className={styles.chip}>Объём: {fmtNum(Number(totals.totalVolume || 0))} кг</span>
+                        <span className={styles.chip}>
+                          Объём: {fmtNum(Number(totals.totalVolume || 0))} кг
+                        </span>
                       ) : null}
                     </div>
                   </div>
@@ -317,12 +320,11 @@ function CurWorkoutInner() {
                   <div className={styles.empty}>Нет упражнений в этой тренировке.</div>
                 ) : (
                   <div className={styles.list} style={{ gap: 10 }}>
-                    {sortedExercises.map((ex, idx) => {
+                    {sortedExercises.map((ex) => {
                       const sets = Array.isArray(ex.sets) ? ex.sets : [];
                       const best = ex.best_set || null;
                       const vol = Number(ex.volume || 0);
-                      const setsCount =
-                        ex.sets_count != null ? Number(ex.sets_count) : sets.length;
+                      const setsCount = ex.sets_count != null ? Number(ex.sets_count) : sets.length;
 
                       const bestText =
                         best && (Number(best.reps) > 0 || Number(best.weight) > 0)
@@ -330,16 +332,9 @@ function CurWorkoutInner() {
                           : null;
 
                       return (
-                        <div
-                          key={ex.workout_exercise_id}
-
-                          className={styles.listItem}
-                          style={{ cursor: "default" }}
-                        >
+                        <div key={ex.workout_exercise_id} className={styles.listItem} style={{ cursor: "default" }}>
                           <div className={styles.listItemMain}>
-                            <div className={styles.titleText}>
-                              {ex.name || "Без названия"}
-                            </div>
+                            <div className={styles.titleText}>{ex.name || "Без названия"}</div>
 
                             <div
                               style={{
@@ -349,13 +344,12 @@ function CurWorkoutInner() {
                                 alignItems: "start",
                               }}
                             >
-                              {/* левый столбец: мета + заметка */}
                               <div style={{ display: "grid", gap: 8 }}>
-                              <div style={{ display: "grid", gap: 6, justifyItems: "start"}}>
-                                <span className={styles.chip}>Подходов: {setsCount}</span>
-                                {bestText ? <span className={styles.chip}>Лучший: {bestText}</span> : null}
-                                <span className={styles.chip}>Объём: {fmtNum(vol)} кг</span>
-                              </div>
+                                <div style={{ display: "grid", gap: 6, justifyItems: "start" }}>
+                                  <span className={styles.chip}>Подходов: {setsCount}</span>
+                                  {bestText ? <span className={styles.chip}>Лучший: {bestText}</span> : null}
+                                  <span className={styles.chip}>Объём: {fmtNum(vol)} кг</span>
+                                </div>
 
                                 {ex.note ? (
                                   <div className={styles.muted} style={{ lineHeight: 1.35 }}>
@@ -364,7 +358,6 @@ function CurWorkoutInner() {
                                 ) : null}
                               </div>
 
-                              {/* правый столбец: подходы в формате повт×вес кг */}
                               {setsCount ? (
                                 <div style={{ display: "grid", gap: 6, justifyItems: "start" }}>
                                   {sets
@@ -386,7 +379,6 @@ function CurWorkoutInner() {
                                 </div>
                               )}
                             </div>
-
                           </div>
                         </div>
                       );
@@ -405,9 +397,7 @@ function CurWorkoutInner() {
                   <div className={styles.listItem} style={{ cursor: "default" }}>
                     <div className={styles.listItemMain}>
                       <div className={styles.metaRow}>
-                        <span className={styles.chip}>
-                          Длительность: {workout.duration_min == null ? "-" : `${workout.duration_min} мин`}
-                        </span>
+                        <span className={styles.chip}>Длительность: {formatDurationHms(workout.duration)}</span>
                       </div>
                       <div className={styles.muted} style={{ marginTop: 8 }}>
                         Тут позже можно добавить дистанцию, пульс, темп и т.д.
@@ -448,7 +438,6 @@ function CurWorkoutInner() {
             </div>
           </div>
         )}
-
       </main>
     </div>
   );
