@@ -1,12 +1,13 @@
 // app/sport/workouts/curworkout/page.tsx
+
 "use client";
 
-import { Suspense, useEffect, useMemo, useState } from "react";
+
+import { Suspense, useEffect, useMemo, useState} from "react";
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
+import { useSearchParams, useRouter } from "next/navigation";
 import AppMenu from "@/app/components/AppMenu/AppMenu";
 import styles from "../../sport.module.css";
-import { useRouter } from "next/navigation";
 import { useCopyWorkout } from "@/app/hooks/useCopyWorkout";
 import { useDeleteWorkout } from "@/app/hooks/useDeleteWorkout";
 import { IconTrash, IconArrow, IconUser, IconStats, IconCopy, IconEdit } from "@/app/components/icons";
@@ -78,6 +79,7 @@ export default function Page() {
 }
 
 function CurWorkoutInner() {
+  const router = useRouter();
   const sp = useSearchParams();
   async function onCopy() {
     if (!workout?.id || copyLoading) return;
@@ -96,11 +98,12 @@ function CurWorkoutInner() {
     setCopyToast("Скопировано в черновики");
     setTimeout(() => router.push("/sport/workouts"), 1000);
   }
+
   const { deleteWorkout, loading: deleteLoading, error: deleteError } = useDeleteWorkout();
 
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deleteToast, setDeleteToast] = useState<string | null>(null);
-  const router = useRouter();
+
   const { copyWorkout, loading: copyLoading, error: copyError } = useCopyWorkout();
   const [copyToast, setCopyToast] = useState<string | null>(null);
   const id = useMemo(() => {

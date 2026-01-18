@@ -1185,6 +1185,24 @@
 }
 /* кнопка "добавить подход" */
 .addSetBtn {
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: 1px dashed rgba(0, 0, 0, 1);
+  border-radius: 999px;
+  background: transparent;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  user-select: none;
+  opacity: 0.18;
+
+  /* ключевое */
+  align-self: center;
+}
+.addExBtn {
   display: inline-flex;
   align-items: center;
   gap: 8px;
@@ -1199,7 +1217,6 @@
   cursor: pointer;
   user-select: none;
   opacity: 0.18;
-
 }
 
 /* нижние кнопки: на мобильном пусть не пытаются в 1 ряд */

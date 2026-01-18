@@ -6,7 +6,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import AppMenu from "@/app/components/AppMenu/AppMenu";
 import styles from "../../sport.module.css";
-import { IconTrash } from "@/app/components/icons";
+import { IconTrash, IconPlus } from "@/app/components/icons";
 
 type WorkoutType = "strength" | "cardio";
 type WorkoutStatus = "draft" | "done";
@@ -134,6 +134,38 @@ function NewWorkoutInner() {
     return () => clearTimeout(t);
   }, [toast]);
 
+
+// ====== автоскролл ТОЛЬКО для exerciseInput к верху (30px) ======
+useEffect(() => {
+  const OFFSET_TOP = 30;
+
+  const isExerciseInput = (el: Element | null) => {
+    if (!el) return false;
+    if (!(el instanceof HTMLElement)) return false;
+
+    // ловим только нужные инпуты по классу
+    return el.classList.contains(styles.exerciseInput);
+  };
+
+  const onFocusIn = (e: FocusEvent) => {
+    const target = e.target as Element | null;
+    if (!isExerciseInput(target)) return;
+
+    requestAnimationFrame(() => {
+      const el = target as HTMLElement;
+      const rect = el.getBoundingClientRect();
+      const top = rect.top + window.scrollY;
+
+      const desired = Math.max(0, top - OFFSET_TOP);
+      if (Math.abs(window.scrollY - desired) < 4) return;
+
+      window.scrollTo({ top: desired, behavior: "smooth" });
+    });
+  };
+
+  document.addEventListener("focusin", onFocusIn, true);
+  return () => document.removeEventListener("focusin", onFocusIn, true);
+}, []);
   function showToast(msg: string) {
     setToast(msg);
   }
@@ -816,6 +848,7 @@ function NewWorkoutInner() {
                         justifyContent: "start",
                         overflowX: "auto",
                         paddingBottom: 2,
+                        paddingRight: 56,
                       }}
                     >
                       {we.sets.map((s) => (
@@ -873,6 +906,16 @@ function NewWorkoutInner() {
                           </button>
                         </div>
                       ))}
+                       <button
+                          type="button"
+                          onClick={() => addSetTo(we.id)}
+                          disabled={loadingDraft}
+                          title="Добавить подход"
+                          className={styles.addSetBtn}
+                          style={{ marginTop: -25}}
+                        >
+                          <IconPlus size={10} />
+                        </button>                      
                     </div>
                   </div>
                 );
@@ -880,12 +923,8 @@ function NewWorkoutInner() {
 
               <div style={{ display: "flex", justifyContent: "center" }}>
                 <div className={styles.addButtonsRow}>
-                  <button type="button" className={styles.addSetBtn} onClick={addExercise} disabled={loadingDraft}>
+                  <button type="button" className={styles.addExBtn} onClick={addExercise} disabled={loadingDraft}>
                     + Добавить упражнение
-                  </button>
-
-                  <button type="button" className={styles.addSetBtn} onClick={addSetToActive} disabled={loadingDraft}>
-                    + Добавить подход
                   </button>
                 </div>
               </div>
