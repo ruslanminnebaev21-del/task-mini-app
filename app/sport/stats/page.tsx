@@ -19,20 +19,27 @@ import {
 /* ---------- types ---------- */
 
 type StatsTab = "overview" | "body";
+type OverviewPeriod = "week" | "month";
 
-type TopExercise = {
-  exercise_id: number;
-  name: string;
+type OverviewCardKey = "workouts" | "tonnage" | "sets" | "duration";
+
+type OverviewCard = {
+  key: OverviewCardKey;
+  current: number;
+  prev: number;
   delta: number;
-  unit: "kg" | "reps";
+  trend: "up" | "down" | "same";
 };
 
-type OverviewStats = {
-  workouts_7d: number;
-  workouts_28d: number;
-  volume_7d: number;
-  volume_28d: number;
-  top: TopExercise[];
+type OverviewApi = {
+  ok: boolean;
+  range?: {
+    current?: { from: string; to: string };
+    prev?: { from: string; to: string };
+  };
+  cards?: Partial<Record<OverviewCardKey, OverviewCard>>;
+  reason?: string;
+  error?: string;
 };
 
 type Point = { date: string; value: number };
@@ -88,7 +95,6 @@ function toChartData(points: { date: string; value: number }[]) {
     .map((p) => ({ date: p.date, value: Number(p.value) }));
 }
 
-/** динамический диапазон Y */
 function calcYDomain(values: number[]) {
   const clean = (values || []).filter((v) => Number.isFinite(v));
   if (clean.length < 2) return ["auto", "auto"] as const;
@@ -114,7 +120,21 @@ function nextKey<T extends string>(keys: T[], cur: T): T {
   return keys[(idx + 1) % keys.length];
 }
 
-/* ---------- chart plot (без заголовков) ---------- */
+function formatHms(totalSeconds: number) {
+  const t = Math.max(0, Math.trunc(Number(totalSeconds || 0)));
+  const h = Math.floor(t / 3600);
+  const m = Math.floor((t % 3600) / 60);
+  const s = t % 60;
+  return `${h}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+}
+
+function trendArrow(trend: "up" | "down" | "same") {
+  if (trend === "up") return "↑";
+  if (trend === "down") return "↓";
+  return "+";
+}
+
+/* ---------- chart plot ---------- */
 
 function ChartPlot({
   data,
@@ -130,14 +150,14 @@ function ChartPlot({
 
   if (!hasData) {
     return (
-      <div className={styles.muted} style={{ lineHeight: 1.4 }}>
+      <div className={`${styles.muted} ${styles.chartEmpty}`}>
         Нужно минимум 2 замера, чтобы построить график.
       </div>
     );
   }
 
   return (
-    <div style={{ width: "100%", height: 240 }}>
+    <div className={styles.chartWrap}>
       <ResponsiveContainer width="100%" height="100%">
         <LineChart data={data} margin={{ top: 16, right: 12, left: 0, bottom: 0 }}>
           <CartesianGrid strokeDasharray="3 3" />
@@ -161,11 +181,8 @@ function ChartPlot({
 
           <Tooltip
             labelFormatter={(l) => formatDateRu(String(l))}
-            contentStyle={{
-              fontSize: 12,
-              borderRadius: 10,
-              borderColor: "rgba(0,0,0,0.08)",
-            }}
+            contentStyle={{}}
+            wrapperStyle={{}}
             formatter={(v: any) => {
               const n = Number(v);
               const txt = Number.isFinite(n) ? fmtNum(n) : String(v);
@@ -178,7 +195,7 @@ function ChartPlot({
               dataKey="value"
               position="top"
               formatter={(v: any) => fmtNum(v)}
-              style={{ fontSize: 10, fill: "rgba(0,0,0,0.6)" }}
+              className={styles.chartLabel}
             />
           </Line>
         </LineChart>
@@ -187,7 +204,7 @@ function ChartPlot({
   );
 }
 
-/* ---------- ChartCard (для веса: с заголовком) ---------- */
+/* ---------- ChartCard ---------- */
 
 function ChartCard({
   title,
@@ -201,14 +218,14 @@ function ChartCard({
   unit?: string;
 }) {
   return (
-    <section className={styles.listWrap} style={{ marginTop: 14 }}>
+    <section className={`${styles.listWrap} ${styles.statsSection}`}>
       <div className={styles.listHeader}>
         <div className={styles.sectionTitle}>{title}</div>
         <div className={styles.muted}>{subtitle || ""}</div>
       </div>
 
       <div className={styles.list}>
-        <div className={styles.listItem} style={{ cursor: "default" }}>
+        <div className={`${styles.listItem} ${styles.listItemStatic}`}>
           <div className={styles.listItemMain}>
             <ChartPlot data={data} unit={unit} />
           </div>
@@ -218,16 +235,69 @@ function ChartCard({
   );
 }
 
+/* ---------- Overview карточка ---------- */
+
+function OverviewStatCard({
+  title,
+  value,
+  unit,
+  delta,
+  deltaHint,
+  trend = "same",
+}: {
+  title: string;
+  value: string;
+  unit?: string;
+  delta: { badge: string; tail: string };
+  deltaHint?: string;
+  trend?: "up" | "down" | "same";
+}) {
+  const deltaClass =
+    trend === "up"
+      ? styles.deltaUp
+      : trend === "down"
+      ? styles.deltaDown
+      : styles.deltaSame;
+
+  return (
+    <div className={`${styles.listItem} ${styles.overviewCard}`}>
+      <div className={styles.overviewCardHead}>
+        <div className={`${styles.muted} ${styles.overviewCardTitle}`}>{title}</div>
+        <div className={styles.overviewCardDecor} />
+      </div>
+
+      <div className={styles.overviewCardValueBlock}>
+        <div className={styles.overviewCardValue}>{value}</div>
+        {unit ? <div className={styles.overviewCardUnit}>{unit}</div> : null}
+      </div>
+
+      <div className={styles.overviewCardFoot}>
+        <div className={styles.overviewCardDelta}>
+          <span className={`${styles.deltaBadge} ${deltaClass}`}>{delta.badge}</span>
+          <span className={styles.deltaTail}> {delta.tail}</span>
+        </div>
+
+        {deltaHint ? (
+          <div className={`${styles.muted} ${styles.overviewCardHint}`}>{deltaHint}</div>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
 /* ---------- page ---------- */
 
 export default function SportStatsPage() {
   const router = useRouter();
   const [tab, setTab] = useState<StatsTab>("overview");
 
+  // NEW: период обзора
+  const [overviewPeriod, setOverviewPeriod] = useState<OverviewPeriod>("week");
+
   const [loading, setLoading] = useState(false);
   const [hint, setHint] = useState<string | null>(null);
 
-  const [overview, setOverview] = useState<OverviewStats | null>(null);
+  const [overview, setOverview] = useState<OverviewApi | null>(null);
 
   // BODY
   const [bodyLoading, setBodyLoading] = useState(false);
@@ -247,25 +317,30 @@ export default function SportStatsPage() {
       setHint(null);
 
       try {
-        const r = await fetch("/api/sport/stats/overview", { credentials: "include" });
-        const j = await r.json().catch(() => ({} as any));
-
-        if (!r.ok || !j.ok) return;
-
-        setOverview({
-          workouts_7d: Number(j.workouts_7d || 0),
-          workouts_28d: Number(j.workouts_28d || 0),
-          volume_7d: Number(j.volume_7d || 0),
-          volume_28d: Number(j.volume_28d || 0),
-          top: Array.isArray(j.top) ? j.top : [],
+        const r = await fetch(`/api/sport/stats/overview?period=${overviewPeriod}`, {
+          credentials: "include",
         });
+        const j: OverviewApi = await r.json().catch(() => ({} as any));
+
+        if (!r.ok || !j.ok) {
+          const msg =
+            j?.reason === "NO_SESSION"
+              ? "Нет сессии. Открой через Telegram."
+              : j?.error || j?.reason || `HTTP ${r.status}`;
+          setHint(msg);
+          setOverview(null);
+          return;
+        }
+
+        setOverview(j);
       } catch (e: any) {
         setHint(String(e?.message || e));
+        setOverview(null);
       } finally {
         setLoading(false);
       }
     })();
-  }, [tab]);
+  }, [tab, overviewPeriod]);
 
   // ---------- BODY ----------
   useEffect(() => {
@@ -299,12 +374,23 @@ export default function SportStatsPage() {
     })();
   }, [tab, body]);
 
-  const workouts7 = overview ? overview.workouts_7d : 0;
-  const workouts28 = overview ? overview.workouts_28d : 0;
-  const vol7 = overview ? overview.volume_7d : 0;
-  const vol28 = overview ? overview.volume_28d : 0;
+  const cards = overview?.cards || {};
 
-  const top3 = useMemo(() => (overview?.top || []).slice(0, 3), [overview]);
+  // const currentPeriod = overview?.range?.current
+  //   ? `${formatDateRu(overview.range.current.from)} – ${formatDateRu(overview.range.current.to)}`
+  //   : overviewPeriod === "month"
+  //   ? "текущий месяц"
+  //   : "текущая неделя";
+
+  // const prevPeriod =
+  //   overview?.range?.prev
+  //     ? `${formatDateRu(overview.range.prev.from)} – ${formatDateRu(overview.range.prev.to)}`
+  //     : overviewPeriod === "month"
+  //     ? "предыдущего месяца"
+  //     : "предыдущей недели";
+// показываем человеку-подписи, а не даты
+  const currentPeriod = overviewPeriod === "month" ? "текущий месяц" : "текущая неделя";
+  const prevPeriod = overviewPeriod === "month" ? "предыдущего месяца" : "предыдущей недели";
 
   const bodyPeriodText = useMemo(() => {
     const from = bodyRange?.from;
@@ -358,6 +444,34 @@ export default function SportStatsPage() {
   const sizesData = useMemo(() => toChartData(activeSize?.data || []), [activeSize]);
   const compData = useMemo(() => toChartData(activeComp?.data || []), [activeComp]);
 
+  function makeDeltaParts(c?: OverviewCard, mode?: "num" | "hms") {
+    const safe =
+      c || ({
+        current: 0,
+        prev: 0,
+        delta: 0,
+        trend: "same",
+        key: "workouts" as OverviewCardKey,
+      } as OverviewCard);
+
+    const arrow = trendArrow(safe.trend);
+    const sign = safe.delta > 0 ? "+" : safe.delta < 0 ? "−" : "";
+    const abs = Math.abs(safe.delta);
+
+    const deltaVal = mode === "hms" ? formatHms(abs) : fmtNum(abs);
+
+    return {
+      badge: `${arrow} ${sign}${deltaVal}`.trim(),
+      tail: `от ${prevPeriod}`,
+    };
+  }
+
+  function toggleOverviewPeriod() {
+    setOverviewPeriod((p) => (p === "week" ? "month" : "week"));
+  }
+
+  const periodBadgeText = overviewPeriod === "week" ? "Неделя" : "Месяц";
+
   return (
     <div className={styles.shell}>
       <AppMenu />
@@ -378,7 +492,7 @@ export default function SportStatsPage() {
           </button>
         </nav>
 
-        <nav className={styles.tabWrap} aria-label="Раздел статистики" style={{ marginTop: 10 }}>
+        <nav className={`${styles.tabWrap} ${styles.statsTabs}`} aria-label="Раздел статистики">
           <button
             type="button"
             className={`${styles.tabBadge} ${tab === "overview" ? styles.tabBadgeActive : ""}`}
@@ -401,111 +515,79 @@ export default function SportStatsPage() {
         </nav>
 
         {hint ? <div className={styles.hintDanger}>{hint}</div> : null}
-        {loading ? <div className={styles.muted} style={{ marginTop: 10 }}>Загружаю…</div> : null}
+        {/*{loading ? <div className={`${styles.muted} ${styles.statsTopGap}`}>Загружаю…</div> : null}*/}
 
         {tab === "overview" ? (
-          <>
-            <section className={styles.listWrap} style={{ marginTop: 14 }}>
-              <div className={styles.listHeader}>
-                <div className={styles.sectionTitle}>Тренировки</div>
-                <div className={styles.muted}>за периоды</div>
-              </div>
+          <section className={`${styles.listWrap} ${styles.statsSection}`}>
+            <div className={styles.listHeader}>
+              <div className={styles.sectionTitle}>Обзор</div>
 
-              <div className={styles.list} style={{ gap: 10 }}>
-                <div className={styles.listItem} style={{ cursor: "default" }}>
-                  <div className={styles.listItemMain}>
-                    <div className={styles.metaRow}>
-                      <span className={styles.chip}>7 дней: {fmtNum(workouts7)}</span>
-                      <span className={styles.chip}>28 дней: {fmtNum(workouts28)}</span>
-                    </div>
-                    <div className={styles.muted} style={{ marginTop: 8, lineHeight: 1.35 }}>
-                      Потом добавим: среднее в неделю и сравнение с прошлым периодом.
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </section>
+              {/* вместо "текущая неделя" */}
+              <button
+                type="button"
+                className={`${styles.tabBadge} ${styles.tabBadgeNowrap}`}
+                onClick={toggleOverviewPeriod}
+                title={currentPeriod}
+                aria-label="Переключить период обзора"
+              >
+                <span className={`${styles.dot} ${styles.dotActive}`} />
+                {periodBadgeText}
+              </button>
+            </div>
 
-            <section className={styles.listWrap} style={{ marginTop: 14 }}>
-              <div className={styles.listHeader}>
-                <div className={styles.sectionTitle}>Объём</div>
-                <div className={styles.muted}>только силовые</div>
-              </div>
+            <div className={styles.overviewGrid}>
+              <OverviewStatCard
+                title="Тренировок"
+                value={fmtNum(cards.workouts?.current || 0)}
+                delta={makeDeltaParts(cards.workouts, "num")}
+                trend={cards.workouts?.trend || "same"}
+              />
 
-              <div className={styles.list} style={{ gap: 10 }}>
-                <div className={styles.listItem} style={{ cursor: "default" }}>
-                  <div className={styles.listItemMain}>
-                    <div className={styles.metaRow}>
-                      <span className={styles.chip}>7 дней: {fmtNum(vol7)} кг</span>
-                      <span className={styles.chip}>28 дней: {fmtNum(vol28)} кг</span>
-                    </div>
-                    <div className={styles.muted} style={{ marginTop: 8, lineHeight: 1.35 }}>
-                      Потом добавим: объём на тренировку и тренд.
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </section>
+              <OverviewStatCard
+                title="Тоннаж"
+                value={fmtNum(cards.tonnage?.current || 0)}
+                delta={makeDeltaParts(cards.tonnage, "num")}
+                trend={cards.tonnage?.trend || "same"}
+              />
 
-            <section className={styles.listWrap} style={{ marginTop: 14 }}>
-              <div className={styles.listHeader}>
-                <div className={styles.sectionTitle}>Лучший прогресс</div>
-                <div className={styles.muted}>топ 3</div>
-              </div>
+              <OverviewStatCard
+                title="Подходы"
+                value={fmtNum(cards.sets?.current || 0)}
+                delta={makeDeltaParts(cards.sets, "num")}
+                trend={cards.sets?.trend || "same"}
+              />
 
-              <div className={styles.list} style={{ gap: 10 }}>
-                {top3.length ? (
-                  top3.map((x) => (
-                    <div key={x.exercise_id} className={styles.listItem} style={{ cursor: "default" }}>
-                      <div className={styles.listItemMain}>
-                        <div className={styles.titleText}>{x.name}</div>
-                        <div className={styles.metaRow} style={{ marginTop: 8 }}>
-                          <span className={styles.chip}>
-                            +{fmtNum(x.delta)} {x.unit === "kg" ? "кг" : "повт"}
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-                  ))
-                ) : (
-                  <div className={styles.listItem} style={{ cursor: "default" }}>
-                    <div className={styles.listItemMain}>
-                      <div className={styles.muted} style={{ lineHeight: 1.35 }}>
-                        Тут появятся упражнения, где лучше всего вырос результат.
-                      </div>
-                    </div>
-                  </div>
-                )}
-              </div>
-            </section>
-          </>
+              <OverviewStatCard
+                title="Длительность"
+                value={formatHms(cards.duration?.current || 0)}
+                delta={makeDeltaParts(cards.duration, "hms")}
+                trend={cards.duration?.trend || "same"}
+              />
+            </div>
+          </section>
         ) : (
           <>
             {bodyHint ? <div className={styles.hintDanger}>{bodyHint}</div> : null}
-            {bodyLoading ? <div className={styles.muted} style={{ marginTop: 10 }}>Загружаю…</div> : null}
+            {bodyLoading ? <div className={`${styles.muted} ${styles.statsTopGap}`}>Загружаю…</div> : null}
 
-            {/* 1) ВЕС */}
             <ChartCard title="Вес" subtitle={bodyPeriodText} data={weightData} unit="кг" />
 
-            {/* 2) ЗАМЕРЫ */}
-            <section className={styles.listWrap} style={{ marginTop: 14 }}>
+            <section className={`${styles.listWrap} ${styles.statsSection}`}>
               <div className={styles.listHeader}>
                 <div className={styles.sectionTitle}>Замеры тела</div>
                 <div className={styles.muted}>{bodyPeriodText}</div>
               </div>
 
               <div className={styles.list}>
-                <div className={styles.listItem} style={{ cursor: "default" }}>
+                <div className={`${styles.listItem} ${styles.listItemStatic}`}>
                   <div className={styles.listItemMain}>
-                    {/* таб внутри listItem */}
-                    <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 10 }}>
+                    <div className={styles.chartSwitchRow}>
                       <button
                         type="button"
-                        className={styles.tabBadge}
+                        className={`${styles.tabBadge} ${styles.tabBadgeNowrap}`}
                         onClick={cycleSize}
                         title="Переключить параметр"
                         aria-label="Переключить параметр замеров"
-                        style={{ whiteSpace: "nowrap" }}
                         disabled={!sizeKeys.length}
                       >
                         <span className={`${styles.dot} ${styles.dotActive}`} />
@@ -519,25 +601,22 @@ export default function SportStatsPage() {
               </div>
             </section>
 
-            {/* 3) СОСТАВ */}
-            <section className={styles.listWrap} style={{ marginTop: 14 }}>
+            <section className={`${styles.listWrap} ${styles.statsSection}`}>
               <div className={styles.listHeader}>
                 <div className={styles.sectionTitle}>Состав тела</div>
                 <div className={styles.muted}>{bodyPeriodText}</div>
               </div>
 
               <div className={styles.list}>
-                <div className={styles.listItem} style={{ cursor: "default" }}>
+                <div className={`${styles.listItem} ${styles.listItemStatic}`}>
                   <div className={styles.listItemMain}>
-                    {/* таб внутри listItem */}
-                    <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 10 }}>
+                    <div className={styles.chartSwitchRow}>
                       <button
                         type="button"
-                        className={styles.tabBadge}
+                        className={`${styles.tabBadge} ${styles.tabBadgeNowrap}`}
                         onClick={cycleComp}
                         title="Переключить параметр"
                         aria-label="Переключить параметр состава тела"
-                        style={{ whiteSpace: "nowrap" }}
                         disabled={!compKeys.length}
                       >
                         <span className={`${styles.dot} ${styles.dotActive}`} />
@@ -553,7 +632,7 @@ export default function SportStatsPage() {
           </>
         )}
 
-        <div style={{ height: 16 }} />
+        <div className={styles.statsBottomSpacer} />
       </main>
     </div>
   );

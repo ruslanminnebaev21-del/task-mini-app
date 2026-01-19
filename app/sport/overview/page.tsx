@@ -92,6 +92,15 @@ function fmtWeight(n: number) {
   return String(s).replace(".", ",");
 }
 
+function startOfMonth(d: Date) {
+  return new Date(d.getFullYear(), d.getMonth(), 1, 12, 0, 0);
+}
+
+function addMonths(d: Date, delta: number) {
+  const base = startOfMonth(d);
+  return new Date(base.getFullYear(), base.getMonth() + delta, 1, 12, 0, 0);
+}
+
 /* ================== CACHE + REV(APP) ================== */
 
 const OVERVIEW_CACHE_KEY = "sport_overview_cache_v3";
@@ -337,6 +346,72 @@ export default function SportPage() {
   const calAbortRef = useRef<AbortController | null>(null);
   const calCacheRef = useRef(new Map<number, WorkoutSummary>());
 
+  // ===== SWIPE MONTH =====
+  const [viewMonth, setViewMonth] = useState<Date>(() => startOfMonth(new Date()));
+  const [calAnim, setCalAnim] = useState<{ phase: "idle" | "out" | "in"; dir: -1 | 1 }>({
+    phase: "idle",
+    dir: 1,
+  });
+  const animTimersRef = useRef<number[]>([]);
+  const swipeRef = useRef<{
+    down: boolean;
+    startX: number;
+    startY: number;
+    pointerId: number | null;
+    decided: boolean;
+    isHorizontal: boolean;
+  }>({
+    down: false,
+    startX: 0,
+    startY: 0,
+    pointerId: null,
+    decided: false,
+    isHorizontal: false,
+  });
+
+  function clearAnimTimers() {
+    animTimersRef.current.forEach((t) => window.clearTimeout(t));
+    animTimersRef.current = [];
+  }
+
+  function goMonth(delta: number) {
+    if (!delta) return;
+    if (calAnim.phase !== "idle") return;
+
+    clearAnimTimers();
+
+    const dir: -1 | 1 = delta > 0 ? 1 : -1;
+
+    // если открыт попап, закрываем, чтобы не улетел в другой месяц
+    if (calOpen) {
+      setCalOpen(false);
+      setCalDateKey(null);
+      setCalWorkouts([]);
+      setCalActiveId(null);
+      setCalSummary(null);
+    }
+
+    setCalAnim({ phase: "out", dir });
+
+    const t1 = window.setTimeout(() => {
+      setViewMonth((prev) => addMonths(prev, delta));
+      setCalAnim({ phase: "in", dir });
+
+      const t2 = window.setTimeout(() => {
+        setCalAnim({ phase: "idle", dir });
+      }, 170);
+
+      animTimersRef.current.push(t2);
+    }, 170);
+
+    animTimersRef.current.push(t1);
+  }
+
+  useEffect(() => {
+    return () => clearAnimTimers();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // актуальные значения для записи кеша без устаревших замыканий
   const stateRef = useRef({
     revApp: 0,
@@ -355,12 +430,15 @@ export default function SportPage() {
     stateRef.current.weightPoints = weightPoints;
   }, [firstName, goal, weight, workouts, weightPoints]);
 
-  const now = useMemo(() => new Date(), []);
   const todayKey = useMemo(() => ymd(new Date()), []);
-  const year = now.getFullYear();
-  const month = now.getMonth();
 
-  const doneWorkouts = useMemo(() => workouts.filter((w) => w.status === "done" && Boolean(w.completed_at)), [workouts]);
+  const year = viewMonth.getFullYear();
+  const month = viewMonth.getMonth();
+
+  const doneWorkouts = useMemo(
+    () => workouts.filter((w) => w.status === "done" && Boolean(w.completed_at)),
+    [workouts]
+  );
 
   const workoutDays = useMemo(() => {
     const s = new Set<string>();
@@ -406,9 +484,10 @@ export default function SportPage() {
       .sort((a, b) => String(b.completed_at).localeCompare(String(a.completed_at)));
   }, [doneWorkouts, year, month]);
 
-  const statsIds = useMemo(() => workoutsThisMonthSorted.filter((w) => w.type === "strength").map((w) => w.id), [
-    workoutsThisMonthSorted,
-  ]);
+  const statsIds = useMemo(
+    () => workoutsThisMonthSorted.filter((w) => w.type === "strength").map((w) => w.id),
+    [workoutsThisMonthSorted]
+  );
   const { loading: statsLoading, data: statsByWorkoutId } = useWorkoutStats(statsIds);
 
   const hello = firstName.trim() ? `Привет, ${firstName.trim()}!` : "Привет!";
@@ -718,6 +797,96 @@ export default function SportPage() {
     }
   }
 
+  // ===== swipe handlers on calWrap =====
+  function onCalPointerDown(e: React.PointerEvent<HTMLDivElement>) {
+    if (e.button !== 0) return;
+    swipeRef.current.down = true;
+    swipeRef.current.startX = e.clientX;
+    swipeRef.current.startY = e.clientY;
+    swipeRef.current.pointerId = e.pointerId;
+    swipeRef.current.decided = false;
+    swipeRef.current.isHorizontal = false;
+
+    try {
+      (e.currentTarget as any).setPointerCapture?.(e.pointerId);
+    } catch {}
+  }
+
+  function onCalPointerMove(e: React.PointerEvent<HTMLDivElement>) {
+    if (!swipeRef.current.down) return;
+
+    const dx = e.clientX - swipeRef.current.startX;
+    const dy = e.clientY - swipeRef.current.startY;
+
+    if (!swipeRef.current.decided) {
+      const ax = Math.abs(dx);
+      const ay = Math.abs(dy);
+
+      if (ax < 8 && ay < 8) return;
+
+      swipeRef.current.decided = true;
+      swipeRef.current.isHorizontal = ax > ay * 1.2;
+
+      // если пошли в горизонталь, стараемся не скроллить страницу
+      if (swipeRef.current.isHorizontal) {
+        e.preventDefault();
+      }
+      return;
+    }
+
+    if (swipeRef.current.isHorizontal) {
+      e.preventDefault();
+    }
+  }
+
+  function onCalPointerUp(e: React.PointerEvent<HTMLDivElement>) {
+    if (!swipeRef.current.down) return;
+
+    const dx = e.clientX - swipeRef.current.startX;
+    const dy = e.clientY - swipeRef.current.startY;
+
+    const ax = Math.abs(dx);
+    const ay = Math.abs(dy);
+
+    const isHorizontal = swipeRef.current.decided ? swipeRef.current.isHorizontal : ax > ay * 1.2;
+
+    swipeRef.current.down = false;
+    swipeRef.current.pointerId = null;
+
+    if (!isHorizontal) return;
+    if (ax < 60) return;
+
+    // dx > 0 = свайп вправо (обычно это прошлый месяц)
+    if (dx > 0) goMonth(-1);
+    else goMonth(1);
+  }
+
+  function onCalPointerCancel() {
+    swipeRef.current.down = false;
+    swipeRef.current.pointerId = null;
+  }
+
+  const calSlideStyle: React.CSSProperties = useMemo(() => {
+    const base: React.CSSProperties = {
+      transition: "transform 170ms ease, opacity 170ms ease",
+      willChange: "transform, opacity",
+    };
+
+    if (calAnim.phase === "idle") {
+      return { ...base, transform: "translateX(0px)", opacity: 1 };
+    }
+
+    // out: уезжаем в сторону движения
+    if (calAnim.phase === "out") {
+      const px = 16 * calAnim.dir;
+      return { ...base, transform: `translateX(${px}px)`, opacity: 0.55 };
+    }
+
+    // in: приезжаем с противоположной стороны
+    const px = -16 * calAnim.dir;
+    return { ...base, transform: `translateX(${px}px)`, opacity: 0.55 };
+  }, [calAnim]);
+
   return (
     <div className={styles.shell}>
       <AppMenu />
@@ -783,118 +952,135 @@ export default function SportPage() {
           </div>
         </button>
 
-        <section className={styles.card} style={{ marginTop: 14 }}>
-          <div className={styles.calHeader}>
-            <div className={styles.calTitle}>{monthLabel(now)}</div>
-            <div className={styles.muted}>Тренировок в этом месяце: {trainingsThisMonth}</div>
-          </div>
-
-          {/* ВАЖНО: обертка для абсолютного позиционирования попапа */}
-          <div className={styles.calWrap}>
-            <div className={styles.calWeekdays}>
-              {["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"].map((x) => (
-                <div key={x} className={styles.calWeekday}>
-                  {x}
-                </div>
-              ))}
+        <section className={styles.card} style={{ marginTop: 14, overflow: "hidden" }}>
+          <div style={calSlideStyle}>
+            <div className={styles.calHeader}>
+              <div className={styles.calTitle}>{monthLabel(viewMonth)}</div>
+              <div className={styles.muted}>Тренировок в этом месяце: {trainingsThisMonth}</div>
             </div>
 
-            <div className={styles.calGrid}>
-              {calendar.map((cell) => {
-                if (!cell.date) return <div key={cell.key} className={styles.calCellEmpty} />;
-
-                const key = ymd(cell.date);
-                const hasWorkout = workoutDays.has(key);
-                const isToday = key === todayKey;
-
-                return (
-                  <button
-                    key={cell.key}
-                    type="button"
-                    className={`${styles.calCellBtn} ${styles.calCell} ${isToday ? styles.calCellToday : ""}`}
-                    title={key}
-                    onClick={(e) => openCalendarPopup(cell.date!, e.currentTarget)}
-                  >
-                    <span className={styles.calDayNum}>{cell.date.getDate()}</span>
-                    {hasWorkout ? <span className={styles.calDot} /> : null}
-                  </button>
-                );
-              })}
-            </div>
-
-            {calOpen && (
-              <>
-                {/* оверлей внутри календаря */}
-                <button
-                  type="button"
-                  className={styles.calOverlay}
-                  onClick={() => setCalOpen(false)}
-                  aria-label="Закрыть"
-                />
-
-                {/* попап поверх календаря */}
-                <div className={styles.calPopover} style={{ left: popPos.left, top: popPos.top }} role="dialog">
-                  <div className={styles.calPopupHead}>
-                    <div className={styles.calPopupTitle}>{calSummary?.workout?.title ? calSummary.workout.title : calLoading ? "Загружаю…" : "—"} </div>
-                    <button type="button" className={styles.calPopupClose} onClick={() => setCalOpen(false)}>
-                      ✕
-                    </button>
+            {/* свайп сюда */}
+            <div
+              className={styles.calWrap}
+              onPointerDown={onCalPointerDown}
+              onPointerMove={onCalPointerMove}
+              onPointerUp={onCalPointerUp}
+              onPointerCancel={onCalPointerCancel}
+              style={{
+                touchAction: "pan-y",
+                userSelect: "none",
+              }}
+              aria-label="Календарь. Свайпни влево или вправо, чтобы сменить месяц"
+              title="Свайпни влево/вправо чтобы сменить месяц"
+            >
+              <div className={styles.calWeekdays}>
+                {["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"].map((x) => (
+                  <div key={x} className={styles.calWeekday}>
+                    {x}
                   </div>
+                ))}
+              </div>
 
-                  {calWorkouts.length === 0 ? (
-                    <div className={styles.muted}>В этот день тренировок нет</div>
-                  ) : (
-                    <>
-                      {calWorkouts.length > 1 && (
-                        <div className={styles.calPopupTabs}>
-                          {calWorkouts.map((w) => (
-                            <button
-                              key={w.id}
-                              type="button"
-                              className={`${styles.calPopupTab} ${
-                                calActiveId === w.id ? styles.calPopupTabActive : ""
-                              }`}
-                              onClick={() => switchPopupWorkout(w.id)}
-                            >
-                              {w.title || "Без названия"}
-                            </button>
-                          ))}
-                        </div>
-                      )}
+              <div className={styles.calGrid}>
+                {calendar.map((cell) => {
+                  if (!cell.date) return <div key={cell.key} className={styles.calCellEmpty} />;
 
-                      {calLoading ? (
-                        <div className={styles.muted}>Загружаю…</div>
-                      ) : !calSummary ? (
-                        <div className={styles.muted}>Не удалось загрузить данные</div>
-                      ) : (
-                        <div className={styles.calPopupBody}>
-                          {/*<div className={styles.calPopupWorkoutTitle}>{calSummary.workout.title}</div>*/}
-                          <div className={styles.muted}>
-                            {calSummary.workout.completed_at
-                              ? new Date(calSummary.workout.completed_at).toLocaleString("ru-RU")
-                              : ""}
+                  const key = ymd(cell.date);
+                  const hasWorkout = workoutDays.has(key);
+                  const isToday = key === todayKey;
+
+                  return (
+                    <button
+                      key={cell.key}
+                      type="button"
+                      className={`${styles.calCellBtn} ${styles.calCell} ${isToday ? styles.calCellToday : ""}`}
+                      title={key}
+                      onClick={(e) => openCalendarPopup(cell.date!, e.currentTarget)}
+                    >
+                      <span className={styles.calDayNum}>{cell.date.getDate()}</span>
+                      {hasWorkout ? <span className={styles.calDot} /> : null}
+                    </button>
+                  );
+                })}
+              </div>
+
+              {calOpen && (
+                <>
+                  {/* оверлей внутри календаря */}
+                  <button
+                    type="button"
+                    className={styles.calOverlay}
+                    onClick={() => setCalOpen(false)}
+                    aria-label="Закрыть"
+                  />
+
+                  {/* попап поверх календаря */}
+                  <div className={styles.calPopover} style={{ left: popPos.left, top: popPos.top }} role="dialog">
+                    <div className={styles.calPopupHead}>
+                      <div className={styles.calPopupTitle}>
+                        {calSummary?.workout?.title
+                          ? calSummary.workout.title
+                          : calLoading
+                          ? "Загружаю…"
+                          : "—"}{" "}
+                      </div>
+                      <button type="button" className={styles.calPopupClose} onClick={() => setCalOpen(false)}>
+                        ✕
+                      </button>
+                    </div>
+
+                    {calWorkouts.length === 0 ? (
+                      <div className={styles.muted}>В этот день тренировок нет</div>
+                    ) : (
+                      <>
+                        {calWorkouts.length > 1 && (
+                          <div className={styles.calPopupTabs}>
+                            {calWorkouts.map((w) => (
+                              <button
+                                key={w.id}
+                                type="button"
+                                className={`${styles.calPopupTab} ${
+                                  calActiveId === w.id ? styles.calPopupTabActive : ""
+                                }`}
+                                onClick={() => switchPopupWorkout(w.id)}
+                              >
+                                {w.title || "Без названия"}
+                              </button>
+                            ))}
                           </div>
+                        )}
 
-                          <div className={styles.calPopupSection}>
-                            {/*<div className={styles.calPopupSectionTitle}>Упражнения</div>*/}
+                        {calLoading ? (
+                          <div className={styles.muted}>Загружаю…</div>
+                        ) : !calSummary ? (
+                          <div className={styles.muted}>Не удалось загрузить данные</div>
+                        ) : (
+                          <div className={styles.calPopupBody}>
+                            <div className={styles.muted}>
+                              {calSummary.workout.completed_at
+                                ? new Date(calSummary.workout.completed_at).toLocaleString("ru-RU")
+                                : ""}
+                            </div>
 
-                            {calSummary.exercises.length ? (
-                              <ul className={styles.muted}>
-                                {calSummary.exercises.map((ex) => (
-                                  <li key={ex.id}>{ex.name}</li>
-                                ))}
-                              </ul>
-                            ) : (
-                              <div className={styles.muted}>Упражнений пока нет</div>
-                            )}
+                            <div className={styles.calPopupSection}>
+                              {calSummary.exercises.length ? (
+                                <ul className={styles.muted}>
+                                  {calSummary.exercises.map((ex) => (
+                                    <li key={ex.id}>{ex.name}</li>
+                                  ))}
+                                </ul>
+                              ) : (
+                                <div className={styles.muted}>Упражнений пока нет</div>
+                              )}
+                            </div>
                           </div>
-                        </div>
-                      )}
-                    </>
-                  )}
-                </div>
-              </>
-            )}
+                        )}
+                      </>
+                    )}
+                  </div>
+                </>
+              )}
+            </div>
           </div>
         </section>
 

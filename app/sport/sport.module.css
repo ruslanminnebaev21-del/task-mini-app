@@ -1751,7 +1751,7 @@
   inset: 0;
   border: 0;
   padding: 0;
-  background: rgba(0, 0, 0, 0.06);
+  /*background: rgba(0, 0, 0, 0.06);*/
   border-radius: 18px;
 }
 
@@ -1856,4 +1856,191 @@
   background: transparent;
   cursor: pointer;
 }
+/* ===== Stats (page.tsx) ===== */
 
+.statsTabs {
+  margin-top: 10px;
+}
+
+.statsTopGap {
+  margin-top: 10px;
+}
+
+.statsSection {
+  margin-top: 14px;
+}
+
+.statsBottomSpacer {
+  height: 16px;
+}
+
+/* Overview grid */
+.overviewGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+}
+
+/* Card base tweaks */
+.listItemStatic {
+  cursor: default;
+}
+
+/* Overview stat card */
+.overviewCard {
+  cursor: default;
+  padding: 16px;
+  border-radius: 18px;
+  min-height: 150px;
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  gap: 10px;
+}
+
+.overviewCardHead {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+}
+
+.overviewCardTitle {
+  font-size: 13px;
+  opacity: 0.7;
+}
+
+.overviewCardDecor {
+  opacity: 0.18;
+  font-size: 12px;
+  min-width: 12px;
+  min-height: 12px;
+}
+
+.overviewCardValueBlock {
+  display: block;
+}
+
+.overviewCardValue {
+  font-size: 36px;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.overviewCardUnit {
+  font-size: 22px;
+  font-weight: 800;
+  margin-top: 2px;
+  line-height: 1;
+}
+
+.overviewCardFoot {
+  display: grid;
+  gap: 4px;
+}
+
+.overviewCardDelta {
+  font-size: 12px;
+  opacity: 0.75;
+}
+
+.overviewCardHint {
+  font-size: 12px;
+  opacity: 0.55;
+}
+
+/* Chart */
+.chartWrap {
+  width: 100%;
+  height: 240px;
+}
+
+.chartEmpty {
+  line-height: 1.4;
+}
+
+.chartLabel {
+  font-size: 10px;
+  fill: rgba(0, 0, 0, 0.6);
+}
+
+/* переключатель параметра над графиком */
+.chartSwitchRow {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 0px;
+}
+
+.tabBadgeNowrap {
+  white-space: nowrap;
+}
+
+/* recharts tooltip styling (через global, иначе module не пробьёт) */
+:global(.recharts-tooltip-wrapper) {
+  outline: none;
+}
+
+:global(.recharts-default-tooltip) {
+  font-size: 12px;
+  border-radius: 10px;
+  border-color: rgba(0, 0, 0, 0.08);
+}
+
+.deltaUp {
+  color: rgba(30, 140, 70, 0.95);
+  opacity: 1;
+}
+
+.deltaDown {
+  color: rgba(200, 55, 65, 0.95);
+  opacity: 1;
+}
+
+.deltaSame {
+  color: rgba(0, 0, 0, 0.55);
+  opacity: 1;
+}
+
+/* дельта в карточке обзора */
+.overviewCardDelta {
+  font-size: 12px;
+  opacity: 0.85;
+  line-height: 1.2;
+}
+
+/* важно: делаем более специфично, чтобы перебить muted */
+.overviewCardDelta.deltaUp {
+  color: #16a34a; /* зелёный */
+}
+
+.overviewCardDelta.deltaDown {
+  color: #ef4444; /* красный */
+}
+
+.overviewCardDelta.deltaSame {
+  color: rgba(0,0,0,0.45);
+}
+
+.overviewCardDelta {
+  font-size: 12px;
+  line-height: 1.2;
+}
+
+.deltaBadge {
+  font-weight: 500;
+}
+
+.deltaTail {
+  color: rgba(0, 0, 0, 0.45);
+}
+
+/* цвет только для badge */
+.deltaBadge.deltaUp {
+  color: #16a34a;
+}
+
+.deltaBadge.deltaDown {
+  color: #ef4444;
+}
+
+.deltaBadge.deltaSame {
+  color: rgba(0, 0, 0, 0.45);
+}
