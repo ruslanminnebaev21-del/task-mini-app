@@ -352,7 +352,15 @@ export default function SportPage() {
     phase: "idle",
     dir: 1,
   });
-  const animTimersRef = useRef<number[]>([]);
+  // ===== SWIPE MONTH (sticky drag) =====
+
+  const calWrapRef = useRef<HTMLDivElement | null>(null);
+  const calWidthRef = useRef(0);
+
+  const [dragX, setDragX] = useState(0);
+  const [isDragging, setIsDragging] = useState(false);
+  const [animMs, setAnimMs] = useState(0);
+
   const swipeRef = useRef<{
     down: boolean;
     startX: number;
@@ -360,6 +368,7 @@ export default function SportPage() {
     pointerId: number | null;
     decided: boolean;
     isHorizontal: boolean;
+    lastX: number;
   }>({
     down: false,
     startX: 0,
@@ -367,7 +376,24 @@ export default function SportPage() {
     pointerId: null,
     decided: false,
     isHorizontal: false,
+    lastX: 0,
   });
+
+  useEffect(() => {
+    const el = calWrapRef.current;
+    if (!el) return;
+
+    const measure = () => {
+      const r = el.getBoundingClientRect();
+      calWidthRef.current = Math.max(1, Math.floor(r.width));
+    };
+
+    measure();
+    window.addEventListener("resize", measure);
+    return () => window.removeEventListener("resize", measure);
+  }, []);  
+  const animTimersRef = useRef<number[]>([]);
+
 
   function clearAnimTimers() {
     animTimersRef.current.forEach((t) => window.clearTimeout(t));
@@ -376,13 +402,8 @@ export default function SportPage() {
 
   function goMonth(delta: number) {
     if (!delta) return;
-    if (calAnim.phase !== "idle") return;
 
-    clearAnimTimers();
-
-    const dir: -1 | 1 = delta > 0 ? 1 : -1;
-
-    // если открыт попап, закрываем, чтобы не улетел в другой месяц
+    // если открыт попап, закрываем, чтобы не ехал вместе
     if (calOpen) {
       setCalOpen(false);
       setCalDateKey(null);
@@ -391,21 +412,18 @@ export default function SportPage() {
       setCalSummary(null);
     }
 
-    setCalAnim({ phase: "out", dir });
-
-    const t1 = window.setTimeout(() => {
-      setViewMonth((prev) => addMonths(prev, delta));
-      setCalAnim({ phase: "in", dir });
-
-      const t2 = window.setTimeout(() => {
-        setCalAnim({ phase: "idle", dir });
-      }, 170);
-
-      animTimersRef.current.push(t2);
-    }, 170);
-
-    animTimersRef.current.push(t1);
+    setViewMonth((prev) => addMonths(prev, delta));
   }
+  function clamp(n: number, a: number, b: number) {
+    return Math.max(a, Math.min(b, n));
+  }
+
+  function animateTo(x: number, ms: number) {
+    setAnimMs(ms);
+    setDragX(x);
+    // после анимации выключаем transition, чтобы палец снова “цеплял” без задержки
+    window.setTimeout(() => setAnimMs(0), ms);
+  }  
 
   useEffect(() => {
     return () => clearAnimTimers();
@@ -800,12 +818,17 @@ export default function SportPage() {
   // ===== swipe handlers on calWrap =====
   function onCalPointerDown(e: React.PointerEvent<HTMLDivElement>) {
     if (e.button !== 0) return;
+
     swipeRef.current.down = true;
     swipeRef.current.startX = e.clientX;
     swipeRef.current.startY = e.clientY;
+    swipeRef.current.lastX = e.clientX;
     swipeRef.current.pointerId = e.pointerId;
     swipeRef.current.decided = false;
     swipeRef.current.isHorizontal = false;
+
+    setIsDragging(false);
+    setAnimMs(0); // отключаем transition, чтобы движение было “живое”
 
     try {
       (e.currentTarget as any).setPointerCapture?.(e.pointerId);
@@ -818,25 +841,35 @@ export default function SportPage() {
     const dx = e.clientX - swipeRef.current.startX;
     const dy = e.clientY - swipeRef.current.startY;
 
+    // решаем, это горизонтальный свайп или вертикальный скролл
     if (!swipeRef.current.decided) {
       const ax = Math.abs(dx);
       const ay = Math.abs(dy);
 
-      if (ax < 8 && ay < 8) return;
+      if (ax < 6 && ay < 6) return;
 
       swipeRef.current.decided = true;
       swipeRef.current.isHorizontal = ax > ay * 1.2;
 
-      // если пошли в горизонталь, стараемся не скроллить страницу
-      if (swipeRef.current.isHorizontal) {
-        e.preventDefault();
-      }
-      return;
-    }
+      if (!swipeRef.current.isHorizontal) return;
 
-    if (swipeRef.current.isHorizontal) {
+      // стартуем drag
+      setIsDragging(true);
       e.preventDefault();
     }
+
+    if (!swipeRef.current.isHorizontal) return;
+
+    e.preventDefault();
+
+    const w = calWidthRef.current || 320;
+
+    // чуть “резины” по краям (чтобы приятно пружинило)
+    const max = w * 0.85;
+    const next = clamp(dx, -max, max);
+
+    setDragX(next);
+    swipeRef.current.lastX = e.clientX;
   }
 
   function onCalPointerUp(e: React.PointerEvent<HTMLDivElement>) {
@@ -845,25 +878,54 @@ export default function SportPage() {
     const dx = e.clientX - swipeRef.current.startX;
     const dy = e.clientY - swipeRef.current.startY;
 
-    const ax = Math.abs(dx);
-    const ay = Math.abs(dy);
-
-    const isHorizontal = swipeRef.current.decided ? swipeRef.current.isHorizontal : ax > ay * 1.2;
-
     swipeRef.current.down = false;
-    swipeRef.current.pointerId = null;
 
-    if (!isHorizontal) return;
-    if (ax < 60) return;
+    const isHorizontal = swipeRef.current.decided
+      ? swipeRef.current.isHorizontal
+      : Math.abs(dx) > Math.abs(dy) * 1.2;
 
-    // dx > 0 = свайп вправо (обычно это прошлый месяц)
-    if (dx > 0) goMonth(-1);
-    else goMonth(1);
+    if (!isHorizontal) {
+      setIsDragging(false);
+      return;
+    }
+
+    const w = calWidthRef.current || 320;
+    const threshold = Math.max(60, Math.round(w * 0.22)); // примерно четверть ширины
+
+    // если не дотянули, возвращаемся
+    if (Math.abs(dx) < threshold) {
+      setIsDragging(false);
+      animateTo(0, 180);
+      return;
+    }
+
+    // если дотянули, “долистываем” до края, меняем месяц, и возвращаем новый месяц в центр
+    const dir = dx > 0 ? -1 : 1; // вправо = прошлый месяц, влево = следующий
+    const target = dx > 0 ? w : -w;
+
+    setIsDragging(false);
+    setAnimMs(180);
+    setDragX(target);
+
+    window.setTimeout(() => {
+      // подменили месяц
+      goMonth(dir);
+
+      // мгновенно переносим позицию нового месяца “за экран”
+      setAnimMs(0);
+      setDragX(-target);
+
+      // и анимируем обратно в центр
+      window.setTimeout(() => {
+        animateTo(0, 180);
+      }, 0);
+    }, 180);
   }
 
   function onCalPointerCancel() {
     swipeRef.current.down = false;
-    swipeRef.current.pointerId = null;
+    setIsDragging(false);
+    animateTo(0, 180);
   }
 
   const calSlideStyle: React.CSSProperties = useMemo(() => {
@@ -952,8 +1014,14 @@ export default function SportPage() {
           </div>
         </button>
 
-        <section className={styles.card} style={{ marginTop: 14, overflow: "hidden" }}>
-          <div style={calSlideStyle}>
+          <section className={styles.card} style={{ marginTop: 14, overflow: "hidden" }}>
+            <div
+              style={{
+                transform: `translateX(${dragX}px)`,
+                transition: animMs ? `transform ${animMs}ms ease` : "none",
+                willChange: "transform",
+              }}
+            >
             <div className={styles.calHeader}>
               <div className={styles.calTitle}>{monthLabel(viewMonth)}</div>
               <div className={styles.muted}>Тренировок в этом месяце: {trainingsThisMonth}</div>
@@ -961,6 +1029,7 @@ export default function SportPage() {
 
             {/* свайп сюда */}
             <div
+              ref={calWrapRef}
               className={styles.calWrap}
               onPointerDown={onCalPointerDown}
               onPointerMove={onCalPointerMove}
@@ -972,7 +1041,7 @@ export default function SportPage() {
               }}
               aria-label="Календарь. Свайпни влево или вправо, чтобы сменить месяц"
               title="Свайпни влево/вправо чтобы сменить месяц"
-            >
+            >            
               <div className={styles.calWeekdays}>
                 {["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"].map((x) => (
                   <div key={x} className={styles.calWeekday}>
