@@ -69,14 +69,10 @@ export default function NewRecipePage() {
   const router = useRouter();
   const [open, setOpen] = useState(false);
 
+  
   /* categories */
-  const ALL_CATEGORIES: Category[] = [
-    { id: "breakfast", title: "Завтраки" },
-    { id: "lunch", title: "Обеды" },
-    { id: "dinner", title: "Ужины" },
-    { id: "dessert", title: "Десерты" },
-    { id: "snack", title: "Перекусы" },
-  ];
+  const [ALL_CATEGORIES, setAllCategories] = useState<Category[]>([]);
+  const [catsLoading, setCatsLoading] = useState(true);
 
   const [selectedCategoryIds, setSelectedCategoryIds] = useState<string[]>([]);
   const [categoriesOpen, setCategoriesOpen] = useState(false);
@@ -144,6 +140,30 @@ export default function NewRecipePage() {
   useEffect(() => {
     requestAnimationFrame(() => setOpen(true));
   }, []);
+  useEffect(() => {
+    let alive = true;
+
+    (async () => {
+      try {
+        setCatsLoading(true);
+        const r = await fetch("/api/recipes/categories", { method: "GET" });
+        const j = await r.json();
+        if (!alive) return;
+
+        setAllCategories(Array.isArray(j?.categories) ? j.categories : []);
+      } catch {
+        if (!alive) return;
+        setAllCategories([]);
+      } finally {
+        if (!alive) return;
+        setCatsLoading(false);
+      }
+    })();
+
+    return () => {
+      alive = false;
+    };
+  }, []); 
 
   // cleanup urls on unmount
   useEffect(() => {
@@ -436,7 +456,9 @@ export default function NewRecipePage() {
                 onClick={(e) => e.stopPropagation()}
               >
                 <div className={styles.modalTitle}>Категории</div>
-
+                {catsLoading ? (
+                  <div style={{ padding: 12, opacity: 0.6 }}>Загружаю категории…</div>
+                ) : null}
                 <div className={styles.list}>
                   {CATEGORIES.map((c) => {
                     const checked = draftCatIds.includes(c.id);

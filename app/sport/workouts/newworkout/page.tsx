@@ -87,6 +87,14 @@ function NewWorkoutInner() {
   const sp = useSearchParams();
 
   const [timerRunning, setTimerRunning] = useState(false);
+
+  // накопленное время в мс (когда на паузе тут уже все учтено)
+  const [elapsedMs, setElapsedMs] = useState(0);
+
+  // момент старта (когда timerRunning=true)
+  const [startedAtMs, setStartedAtMs] = useState<number | null>(null);
+
+  // то, что показываем в UI и отправляем в duration (секунды)
   const [seconds, setSeconds] = useState(0);
 
   // принимаем оба варианта, чтобы не ловить баги из-за несостыковки
@@ -95,6 +103,10 @@ function NewWorkoutInner() {
     const b = String(sp.get("id") || "").trim();
     return a || b; // приоритет workout_id
   }, [sp]);
+  const timerKey = useMemo(() => {
+    const id = String(editId || "new").trim();
+    return `sport_timer_v1:${id}`;
+  }, [editId]);
 
   const [title, setTitle] = useState("");
   const [type, setType] = useState<WorkoutType>("strength");
@@ -143,11 +155,24 @@ function NewWorkoutInner() {
     if (!timerRunning) return;
 
     const id = setInterval(() => {
-      setSeconds((s) => s + 1);
-    }, 1000);
+      setSeconds(calcSeconds(elapsedMs, startedAtMs, true));
+    }, 250);
 
     return () => clearInterval(id);
-  }, [timerRunning]);
+  }, [timerRunning, elapsedMs, startedAtMs]);
+  useEffect(() => {
+    const onVis = () => {
+      if (document.visibilityState !== "visible") return;
+      setSeconds(calcSeconds(elapsedMs, startedAtMs, timerRunning));
+    };
+
+    document.addEventListener("visibilitychange", onVis);
+    window.addEventListener("focus", onVis);
+    return () => {
+      document.removeEventListener("visibilitychange", onVis);
+      window.removeEventListener("focus", onVis);
+    };
+  }, [elapsedMs, startedAtMs, timerRunning]);
 
   function formatTime(total: number) {
     const h = Math.floor(total / 3600);
@@ -155,7 +180,46 @@ function NewWorkoutInner() {
     const s = total % 60;
     return `${h}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
   }
+  function calcSeconds(nextElapsedMs: number, nextStartedAtMs: number | null, running: boolean) {
+    const base = Math.max(0, Number(nextElapsedMs) || 0);
+    if (!running || !nextStartedAtMs) return Math.floor(base / 1000);
 
+    const add = Date.now() - nextStartedAtMs;
+    return Math.floor(Math.max(0, base + add) / 1000);
+  }
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(timerKey);
+      if (!raw) return;
+
+      const j = JSON.parse(raw) as any;
+      const running = Boolean(j?.running);
+      const eMs = Number(j?.elapsedMs) || 0;
+      const sAt = j?.startedAtMs == null ? null : Number(j.startedAtMs);
+
+      setElapsedMs(eMs);
+      setStartedAtMs(running && sAt ? sAt : null);
+      setTimerRunning(running && Boolean(sAt));
+
+      const sec = calcSeconds(eMs, running && sAt ? sAt : null, running);
+      setSeconds(sec);
+    } catch {
+      // если мусор в localStorage — просто игнор
+    }
+  }, [timerKey]);
+  useEffect(() => {
+    try {
+      localStorage.setItem(
+        timerKey,
+        JSON.stringify({
+          running: timerRunning,
+          elapsedMs,
+          startedAtMs,
+          savedAt: Date.now(),
+        })
+      );
+    } catch {}
+  }, [timerKey, timerRunning, elapsedMs, startedAtMs]);
   // ====== автоскролл ТОЛЬКО для exerciseInput к верху (30px) ======
   useEffect(() => {
     const OFFSET_TOP = 30;
@@ -303,8 +367,12 @@ function NewWorkoutInner() {
 
         // duration -> seconds (таймер), таймер при открытии не запускаем
         const dur = w.duration == null ? 0 : Number(w.duration);
-        setSeconds(Number.isFinite(dur) && dur > 0 ? dur : 0);
+        const sec = Number.isFinite(dur) && dur > 0 ? dur : 0;
+        setElapsedMs(sec * 1000);
+        setStartedAtMs(null);
+        setSeconds(sec);
         setTimerRunning(false);
+        try { localStorage.removeItem(timerKey); } catch {}
 
         // durationMin пока оставим (потом уберешь UI)
         setDurationMin(w.duration == null ? "" : String(w.duration));
@@ -400,8 +468,12 @@ function NewWorkoutInner() {
     setWorkoutDate(todayYmd());
 
     // сброс таймера
-    setTimerRunning(false);
-    setSeconds(0);
+  setTimerRunning(false);
+  setElapsedMs(0);
+  setStartedAtMs(null);
+  setSeconds(0);
+
+  try { localStorage.removeItem(timerKey); } catch {}
 
     const first = makeEmptyExercise();
     setWorkoutExercises([first]);
@@ -705,7 +777,27 @@ function NewWorkoutInner() {
               <button
                 type="button"
                 className={styles.timerBtn}
-                onClick={() => setTimerRunning((v) => !v)}
+                onClick={() => {
+                  setTimerRunning((prev) => {
+                    // старт
+                    if (!prev) {
+                      const now = Date.now();
+                      setStartedAtMs(now);
+                      setSeconds(calcSeconds(elapsedMs, now, true));
+                      return true;
+                    }
+
+                    // пауза
+                    const sAt = startedAtMs;
+                    const add = sAt ? Date.now() - sAt : 0;
+                    const nextElapsed = Math.max(0, elapsedMs + add);
+
+                    setElapsedMs(nextElapsed);
+                    setStartedAtMs(null);
+                    setSeconds(calcSeconds(nextElapsed, null, false));
+                    return false;
+                  });
+                }}
                 aria-label={timerRunning ? "Пауза" : "Старт"}
               >
                 {timerRunning ? <IconPause size={17} /> : <IconPlay size={17} />}
