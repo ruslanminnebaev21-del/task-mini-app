@@ -1,4 +1,3 @@
-// app/recipes/layout.tsx
 import styles from "./recipes.module.css";
 import RecMenu from "@/app/components/RecMenu/RecMenu";
 
@@ -7,7 +6,7 @@ export default function RecipesLayout({
   modal,
 }: {
   children: React.ReactNode;
-  modal: React.ReactNode;
+  modal?: React.ReactNode;
 }) {
   return (
     <div className={styles.shell}>
@@ -16,7 +15,7 @@ export default function RecipesLayout({
       <div className={styles.orbB} />
 
       {children}
-      {modal}
+      {modal ?? null}
 
       <RecMenu />
     </div>

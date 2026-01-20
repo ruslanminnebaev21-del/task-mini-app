@@ -1,11 +1,12 @@
-// app/recipes/@modal/newRecipe/page.tsx
+// app/recipes/newRecipe/page.tsx
 
 "use client";
 
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import styles from "../../recipes.module.css";
+import styles from "../recipes.module.css";
 import { IconTrash, IconPlus, IconImage } from "@/app/components/icons";
+import PageFade from "@/app/components/PageFade/PageFade";
 
 function uid() {
   return Math.random().toString(16).slice(2) + Date.now().toString(16);
@@ -67,7 +68,8 @@ function useAutosizeTextareas(values: string[]) {
 
 export default function NewRecipePage() {
   const router = useRouter();
-  const [open, setOpen] = useState(false);
+  
+  const [saving, setSaving] = useState(false);
 
   
   /* categories */
@@ -92,6 +94,7 @@ export default function NewRecipePage() {
 
   const [prepTime, setPrepTime] = useState({ d: "", h: "", m: "" });
   const [cookTime, setCookTime] = useState({ d: "", h: "", m: "" });
+  const [toast, setToast] = useState<string | null>(null);
 
   function formatTime(t: { d: string; h: string; m: string }) {
     const parts: string[] = [];
@@ -122,6 +125,7 @@ export default function NewRecipePage() {
   /* recipe photo */
   const [recipePhoto, setRecipePhoto] = useState<PhotoState | null>(null);
   const recipeFileRef = useRef<HTMLInputElement | null>(null);
+  const [recipePhotoPath, setRecipePhotoPath] = useState<string | null>(null);
 
   /* ingredients */
   const [ingredients, setIngredients] = useState<Ingredient[]>([makeIngredient()]);
@@ -137,9 +141,7 @@ export default function NewRecipePage() {
     steps.map((s) => s.text)
   );
 
-  useEffect(() => {
-    requestAnimationFrame(() => setOpen(true));
-  }, []);
+  
   useEffect(() => {
     let alive = true;
 
@@ -177,8 +179,8 @@ export default function NewRecipePage() {
   }, []);
 
   const close = () => {
-    setOpen(false);
-    setTimeout(() => router.back(), 220);
+    if (window.history.length > 1) router.back();
+    else router.push("/recipes");
   };
 
   /* ===== ingredients ===== */
@@ -235,7 +237,7 @@ export default function NewRecipePage() {
     recipeFileRef.current?.click();
   }
 
-  function onRecipePhotoChange(e: React.ChangeEvent<HTMLInputElement>) {
+  async function onRecipePhotoChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
 
@@ -243,6 +245,30 @@ export default function NewRecipePage() {
       if (prev?.url) URL.revokeObjectURL(prev.url);
       return { file, url: URL.createObjectURL(file) };
     });
+    // ===== TEMP TEST UPLOAD =====
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      fd.append("folder", "main");
+      fd.append("recipe_id", "tmp");
+
+      const res = await fetch("/api/recipes/upload", { method: "POST", body: fd });
+      const json = await res.json();
+
+      console.log("UPLOAD RESULT:", json);
+      if (json?.photo_path) setRecipePhotoPath(json.photo_path);
+
+      if (json?.ok && json?.photo_path) {
+        setRecipePhotoPath(String(json.photo_path));
+      } else {
+        setRecipePhotoPath(null);
+        console.log("UPLOAD BAD RESPONSE:", json);
+      }
+    } catch (err) {
+      setRecipePhotoPath(null);
+      console.log("UPLOAD ERROR:", err);
+    }
+    // ===== /TEMP TEST UPLOAD =====
 
     e.target.value = "";
   }
@@ -252,6 +278,7 @@ export default function NewRecipePage() {
       if (prev?.url) URL.revokeObjectURL(prev.url);
       return null;
     });
+    setRecipePhotoPath(null);
   }
 
   function setStepFileRef(stepId: string) {
@@ -341,26 +368,112 @@ export default function NewRecipePage() {
   function cancelCategories() {
     setCategoriesOpen(false);
   }
+  async function handleSave() {
+    if (saving) return;
+    setSaving(true);
+    try {
+      const payload = {
+        title: title.trim(),
+        url: url.trim() ? url.trim() : null,
+        portions: portions.trim() ? portions.trim() : null,
+        category_ids: selectedCategoryIds,
+        prep_time: prepTime,
+        cook_time: cookTime,
+        ingredients: ingredients.map((i) => i.name.trim()).filter(Boolean),
+        steps: steps.map((s) => ({ text: s.text.trim() })).filter((s) => s.text.length > 0),
+        photo_path: recipePhotoPath ?? null,
+      };
+
+      const res = await fetch("/api/recipes/newRecipe", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+
+      const json = await res.json();
+      
+
+      if (!res.ok) {
+        alert(json?.error ?? "Ошибка сохранения");
+        return;
+      }
+
+      if (json?.ok && json.recipe_id && Array.isArray(json.step_ids)) {
+        uploadStepPhotosInBackground(json.recipe_id, json.step_ids);
+      }
+
+      showToast("Рецепт сохранён");
+      setTimeout(close, 2000);
+      console.log("STEPS STATE:", steps);
+      console.log("STEP PHOTOS:", stepPhotos);
+      console.log("STEP IDS FROM DB:", json.step_ids);
+
+      
+    } catch (e) {
+      console.log("SAVE ERROR:", e);
+      alert("Ошибка сохранения");
+    } finally {
+      setSaving(false);
+    }
+  }  
+
+  function showToast(message: string) {
+    setToast(message);
+    setTimeout(() => setToast(null), 2000);
+  }
+
+  async function uploadStepPhotosInBackground(
+    recipeId: number,
+    stepIds: { id: number; pos: number }[]
+  ) {
+    stepIds.forEach(async ({ id: stepDbId, pos }) => {
+      const localStep = steps[pos - 1];
+      if (!localStep) return;
+
+      const photo = stepPhotos[localStep.id];
+      if (!photo?.file) return;
+
+      try {
+        const fd = new FormData();
+        fd.append("file", photo.file);
+        fd.append("folder", "steps");
+        fd.append("recipe_id", String(recipeId));
+        fd.append("step_id", String(stepDbId));
+
+        const res = await fetch("/api/recipes/upload", {
+          method: "POST",
+          body: fd,
+        });
+
+        const json = await res.json();
+        
+      } catch (e) {
+        console.log("STEP PHOTO UPLOAD ERROR:", e);
+      }
+    });
+  }
 
   return (
     <>
+    <PageFade>
       {/* overlay */}
-      <div className={`${open ? styles.sheetOverlayOpen : ""}`} onClick={close} />
+      <div className={styles.sheetOverlayOpen} onClick={close} />
 
       {/* sheet */}
-      <div className={`${styles.sheet} ${open ? styles.sheetOpen : styles.sheetClosed}`}>
+      <div className={styles.sheet}>
         {/* header */}
         <div className={styles.sheetHeader}>
           <button className={styles.sheetIconBtn} onClick={close} aria-label="Закрыть">
             ✕
           </button>
           <button
-            className={`${styles.sheetIconBtn} ${styles.sheetIconBtnDisabled}`}
-            disabled
+            className={`${styles.sheetIconBtn} ${(!title.trim() || saving) ? styles.sheetIconBtnDisabled : ""}`}
+            disabled={!title.trim() || saving}
             aria-label="Сохранить"
+            onClick={handleSave}
           >
             ✓
-          </button>
+          </button>          
         </div>
 
         {/* content */}
@@ -586,125 +699,133 @@ export default function NewRecipePage() {
           </div>
 
           {/* ===== INGREDIENTS ===== */}
-          <div className={styles.sectionTitle}>Ингредиенты</div>
-          <div className={styles.card}>
-            <div className={styles.formGrid}>
-              {ingredients.map((ing) => (
-                <div key={ing.id} className={styles.listItemRec}>
-                  <input
-                    className={`${styles.input} ${styles.inputRecipes}`}
-                    placeholder="Ингредиент"
-                    value={ing.name}
-                    onChange={(e) => updateIngredient(ing.id, e.target.value)}
-                  />
+          <section className={styles.listWrap}>
+            <div className={styles.sectionTitle}>Ингредиенты</div>
+            <div className={styles.card}>
+              <div className={styles.formGrid}>
+                {ingredients.map((ing) => (
+                  <div key={ing.id} className={styles.listItemRec}>
+                    <input
+                      className={`${styles.input} ${styles.inputRecipes}`}
+                      placeholder="Ингредиент"
+                      value={ing.name}
+                      onChange={(e) => updateIngredient(ing.id, e.target.value)}
+                    />
 
-                  <button
-                    type="button"
-                    className={styles.trashBtn}
-                    onClick={() => removeIngredient(ing.id)}
-                    aria-label="Удалить ингредиент"
-                    title="Удалить"
-                  >
-                    <IconTrash size={16} />
-                  </button>
-                </div>
-              ))}
+                    <button
+                      type="button"
+                      className={styles.trashBtn}
+                      onClick={() => removeIngredient(ing.id)}
+                      aria-label="Удалить ингредиент"
+                      title="Удалить"
+                    >
+                      <IconTrash size={16} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+
+              <button type="button" className={styles.bigCtaRec} onClick={addIngredient}>
+                <span className={styles.bigCtaRecText}>
+                  Добавить
+                </span>
+              </button>
             </div>
-
-            <button type="button" className={styles.bigCtaRec} onClick={addIngredient}>
-              <span className={styles.bigCtaRecText}>
-                Добавить
-              </span>
-            </button>
-          </div>
-
+          </section>
           {/* ===== STEPS ===== */}
-          <div className={styles.sectionTitle}>Шаги</div>
-          <div className={styles.card}>
-            <div className={styles.formGrid}>
-              <div className={styles.gridSteps}>
-                {steps.map((step, idx) => {
-                  const photo = stepPhotos[step.id] ?? null;
+          <section className={styles.listWrap}>
+            <div className={styles.sectionTitle}>Шаги</div>
+            <div className={styles.card}>
+              <div className={styles.formGrid}>
+                <div className={styles.gridSteps}>
+                  {steps.map((step, idx) => {
+                    const photo = stepPhotos[step.id] ?? null;
 
-                  return (
-                    <div key={step.id} className={styles.stepRow}>
-                      <div className={styles.stepMain}>
-                        <textarea
-                          ref={setStepTaRef(step.id)}
-                          className={styles.textareaRec}
-                          placeholder={`Шаг ${idx + 1}. Что делаем?`}
-                          value={step.text}
-                          onChange={(e) => {
-                            const v = e.target.value;
-                            updateStep(step.id, v);
-                            requestAnimationFrame(() => resizeStepTa(step.id));
-                          }}
-                          onInput={() => requestAnimationFrame(() => resizeStepTa(step.id))}
-                          rows={1}
-                        />
-
-                        {/* step photo 64x64 */}
-                        <div className={styles.addRow} style={{ justifyContent: "flex-start" }}>
-                          <input
-                            ref={setStepFileRef(step.id)}
-                            type="file"
-                            accept="image/*"
-                            onChange={onStepPhotoChange(step.id)}
-                            style={{ display: "none" }}
+                    return (
+                      <div key={step.id} className={styles.stepRow}>
+                        <div className={styles.stepMain}>
+                          <textarea
+                            ref={setStepTaRef(step.id)}
+                            className={styles.textareaRec}
+                            placeholder={`Шаг ${idx + 1}. Что делаем?`}
+                            value={step.text}
+                            onChange={(e) => {
+                              const v = e.target.value;
+                              updateStep(step.id, v);
+                              requestAnimationFrame(() => resizeStepTa(step.id));
+                            }}
+                            onInput={() => requestAnimationFrame(() => resizeStepTa(step.id))}
+                            rows={1}
                           />
 
-                          <div style={{ position: "relative" }}>
-                            <button
-                              type="button"
-                              onClick={() => pickStepPhoto(step.id)}
-                              aria-label={`Фото шага ${idx + 1}`}
-                              title="Фото шага"
-                              style={{ ...photoBoxStyle, padding: 0, cursor: "pointer" }}
-                            >
-                              {photo ? (
-                                <img src={photo.url} alt={`Фото шага ${idx + 1}`} style={photoImgStyle} />
-                              ) : (
-                                <IconImage size={20} />
-                              )}
-                            </button>
+                          {/* step photo 64x64 */}
+                          <div className={styles.addRow} style={{ justifyContent: "flex-start" }}>
+                            <input
+                              ref={setStepFileRef(step.id)}
+                              type="file"
+                              accept="image/*"
+                              onChange={onStepPhotoChange(step.id)}
+                              style={{ display: "none" }}
+                            />
 
-                            {photo ? (
+                            <div style={{ position: "relative" }}>
                               <button
                                 type="button"
-                                onClick={() => clearStepPhoto(step.id)}
-                                aria-label={`Удалить фото шага ${idx + 1}`}
-                                title="Удалить"
-                                style={photoClearBtnStyle}
+                                onClick={() => pickStepPhoto(step.id)}
+                                aria-label={`Фото шага ${idx + 1}`}
+                                title="Фото шага"
+                                style={{ ...photoBoxStyle, padding: 0, cursor: "pointer" }}
                               >
-                                ✕
+                                {photo ? (
+                                  <img src={photo.url} alt={`Фото шага ${idx + 1}`} style={photoImgStyle} />
+                                ) : (
+                                  <IconImage size={20} />
+                                )}
                               </button>
-                            ) : null}
+
+                              {photo ? (
+                                <button
+                                  type="button"
+                                  onClick={() => clearStepPhoto(step.id)}
+                                  aria-label={`Удалить фото шага ${idx + 1}`}
+                                  title="Удалить"
+                                  style={photoClearBtnStyle}
+                                >
+                                  ✕
+                                </button>
+                              ) : null}
+                            </div>
                           </div>
                         </div>
+
+                        <button
+                          type="button"
+                          className={styles.stepTrashBtn}
+                          onClick={() => removeStep(step.id)}
+                          aria-label="Удалить шаг"
+                          title="Удалить"
+                        >
+                          <IconTrash size={16} />
+                        </button>
                       </div>
-
-                      <button
-                        type="button"
-                        className={styles.stepTrashBtn}
-                        onClick={() => removeStep(step.id)}
-                        aria-label="Удалить шаг"
-                        title="Удалить"
-                      >
-                        <IconTrash size={16} />
-                      </button>
-                    </div>
-                  );
-                })}
+                    );
+                  })}
+                </div>
               </div>
-            </div>
 
-            <button type="button" className={styles.bigCtaRec} onClick={addStep}>
-              <span className={styles.bigCtaRecText}>Добавить шаг</span>
-            </button>
-          </div>
+              <button type="button" className={styles.bigCtaRec} onClick={addStep}>
+                <span className={styles.bigCtaRecText}>Добавить шаг</span>
+              </button>
+            </div>
+          </section>
         </div>
       </div>
-      
+      {toast && (
+        <div className={styles.toast}>
+          {toast}
+        </div>
+      )}
+    </PageFade>
     </>
   );
 }

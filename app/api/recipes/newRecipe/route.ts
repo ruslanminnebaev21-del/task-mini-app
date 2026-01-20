@@ -171,16 +171,31 @@ export async function POST(req: Request) {
   }
 
   // 4) шаги
+  // 4) шаги (pos = 1..n)
+  let createdSteps: { id: number; pos: number }[] = [];
+
   if (steps.length) {
     const rows = steps.map((s, idx) => ({
       recipe_id,
       pos: idx + 1,
       text: s.text,
-      photo_path: s.photo_path,
+      photo_path: s.photo_path, // сейчас будет null, фотки догрузим потом
     }));
-    const { error } = await supabaseAdmin.from("recipe_steps").insert(rows);
+
+    const { data, error } = await supabaseAdmin
+      .from("recipe_steps")
+      .insert(rows)
+      .select("id,pos");
+
     if (error) return rollbackAndFail("Failed to save steps", error.message);
+
+    createdSteps = Array.isArray(data) ? data : [];
   }
+
+  return NextResponse.json(
+    { ok: true, recipe_id, step_ids: createdSteps },
+    { status: 200 }
+  );
 
   // public urls (bucket public)
   const recipe_photo_url = publicUrlForPath(photo_path);
