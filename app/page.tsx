@@ -75,7 +75,7 @@ export default function MenuPage() {
           >
             <div className={styles.tileTop}>
               <div className={styles.tileTitle}>Задачи</div>
-              <div className={styles.tileHint}>Проекты, дедлайны, завершено</div>
+             
             </div>
             <div className={styles.tileMeta}>{ready ? "Перейти" : "Авторизация..."}</div>
           </Link>
@@ -92,15 +92,29 @@ export default function MenuPage() {
           >
             <div className={styles.tileTop}>
               <div className={styles.tileTitle}>Дневник тренировок</div>
-              <div className={styles.tileHint}>Тренировки, объём, прогресс</div>
+              
+            </div>
+            <div className={styles.tileMeta}>{ready ? "Перейти" : "Авторизация..."}</div>
+          </Link>
+
+          <Link
+            href="/recipes"
+            className={`${styles.tile} ${!ready ? styles.tileDisabled : ""}`}
+            aria-label="Открыть дневник тренировок"
+            aria-disabled={!ready}
+            tabIndex={!ready ? -1 : 0}
+            onClick={(e) => {
+              if (!ready) e.preventDefault();
+            }}
+          >
+            <div className={styles.tileTop}>
+              <div className={styles.tileTitle}>Книга рецептов</div>
             </div>
             <div className={styles.tileMeta}>{ready ? "Перейти" : "Авторизация..."}</div>
           </Link>
         </section>
 
-        <div className={styles.footerNote}>
-          Стили как в задачнике, дальше можно добавлять плитки.
-        </div>
+        
       </main>
     </div>
   );

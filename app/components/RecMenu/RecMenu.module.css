@@ -1,0 +1,199 @@
+/* app/components/RecMenu/RecMenu.module.css */
+
+.fixedWrap {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 40;
+  pointer-events: none;
+}
+
+.safePad {
+  height: env(safe-area-inset-bottom, 0px);
+}
+
+.bar {
+  width: 100%;
+  margin: 0;
+
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+
+  padding: 4px;
+  border-radius: 999px;
+
+  background: rgba(255, 255, 255, 0.7);
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  box-shadow:
+    0 18px 45px rgba(0, 0, 0, 0.12),
+    0 2px 0 rgba(255, 255, 255, 0.75) inset;
+
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+
+  position: relative;
+  overflow: hidden;
+}
+
+.item {
+  position: relative;
+  height: 54px; /* было 44, теперь место под подпись */
+  border: 0;
+  background: transparent;
+  border-radius: 999px;
+
+  display: grid;
+  place-items: center;
+
+  cursor: pointer;
+  user-select: none;
+
+  color: rgba(0, 0, 0, 0.65);
+  font-weight: 800;
+  font-size: 12px;
+  overflow: hidden;
+}
+.itemCol {
+  position: relative;
+  z-index: 2;
+
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+
+  gap: 4px;
+  line-height: 1;
+}
+
+.pill {
+  position: absolute;
+  inset: 0;
+  border-radius: 18px;
+
+  background: rgba(0, 0, 0, 0.06);
+  box-shadow:
+    0 10px 24px rgba(0, 0, 0, 0.08),
+    0 1px 0 rgba(255, 255, 255, 0.6) inset;
+
+  opacity: 0;
+  transform: scale(0.98);
+  transition:
+    opacity 160ms ease,
+    transform 200ms cubic-bezier(0.22, 1, 0.36, 1);
+  will-change: opacity, transform;
+}
+
+.itemActive {
+  color: rgba(0, 0, 0, 0.92);
+}
+
+.itemActive .pill {
+  opacity: 1;
+  transform: scale(1);
+}
+
+.icon,
+.label {
+  position: relative;
+  z-index: 2;
+}
+
+.icon {
+  width: 20px;
+  height: 20px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.svg {
+  width: 20px;
+  height: 20px;
+  display: block;
+}
+
+.label {
+  font-size: 11px;
+  font-weight: 700;
+  opacity: 0.75;
+  white-space: nowrap;
+}
+/* состояния бара */
+.barNotReady .itemActive .pill {
+  opacity: 0;
+  transform: scale(0.98);
+}
+
+.barReady .itemActive .pill {
+  opacity: 1;
+  transform: scale(1);
+}
+
+/* при уходе: текущий активный пузырь плавно тухнет */
+.barLeaving .itemActive .pill {
+  opacity: 0;
+  transform: scale(0.98);
+}
+
+/* чтобы не было резких кликов в процессе */
+.barLeaving {
+  pointer-events: none;
+}
+
+.barRow {
+  pointer-events: auto;
+  width: min(720px, calc(100vw - 28px));
+  margin: 0 auto 12px auto;
+
+  display: grid;
+  
+  gap: 12px;
+  align-items: center;
+}
+
+/* твой .bar раньше имел width+margin, теперь это у barRow */
+.bar {
+  width: 100%;
+  margin: 0;
+}
+
+/* круг поиска справа */
+.searchBtn {
+  width: 52px;
+  height: 52px;
+  border-radius: 999px;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  background: rgba(255, 255, 255, 0.70);
+
+  box-shadow:
+    0 18px 45px rgba(0, 0, 0, 0.12),
+    0 2px 0 rgba(255, 255, 255, 0.75) inset;
+
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+
+  display: grid;
+  place-items: center;
+
+  cursor: pointer;
+  user-select: none;
+  color: rgba(0, 0, 0, 0.78);
+}
+
+.searchBtn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.searchBtn:active {
+  transform: translateY(1px);
+}
+
+.searchIcon {
+  width: 22px;
+  height: 22px;
+  display: block;
+}

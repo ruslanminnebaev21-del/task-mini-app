@@ -9,4 +9,5 @@ export { IconCopy } from "./IconCopy";
 export { IconHome } from "./IconHome";
 export { IconPlay } from "./IconPlay";
 export { IconPause } from "./IconPause";
+export { IconImage } from "./IconImage";
 export type { IconProps } from "./IconBase";

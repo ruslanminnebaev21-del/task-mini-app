@@ -1,0 +1,161 @@
+// app/components/RecMenu/RecMenu.tsx
+"use client";
+
+import { useEffect, useMemo, useRef, useState } from "react";
+import { usePathname, useRouter } from "next/navigation";
+import styles from "./RecMenu.module.css";
+
+type MenuItem = {
+  key: string;
+  label: string;
+  href: string;
+  icon: "home" | "all" | "fav";
+};
+
+export default function RecMenu() {
+  const router = useRouter();
+  const pathname = usePathname();
+
+  const items: MenuItem[] = useMemo(
+    () => [
+      { key: "home", label: "Главная", href: "/recipes", icon: "home" },
+      { key: "all", label: "Все рецепты", href: "/recipes/allRecipes", icon: "all" },
+      { key: "fav", label: "Избранное", href: "/recipes/favorites", icon: "fav" },
+    ],
+    []
+  );
+
+  const activeKey = useMemo(() => {
+    if (!pathname) return "home";
+
+    if (pathname.startsWith("/recipes/allRecipes")) return "all";
+    if (pathname.startsWith("/recipes/favorites")) return "fav";
+    if (pathname === "/recipes") return "home";
+
+    return "home";
+  }, [pathname]);
+
+  const [ready, setReady] = useState(false);
+  const [leaving, setLeaving] = useState(false);
+  const navTimer = useRef<number | null>(null);
+
+  useEffect(() => {
+    setReady(true);
+    return () => {
+      if (navTimer.current) window.clearTimeout(navTimer.current);
+    };
+  }, []);
+
+  useEffect(() => {
+    setLeaving(false);
+  }, [pathname]);
+
+  const go = (href: string) => {
+    if (pathname === href) return;
+    if (leaving) return;
+
+    setLeaving(true);
+
+    navTimer.current = window.setTimeout(() => {
+      router.push(href);
+    }, 160);
+  };
+
+  return (
+    <div className={styles.fixedWrap}>
+      <div className={styles.safePad} />
+
+      <div className={styles.barRow}>
+        <div
+          className={`${styles.bar} ${ready ? styles.barReady : styles.barNotReady} ${
+            leaving ? styles.barLeaving : ""
+          }`}
+        >
+          {items.map((it) => {
+            const isActive = it.key === activeKey;
+
+            return (
+              <button
+                key={it.key}
+                type="button"
+                onClick={() => go(it.href)}
+                className={`${styles.item} ${isActive ? styles.itemActive : ""}`}
+                disabled={leaving}
+              >
+                <span className={styles.pill} aria-hidden />
+
+                <span className={styles.itemCol}>
+                  <span className={styles.icon} aria-hidden>
+                    {it.icon === "home" ? (
+                      <HomeIcon />
+                    ) : it.icon === "all" ? (
+                      <ListIcon />
+                    ) : (
+                      <StarIcon />
+                    )}
+                  </span>
+
+                  <span className={styles.label}>{it.label}</span>
+                </span>
+              </button>
+            );
+          })}
+        </div>
+
+        
+      </div>
+    </div>
+  );
+}
+
+function HomeIcon() {
+  return (
+    <svg viewBox="0 0 24 24" className={styles.svg} fill="none">
+      <path
+        d="M4 10.6L12 4l8 6.6V20a1.6 1.6 0 0 1-1.6 1.6H5.6A1.6 1.6 0 0 1 4 20v-9.4Z"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M9.2 21.6V14.2c0-.9.7-1.6 1.6-1.6h2.4c.9 0 1.6.7 1.6 1.6v7.4"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+function ListIcon() {
+  return (
+    <svg viewBox="0 0 24 24" className={styles.svg} fill="none">
+      <path
+        d="M7 7h14M7 12h14M7 17h14"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+      />
+      <path
+        d="M4.2 7h.01M4.2 12h.01M4.2 17h.01"
+        stroke="currentColor"
+        strokeWidth="2.6"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}
+
+function StarIcon() {
+  return (
+    <svg viewBox="0 0 24 24" className={styles.svg} fill="none">
+      <path
+        d="M12 3.6l2.6 5.3 5.8.85-4.2 4.1 1 5.8-5.2-2.75-5.2 2.75 1-5.8-4.2-4.1 5.8-.85L12 3.6Z"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+

@@ -1,0 +1,2159 @@
+/* app/recipes/recipes.module.css */
+
+
+.shell {
+  min-height: 100vh;
+  position: relative;
+  overflow-x: hidden;
+  padding-bottom: 50px;
+}
+
+.bg {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(860px 520px at 72% 26%, rgba(85, 155, 255, 0.20), transparent 64%),
+    radial-gradient(760px 520px at 18% 38%, rgba(85, 155, 255, 0.10), transparent 66%),
+    radial-gradient(900px 640px at 45% 10%, rgba(255, 255, 255, 0.70), transparent 60%),
+    linear-gradient(180deg, #eef2f6, #f4f6f8 45%, #f7f6f3);
+}
+
+.orbA,
+.orbB {
+  position: fixed;
+  width: 520px;
+  height: 520px;
+  border-radius: 999px;
+  filter: blur(24px);
+  opacity: 0.45;
+  z-index: 1;
+  pointer-events: none;
+}
+
+.orbA {
+  left: -240px;
+  top: 280px;
+  background: radial-gradient(circle at 35% 35%, rgba(0, 0, 0, 0.14), rgba(0, 0, 0, 0.04) 58%, transparent 74%);
+}
+
+.orbB {
+  right: -260px;
+  top: 180px;
+  background: radial-gradient(circle at 55% 45%, rgba(85, 155, 255, 0.40), rgba(85, 155, 255, 0.14) 55%, transparent 76%);
+}
+
+/*--------------------*/
+
+.container {
+  position: relative;
+  z-index: 2;
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 16px;
+  color: #111;
+  font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, Apple Color Emoji, Segoe UI Emoji;
+}
+
+.headerRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.h1 {
+  font-size: 34px;
+  letter-spacing: -0.6px;
+  margin: 0;
+  line-height: 44px;
+  font-weight: 900;
+}
+
+.tabWrap {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+  margin-top: 12px;
+  margin-bottom: 12px;
+}
+
+.tabBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 12px;
+  border-radius: 16px;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  background: rgba(255, 255, 255, 0.62);
+  /*box-shadow: 0 10px 20px rgba(0, 0, 0, 0.06);*/
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  font-weight: 500;
+  font-size: 13px;
+  user-select: none;
+  white-space: nowrap;
+  height: 36px;
+  color: #111;
+  text-decoration: none;
+}
+
+.tabBadgeActive {
+  /*border: 1px solid rgba(0, 0, 0, 0.16);
+  background: rgba(17, 17, 17, 0.92);
+  color: #fff;*/
+}
+
+.dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: #bdbdbd;
+  flex: 0 0 auto;
+  box-shadow: 0 0 0 3px rgba(0, 0, 0, 0.04);
+
+}
+
+.dotActive {
+  background: rgba(64, 153, 255, 0.85);
+  box-shadow: 0 0 0 4px rgba(64, 153, 255, 0.12);
+}
+
+.card {
+  border-radius: 22px;
+  padding: 16px;
+  background: rgba(255, 255, 255, 0.62);
+  border: 1px solid rgba(255, 255, 255, 0.7);
+  box-shadow:
+    0 18px 45px rgba(0, 0, 0, 0.08),
+    0 2px 0 rgba(255, 255, 255, 0.55) inset,
+    0 -1px 0 rgba(0, 0, 0, 0.03) inset;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+.muted {
+  font-size: 12px;
+  opacity: 0.65;
+  line-height: 1.35;
+}
+
+/* --------- ДОБАВЛЕНО ДЛЯ УПРАЖНЕНИЙ --------- */
+
+.formGrid {
+  display: grid;
+  gap: 14px;
+}
+.gridSteps {
+  display: grid;
+  gap: 20px;
+}
+
+.field {
+  display: grid;
+  gap: 16px;
+}
+
+.label {
+  font-size: 12px;
+  font-weight: 900;
+  opacity: 0.75;
+  letter-spacing: -0.1px;
+}
+
+.input {
+  width: 100%;
+  padding: 12px 16px;
+  border-radius: 999px;
+  border: 1px solid rgba(0, 0, 0, 0.07);
+  background: rgba(255, 255, 255, 0.72);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.8) inset, 0 10px 20px rgba(0, 0, 0, 0.05);
+  outline: none;
+  font-size: 16px;
+  color: #111;
+}
+.inputRecipes {
+  color: #111111b8;
+  border: 1px solid rgba(255, 255, 255, 0.7);
+}
+
+.input:focus {
+  border-color: rgba(85, 155, 255, 0.28);
+  background: rgba(255, 255, 255, 0.92);
+ /* box-shadow:
+    var(--shadowB),
+    var(--insetTop),
+    0 0 0 4px rgba(85, 155, 255, 0.14);*/
+}
+
+.textarea {
+  width: 100%;
+  min-height: 44px;
+  padding: 12px 16px;
+  border-radius: 16px;
+  border: 1px solid rgba(0, 0, 0, 0.07);
+  background: rgba(255, 255, 255, 0.72);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.8) inset,
+    0 10px 20px rgba(0, 0, 0, 0.05);
+  outline: none;
+  font-size: 16px;
+  color: #111;
+
+  resize: none;
+  overflow: hidden;   /* важно */
+  line-height: 20px;      /* фиксируем */
+  padding: 12px 16px;
+  min-height: 44px;       /* как ты хотел */
+  height: 44px;           /* старт ровно в одну строку */
+  box-sizing: border-box; /* важно */
+  overflow: hidden;
+  resize: none;
+}
+.textareaRec {
+  width: 100%;
+  min-height: 44px;
+  padding: 12px 16px;
+  border-radius: 24px;
+  border: none;
+  background: rgba(255, 255, 255, 0.72);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.8) inset, 0 10px 20px rgba(0, 0, 0, 0.05);
+  outline: none;
+  font-size: 16px;
+  color: #111;
+
+  resize: none;
+  overflow: hidden;   /* важно */
+  line-height: 20px;      /* фиксируем */
+  padding: 12px 16px;
+  min-height: 44px;       /* как ты хотел */
+  height: 44px;           /* старт ровно в одну строку */
+  box-sizing: border-box; /* важно */
+  overflow: hidden;
+  resize: none;
+}
+
+/* чтобы не было скачка при фокусе */
+.textarea:focus {
+  border-color: rgba(0, 0, 0, 0.15);
+}
+
+.radioRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+}
+
+.chipBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  background: rgba(255, 255, 255, 0.62);
+  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.06);
+  font-size: 12px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.chipBtnActive {
+  border: 1px solid rgba(0, 0, 0, 0.16);
+  background: rgba(17, 17, 17, 0.92);
+  color: #fff;
+}
+
+.formActions {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+}
+
+.btnPrimary {
+  padding: 12px 16px;
+  border-radius: 999px;
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  background: #111;
+  color: #fff;
+  font-weight: 800;
+  cursor: pointer;
+  user-select: none;
+  box-shadow: 0 16px 30px rgba(0, 0, 0, 0.18);
+}
+
+.btnCircle {
+  width: 44px;
+  height: 44px;
+  border-radius: 999px;
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  background: #111;
+  color: #fff;
+  cursor: pointer;
+  user-select: none;
+  box-shadow: 0 16px 30px rgba(0, 0, 0, 0.18);
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+}
+
+.btnDisabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.listWrap {
+  margin-top: 12px;
+  display: grid;
+  gap: 10px;
+}
+
+.listWrapShifted {
+  transform: translateY(12px);
+  transition: transform 260ms ease;
+}
+
+.listHeader {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 6px;
+}
+
+.sectionTitle {
+  font-size: 18px;
+  font-weight: 900;
+  opacity: 0.85;
+  letter-spacing: -0.2px;
+}
+
+.empty {
+  opacity: 0.7;
+  padding: 6px 2px;
+}
+
+.list {
+  display: grid;
+  gap: 12px;
+}
+
+.listItem {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  justify-content: space-between;
+  border-radius: 20px;
+  padding: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.72);
+  background: rgba(255, 255, 255, 0.62);
+  box-shadow: 0 16px 34px rgba(0, 0, 0, 0.01);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+.listItemRec {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  justify-content: space-between;
+  border-radius: 20px;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+.listItemMain {
+  display: grid;
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
+}
+
+.titleText {
+  font-weight: 300;
+  font-size: 16px;
+  line-height: 1.2;
+  user-select: text;
+  word-break: break-word;
+}
+
+.metaRow {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 2px;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(0, 0, 0, 0.07);
+  background: rgba(255, 255, 255, 0.62);
+  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.06);
+  font-size: 12px;
+  opacity: 0.55;
+}
+
+.trashBtn {
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-top: 2px;
+  opacity: 0.55;
+}
+.iconSmallBtn {
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-top: 2px;
+  opacity: 0.55;
+}
+
+.trashBtn:hover {
+  opacity: 0.85;
+}
+
+.itemActions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: center;
+}
+
+.copyBtn {
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-top: 2px;
+  opacity: 0.55;
+}
+
+.copyBtn:disabled {
+  opacity: 0.5;
+}
+
+.hintBox {
+  border-radius: 18px;
+  padding: 12px;
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  background: rgba(255, 255, 255, 0.55);
+}
+
+.hintTitle {
+  font-weight: 900;
+  font-size: 12px;
+  opacity: 0.8;
+  /*margin-bottom: 8px;*/
+}
+
+.hintDanger {
+  font-weight: 900;
+  font-size: 12px;
+  color: rgba(160, 0, 0, 0.85);
+}
+
+.suggestList {
+  display: grid;
+  gap: 8px;
+}
+
+.suggestItem {
+  width: 100%;
+  text-align: left;
+  border-radius: 16px;
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.72);
+  background: rgba(255, 255, 255, 0.62);
+  box-shadow: 0 10px 22px rgba(0, 0, 0, 0.05);
+  cursor: pointer;
+}
+
+.suggestName {
+  font-weight: 900;
+  font-size: 14px;
+  line-height: 1.2;
+}
+
+.suggestMeta {
+  margin-top: 4px;
+  font-size: 12px;
+  opacity: 0.6;
+}
+
+.suggestionDivider {
+  height: 1px;
+  background: rgba(0, 0, 0, 0.08);
+
+}
+
+.suggestionAdd {
+  width: 100%;
+  text-align: left;
+  padding: 10px 12px;
+  background: transparent;
+  border: 1px dashed rgba(0, 0, 0, 0.18);
+  border-radius: 10px;
+
+  font-weight: 500;
+  color: rgba(0, 0, 0, 0.65);
+
+  cursor: pointer;
+}
+
+.suggestionAdd:hover {
+  background: rgba(0, 0, 0, 0.04);
+  border-color: rgba(0, 0, 0, 0.3);
+}
+
+.inputRow {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.inputGrow {
+  flex: 1;
+  min-width: 0;
+}
+
+/* ===== Sport page extras (tabs icons, hero, KPI, calendar) ===== */
+
+.tabIcon {
+  width: 16px;
+  height: 16px;
+  display: block;
+}
+
+/* цвет иконки в активном табе */
+.tabBadgeActive .tabIcon {
+  color: rgba(64, 153, 255, 0.85);
+}
+
+/* привет */
+.heroHello {
+  font-size: 22px;
+  font-weight: 900;
+  letter-spacing: -0.2px;
+  margin-bottom: 12px;
+}
+
+/* большая CTA кнопка */
+.bigCta {
+  width: 100%;
+  margin-top: 10px;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  /*background: #111111eb;*/
+  background: linear-gradient(
+    135deg,
+    #0b0b0b,
+    #111111eb 60%,
+    #1a1a1a
+  );
+  border-radius: 22px;
+  padding: 16px;
+  box-shadow: 0 14px 34px rgba(0, 0, 0, 0.07);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  cursor: pointer;
+  text-align: left;
+  user-select: none;
+  color: #fff;
+}
+.bigCtaRec {
+  width: 100%;
+  margin-top: 14px;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  background: #00000066;
+  display: flex;
+  align-items: center;
+  justify-content: center; /* вот это центрирует по горизонтали */
+  text-align: center;
+  border-radius: 22px;
+  padding: 10px;
+  /*box-shadow: 0 14px 34px rgba(0, 0, 0, 0.07);*/
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.8) inset, 0 10px 20px rgba(0, 0, 0, 0.05);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  cursor: pointer;
+  text-align: left;
+  user-select: none;
+  color: #ffffff;
+}
+
+
+/*.bigCta:active {
+  transform: translateY(1px);
+}*/
+
+
+.bigCtaRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.bigCtaText {
+  font-size: 18px;
+  font-weight: 100;
+  letter-spacing: -0.2px;
+}
+.bigCtaRecText {
+  font-size: 15px;
+  font-weight: 100;
+  letter-spacing: -0.2px;
+
+}
+
+.bigCtaIcon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.bigCtaSub {
+  font-size: 12px;
+  opacity: 0.7;
+  line-height: 1.35;
+}
+
+/* KPI блоки (цель/вес) */
+.kpiGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.kpiItem {
+  border-radius: 18px;
+  padding: 12px 14px;
+  border: 1px solid rgba(255, 255, 255, 0.75);
+  background: rgba(255, 255, 255, 0.55);
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.05);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+
+.kpiLabel {
+  font-size: 12px;
+  opacity: 0.55;
+  margin-bottom: 6px;
+}
+
+.kpiValue {
+  font-size: 16px;
+  font-weight: 300;
+  letter-spacing: -0.2px;
+  line-height: 1.2;
+  word-break: break-word;
+}
+
+/* на широких экранах можно в 2 колонки */
+@media (min-width: 520px) {
+  .kpiGrid {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+/* календарь */
+.calHeader {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.calTitle {
+  font-size: 16px;
+  font-weight: 900;
+  letter-spacing: -0.2px;
+  text-transform: capitalize;
+}
+
+.calWeekdays {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.calWeekday {
+  font-size: 11px;
+  opacity: 0.55;
+  text-align: center;
+  font-weight: 800;
+}
+
+.calGrid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 6px;
+}
+
+.calCell,
+.calCellEmpty {
+  height: 42px;
+  border-radius: 14px;
+}
+
+.calCellEmpty {
+  background: transparent;
+}
+
+.calCell {
+  position: relative;
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  background: rgba(255, 255, 255, 0.58);
+  box-shadow: 0 10px 22px rgba(0, 0, 0, 0.05);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  display: grid;
+  place-items: center;
+}
+
+.calCellToday {
+  border: 1px solid rgba(0, 0, 0, 0.14);
+  background: rgba(255, 255, 255, 0.72);
+}
+
+.calDayNum {
+  font-size: 13px;
+  font-weight: 900;
+  opacity: 0.85;
+  line-height: 1;
+}
+
+/* кружок тренировки */
+.calDot {
+  position: absolute;
+  bottom: 8px;
+  right: 8px;
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  background: rgba(64, 153, 255, 0.85);
+  box-shadow: 0 0 0 4px rgba(64, 153, 255, 0.12);
+}
+
+.listHeader {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.sectionTitle {
+  font-size: 18px;
+  font-weight: 900;
+  opacity: 0.9;
+  letter-spacing: -0.2px;
+}
+
+.empty {
+  opacity: 0.7;
+  line-height: 1.35;
+}
+
+.list {
+  display: grid;
+  gap: 12px;
+}
+
+.listItemBtn {
+  width: 100%;
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  justify-content: space-between;
+  text-align: left;
+  padding: 14px;
+  border-radius: 20px;
+  border: 1px solid rgba(255, 255, 255, 0.72);
+  background: rgba(255, 255, 255, 0.62);
+  box-shadow: 0 16px 34px rgba(0, 0, 0, 0.01);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  cursor: pointer;
+}
+
+.listItemMain {
+  display: grid;
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
+}
+
+.metaRow {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 4px;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(0, 0, 0, 0.07);
+  background: rgba(255, 255, 255, 0.62);
+  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.06);
+  font-size: 12px;
+  opacity: 0.55;
+}
+
+.listChevron {
+  display: flex;
+  align-items: center;
+  height: 100%;
+  opacity: 0.35;
+  font-size: 22px;
+  line-height: 1;
+}
+
+.hintDanger {
+  margin-bottom: 10px;
+  font-weight: 900;
+  color: rgba(180, 0, 0, 0.85);
+}
+
+/*Стили для создания тренировки*/
+
+/* ===== Workouts page ===== */
+
+.backTab {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 36px;
+  padding: 0 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  background: rgba(255, 255, 255, 0.62);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  text-decoration: none;
+  color: #111;
+  font-weight: 600;
+  font-size: 13px;
+}
+
+.workoutsTopRow {
+  display: grid;
+  gap: 10px;
+}
+
+.workoutEditor {
+  margin-top: 0;
+  max-height: 0;
+  opacity: 0;
+  transform: translateY(-8px);
+  overflow: hidden;
+
+  /* важно: в закрытом состоянии ничего не рисуем */
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+
+  transition:
+    max-height 260ms ease,
+    opacity 200ms ease,
+    transform 260ms ease,
+    margin-top 260ms ease;
+}
+
+.workoutEditorOpen {
+  margin-top: 14px;
+  max-height: 1200px; /* можно 2000, лишь бы хватило */
+  opacity: 1;
+  transform: translateY(0);
+
+  border-radius: 22px;
+  background: rgba(255, 255, 255, 0.62);
+  border: 1px solid rgba(255, 255, 255, 0.7);
+  box-shadow:
+    0 18px 45px rgba(0, 0, 0, 0.08),
+    0 2px 0 rgba(255, 255, 255, 0.55) inset,
+    0 -1px 0 rgba(0, 0, 0, 0.03) inset;
+
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+.workoutEditorInner {
+  padding: 14px;
+  overflow: hidden;
+}
+
+.editorHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.editorClose {
+  height: 34px;
+  width: 34px;
+  border-radius: 999px;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  background: rgba(255, 255, 255, 0.7);
+  cursor: pointer;
+}
+
+.editorGrid {
+  display: grid;
+  gap: 12px;
+}
+
+.textarea {
+  width: 100%;
+  border-radius: 14px;
+  border: 1px solid rgba(0, 0, 0, 0.10);
+  background: rgba(255, 255, 255, 0.82);
+  padding: 10px 12px;
+  font-size: 14px;
+  outline: none;
+  resize: vertical;
+}
+
+.editorActions {
+  margin-top: 12px;
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 10px;
+}
+
+.btnPrimary {
+  height: 42px;
+  border-radius: 14px;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  background: #111111eb;
+  color: #fff;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 14px 34px rgba(0, 0, 0, 0.07);
+}
+
+.btnSoft {
+  height: 42px;
+  border-radius: 14px;
+  border: 1px solid rgba(0, 0, 0, 0.10);
+  background: rgba(255, 255, 255, 0.85);
+  color: #111;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.btnGhost {
+  height: 42px;
+  border-radius: 14px;
+  border: 1px dashed rgba(0, 0, 0, 0.18);
+  background: transparent;
+  color: #111;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.btnPrimary,
+.btnSoft,
+.btnGhost {
+  height: 42px;
+  padding: 0 14px;        /* чтобы текст не прилипал */
+  display: inline-flex;   /* ключевое */
+  align-items: center;    /* вертикальный центр */
+  justify-content: center;/* горизонтальный центр */
+  line-height: 1;         /* чтобы не плясало */
+  white-space: nowrap;    /* чтобы не переносилось */
+  box-sizing: border-box;
+}
+
+.btnDisabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.draftsCard {
+  margin-top: 14px;
+  transition: transform 260ms ease;
+}
+
+.draftsCardShifted {
+  transform: translateY(12px);
+}
+
+.draftsList {
+  margin-top: 10px;
+  display: grid;
+  gap: 10px;
+}
+
+/* accordion */
+.draftItem {
+  border-radius: 18px;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  background: rgba(255, 255, 255, 0.66);
+  overflow: hidden;
+}
+
+.draftHead {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px;
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+  text-align: left;
+}
+
+.draftMain {
+  min-width: 0;
+}
+
+.draftChevron {
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+  border: 1px solid rgba(0, 0, 0, 0.10);
+  background: rgba(255, 255, 255, 0.75);
+  flex: 0 0 auto;
+  font-weight: 900;
+}
+
+.draftBody {
+  max-height: 0;
+  opacity: 0;
+  transform: translateY(-6px);
+  transition:
+    max-height 260ms ease,
+    opacity 200ms ease,
+    transform 260ms ease;
+}
+
+.draftItemOpen .draftBody {
+  max-height: 260px;
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.draftBodyInner {
+  padding: 0 12px 12px 12px;
+  display: grid;
+  gap: 10px;
+}
+
+.draftNotes {
+  padding: 10px 12px;
+  border-radius: 14px;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  background: rgba(255, 255, 255, 0.72);
+  font-size: 13px;
+  line-height: 1.35;
+}
+
+.draftActions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.draftInline {
+  margin-top: 10px;
+  padding: 14px;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.62);
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  box-shadow: 0 10px 22px rgba(0, 0, 0, 0.06);
+}
+
+.draftNotes {
+  margin-top: 10px;
+  font-size: 13px;
+  line-height: 1.35;
+  opacity: 0.8;
+}
+
+.draftActions {
+  margin-top: 12px;
+  display: flex;
+  justify-content: flex-end;
+}
+
+/* --- newworkout: подходы --- */
+
+.setsWrap {
+  display: grid;
+  gap: 10px;
+}
+
+/* 1fr = упражнение, затем 44, 44, и кнопка */
+.setRow {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 44px 44px auto;
+  gap: 12px;
+  align-items: start;
+  min-width: 0;
+  opacity: 0;
+  transform: translateY(-6px);
+  animation: setAppear 100ms ease forwards;
+ } 
+@keyframes setAppear {
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+
+/* номер больше не нужен */
+.setNum {
+  display: none;
+}
+
+/* wrapper под упражнение */
+.exInputWrap {
+  position: relative;
+  min-width: 0;
+}
+
+.exerciseInput {
+  height:44px;
+  width: 100%;
+  min-width: 0;
+  /*padding-right: 135px;*/
+}
+.withBestPadding {
+  padding-right: 140px; /* место под чип */
+}
+
+/* маленькие колонки кг/повт */
+.smallGroup {
+  display: grid;
+  grid-template-rows: 44px auto ;
+  gap: 6px;
+  justify-items: stretch; /* важно: чтобы инпут не был уже колонки */
+  min-width: 0;
+}
+
+.smallLabel {
+  font-size: 12px;
+  opacity: 0.65;
+  line-height: 1.1;
+  padding-left: 0; /* убираем твой сдвиг */
+  text-align: center;
+}
+
+.smallInput {
+  width: 54px;
+  height: 44px;
+  border-radius: 16px;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  background: rgba(255, 255, 255, 0.85);
+  padding: 0 12px;
+  outline: none;
+  text-align: center;
+}
+
+.smallInput:focus {
+  border-color: rgba(0, 0, 0, 0.18);
+}
+
+/* удалить: фикс 44x44 и внизу строки */
+.setRemoveBtn {
+  width: 20px;
+  height: 44px;
+  background: transparent;
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  justify-self: end;
+  opacity: 0.55;
+}
+
+
+.addButtonsRow {
+  display: inline-flex;
+  gap: 10px;
+  align-items: center;
+  margin: 0 auto;   /* центр */
+}
+/* кнопка "добавить подход" */
+.addSetBtn {
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: 1px dashed rgba(0, 0, 0, 1);
+  border-radius: 999px;
+  background: transparent;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  user-select: none;
+  opacity: 0.18;
+
+  /* ключевое */
+  align-self: center;
+}
+.addExBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  width: fit-content;
+  border: 1px dashed rgba(0, 0, 0, 1);
+  border-radius: 999;
+  background: transparent;
+  justify-self: center;
+  font-size: 12px;
+  font-weight: 900;
+  cursor: pointer;
+  user-select: none;
+  opacity: 0.18;
+}
+
+/* нижние кнопки: на мобильном пусть не пытаются в 1 ряд */
+.editorActions {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 10px;
+}
+
+@media (min-width: 420px) {
+  .editorActions {
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 10px;
+  }
+}
+
+/* подсказки упражнений: чтобы не вылезали за card */
+.suggestionBox {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: calc(100% + 8px);
+  z-index: 20;
+  border-radius: 18px;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.12);
+  overflow: hidden;
+}
+
+.suggestionItem {
+  width: 100%;
+  padding: 12px 14px;
+  text-align: left;
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.suggestionItem:hover {
+  background: rgba(0, 0, 0, 0.04);
+}
+
+.toast {
+  position: fixed;
+  left: 50%;
+  bottom: 16px;
+  transform: translateX(-50%);
+  z-index: 9999;
+
+  max-width: min(520px, calc(100vw - 28px));
+  padding: 10px 14px;
+  border-radius: 16px;
+
+  background: rgba(17, 17, 17, 0.92);
+  color: rgba(255, 255, 255, 0.96);
+  font-weight: 700;
+  font-size: 13px;
+  line-height: 1.2;
+
+  box-shadow: 0 18px 45px rgba(0, 0, 0, 0.25);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+
+  animation: toastIn 140ms ease-out;
+}
+
+@keyframes toastIn {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
+}
+/* ===== Confirm modal ===== */
+
+.modalOverlay {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  background: rgba(0, 0, 0, 0.35);
+  backdrop-filter: blur(4px);
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.modalBox {
+  width: 100%;
+  max-width: 340px;
+  background: #fff;
+  border-radius: 18px;
+  padding: 18px 16px;
+
+  box-shadow: 0 25px 60px rgba(0, 0, 0, 0.25);
+}
+
+.modalTitle {
+  font-size: 18px;
+  font-weight: 800;
+  margin-bottom: 6px;
+}
+
+.modalText {
+  font-size: 13px;
+  opacity: 0.7;
+  line-height: 1.4;
+  margin-bottom: 14px;
+}
+
+.modalActions {
+  display: flex;
+  gap: 10px;
+}
+
+.modalBtn {
+  flex: 1;
+  border-radius: 12px;
+  padding: 10px 0;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  border: none;
+}
+
+.modalCancel {
+  background: rgba(0, 0, 0, 0.06);
+  color: #111;
+}
+
+.modalDelete {
+  background: #ef4444;
+  color: #fff;
+}
+
+/* ===== Profile page ===== */
+
+.profileGrid {
+  display: grid;
+  gap: 12px;
+  margin-top: 14px;
+}
+
+.profileSectionHead {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.profileSectionHeadLeft {
+  min-width: 0;
+}
+
+.profileSectionTitle {
+  font-size: 16px;
+  font-weight: 800;
+  line-height: 1.2;
+}
+
+.profileSectionBody {
+  display: grid;
+  gap: 10px;
+}
+
+.profileGoal {
+  display: grid;
+  gap: 10px;
+}
+
+.profileText {
+  font-size: 12px;
+  opacity: 0.65;
+  line-height: 1.35;
+  margin-top: 8px;
+}
+
+.profileGoalMeta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.profileChip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.profileChipLabel {
+  font-size: 12px;
+  opacity: 0.75;
+}
+
+.profileChipValue {
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.profileActionsRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.profileRows {
+  display: grid;
+  gap: 10px;
+}
+
+.profileRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.profileRowMain {
+  min-width: 0;
+  display: grid;
+  gap: 6px;
+}
+
+.profileRowTop {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.profileRowLabel {
+  font-weight: 800;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.profileRowValue {
+  font-weight: 900;
+  letter-spacing: -0.2px;
+  white-space: nowrap;
+}
+
+.profileRowUnit {
+  font-weight: 700;
+  opacity: 0.75;
+  margin-left: 2px;
+}
+
+.profileRowMeta {
+  font-size: 12px;
+  opacity: 0.7;
+}
+
+.profileRowActions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 0 0 auto;
+}
+
+.iconBtn,
+.iconBtnDanger {
+  height: 36px;
+  width: 36px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.10);
+  background: rgba(255, 255, 255, 0.06);
+  transition: transform 120ms ease, opacity 120ms ease;
+}
+
+.iconBtn:hover,
+.iconBtnDanger:hover {
+  transform: translateY(-1px);
+}
+
+.iconBtn svg,
+.iconBtnDanger svg {
+  width: 18px;
+  height: 18px;
+  opacity: 0.9;
+}
+
+.iconBtnDanger {
+  border: 1px solid rgba(255, 90, 90, 0.20);
+  background: rgba(255, 90, 90, 0.08);
+}
+
+.profileHint {
+  font-size: 12px;
+  line-height: 1.35;
+  opacity: 0.72;
+}
+
+.profileContextGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.profileContextItem,
+.profileContextItemWide {
+  padding: 12px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  display: grid;
+  gap: 6px;
+}
+
+.profileContextLabel {
+  font-size: 12px;
+  opacity: 0.72;
+}
+
+.profileContextValue {
+  font-weight: 850;
+  line-height: 1.25;
+}
+
+.profileContextItemWide {
+  grid-column: 1 / -1;
+}
+
+@media (max-width: 420px) {
+  .profileContextGrid {
+    grid-template-columns: 1fr;
+  }
+}
+
+
+/* ===== KPI cards (overview) ===== */
+
+.kpiCard {
+  position: relative;
+  overflow: hidden;
+  padding: 16px;
+  border-radius: 22px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.18), rgba(255, 255, 255, 0.10));
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.18);
+  backdrop-filter: blur(10px);
+}
+
+.kpiSpark {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  width: 170px;
+  height: 56px;
+  opacity: 0.22;
+  pointer-events: none;
+}
+
+.kpiSparkLine {
+  stroke: rgba(255, 255, 255, 0.95);
+  stroke-width: 3;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.kpiCardLabel {
+  font-size: 14px;
+  opacity: 0.75;
+  margin-bottom: 10px;
+}
+
+.kpiCardDesc {
+  font-size: 14px;
+  opacity: 0.7;
+  max-width: 220px;
+  line-height: 1.35;
+  margin-top: 8px;
+}
+
+.kpiCardValueGoal {
+  font-size: 22px;
+  font-weight: 900;
+  letter-spacing: -0.3px;
+  line-height: 1.15;
+  max-width: 260px;
+}
+
+.kpiCardValueNum {
+  font-size: 40px;
+  font-weight: 950;
+  letter-spacing: -0.8px;
+  line-height: 1;
+}
+
+.kpiCardValueUnit {
+  font-size: 22px;
+  font-weight: 900;
+  letter-spacing: -0.3px;
+  line-height: 1.1;
+  margin-top: 6px;
+}
+
+.kpiMoreBtn {
+  margin-top: 14px;
+  height: 44px;
+  padding: 0 16px;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  background: rgba(255, 255, 255, 0.70);
+  color: rgba(0, 0, 0, 0.86);
+  font-weight: 800;
+  transition: transform 140ms ease, opacity 140ms ease;
+}
+
+.kpiMoreBtn:hover {
+  transform: translateY(-1px);
+}
+
+.kpiMoreDot {
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.18);
+  box-shadow: 0 0 0 5px rgba(0, 0, 0, 0.06);
+}
+.calCellBtn {
+  border: 0;
+  background: transparent;
+  padding: 0;
+  text-align: inherit;
+  cursor: pointer;
+}
+
+.calPopup {
+  margin-top: 10px;
+  padding: 12px;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.78);
+  backdrop-filter: blur(10px);
+  box-shadow: 0 12px 26px rgba(0, 0, 0, 0.08);
+}
+
+.calPopupHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.calPopupTitle {
+  font-weight: 800;
+}
+
+.calPopupClose {
+  border: 0;
+  background: transparent;
+  font-size: 18px;
+  opacity: 0.65;
+  cursor: pointer;
+}
+
+.calPopupTabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.calPopupTab {
+  border: 0;
+  border-radius: 999px;
+  padding: 8px 10px;
+  background: rgba(0, 0, 0, 0.06);
+  cursor: pointer;
+}
+
+.calPopupTabActive {
+  background: rgba(0, 0, 0, 0.12);
+}
+
+.calPopupBody {
+  /*margin-top: 10px;*/
+}
+
+.calPopupWorkoutTitle {
+  font-weight: 500;
+  margin-bottom: 4px;
+}
+
+.calPopupSection {
+  margin-top: 5px;
+}
+
+.calPopupSectionTitle {
+  font-weight: 700;
+  font-size: 14px;
+}
+
+.calPopupList {
+  margin: 8px 0 0;
+  /*padding-left: 18px;*/
+}
+
+.calWrap {
+  position: relative;
+}
+
+.calCellBtn {
+  border: 0;
+  background: transparent;
+  padding: 0;
+  text-align: inherit;
+}
+
+.calOverlay {
+  position: absolute;
+  inset: 0;
+  border: 0;
+  padding: 0;
+  /*background: rgba(0, 0, 0, 0.06);*/
+  border-radius: 18px;
+}
+
+.calPopover {
+  position: absolute;
+  z-index: 30;
+  width: 270px;
+  max-width: calc(100% - 24px);
+  padding: 12px;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.92);
+  backdrop-filter: blur(10px);
+  box-shadow: 0 14px 30px rgba(0, 0, 0, 0.14);
+}
+
+/*Таймер тренировки */
+.timerWrap {
+  display: inline-flex;
+  align-items: center;
+  height: 32px;
+  margin-left: auto;
+  overflow: hidden;
+
+  border-radius: 999px;
+  transition: width 0.25s ease, padding 0.25s ease;
+}
+.timerBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 32px;
+  background: transparent;
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  justify-self: end;
+  opacity: 0.55;
+  color:#111;
+
+  user-select: none;
+  white-space: nowrap;
+  text-decoration: none;
+}
+/*.timerExpanded {
+  padding: 0 8px 0 6px;
+}*/
+.timerPlayBtn {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+
+  font-size: 12px;
+  font-weight: 700;
+
+  border: 1px solid rgba(0,0,0,0.2);
+  background: transparent;
+  cursor: pointer;
+}
+.timerValue {
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.5px;
+  opacity: 0;
+  margin: 0 8px;
+  color: #4A4949;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum";
+
+  transform: translateX(6px);
+  transition:
+    opacity 180ms ease,
+    transform 180ms ease;
+  pointer-events: none;
+}
+.timerValueActive {
+  opacity: 0.55;
+  transform: translateX(0);
+  pointer-events: auto;
+}
+
+
+.timerPauseBtn {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+
+  font-size: 10px;
+  font-weight: 700;
+
+  border: 1px solid rgba(0,0,0,0.2);
+  background: transparent;
+  cursor: pointer;
+}
+/* ===== Stats (page.tsx) ===== */
+
+.statsTabs {
+  margin-top: 10px;
+}
+
+.statsTopGap {
+  margin-top: 10px;
+}
+
+.statsSection {
+  margin-top: 14px;
+}
+
+.statsBottomSpacer {
+  height: 16px;
+}
+
+/* Overview grid */
+.overviewGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+}
+
+/* Card base tweaks */
+.listItemStatic {
+  cursor: default;
+}
+
+/* Overview stat card */
+.overviewCard {
+  cursor: default;
+  padding: 16px;
+  border-radius: 18px;
+  min-height: 150px;
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  gap: 10px;
+}
+
+.overviewCardHead {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+}
+
+.overviewCardTitle {
+  font-size: 13px;
+  opacity: 0.7;
+}
+
+.overviewCardDecor {
+  opacity: 0.18;
+  font-size: 12px;
+  min-width: 12px;
+  min-height: 12px;
+}
+
+.overviewCardValueBlock {
+  display: block;
+}
+
+.overviewCardValue {
+  font-size: 36px;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.overviewCardUnit {
+  font-size: 22px;
+  font-weight: 800;
+  margin-top: 2px;
+  line-height: 1;
+}
+
+.overviewCardFoot {
+  display: grid;
+  gap: 4px;
+}
+
+.overviewCardDelta {
+  font-size: 12px;
+  opacity: 0.75;
+}
+
+.overviewCardHint {
+  font-size: 12px;
+  opacity: 0.55;
+}
+
+/* Chart */
+.chartWrap {
+  width: 100%;
+  height: 240px;
+}
+
+.chartEmpty {
+  line-height: 1.4;
+}
+
+.chartLabel {
+  font-size: 10px;
+  fill: rgba(0, 0, 0, 0.6);
+}
+
+/* переключатель параметра над графиком */
+.chartSwitchRow {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 0px;
+}
+
+.tabBadgeNowrap {
+  white-space: nowrap;
+}
+
+/* recharts tooltip styling (через global, иначе module не пробьёт) */
+:global(.recharts-tooltip-wrapper) {
+  outline: none;
+}
+
+:global(.recharts-default-tooltip) {
+  font-size: 12px;
+  border-radius: 10px;
+  border-color: rgba(0, 0, 0, 0.08);
+}
+
+.deltaUp {
+  color: rgba(30, 140, 70, 0.95);
+  opacity: 1;
+}
+
+.deltaDown {
+  color: rgba(200, 55, 65, 0.95);
+  opacity: 1;
+}
+
+.deltaSame {
+  color: rgba(0, 0, 0, 0.55);
+  opacity: 1;
+}
+
+/* дельта в карточке обзора */
+.overviewCardDelta {
+  font-size: 12px;
+  opacity: 0.85;
+  line-height: 1.2;
+}
+
+/* важно: делаем более специфично, чтобы перебить muted */
+.overviewCardDelta.deltaUp {
+  color: #16a34a; /* зелёный */
+}
+
+.overviewCardDelta.deltaDown {
+  color: #ef4444; /* красный */
+}
+
+.overviewCardDelta.deltaSame {
+  color: rgba(0,0,0,0.45);
+}
+
+.overviewCardDelta {
+  font-size: 12px;
+  line-height: 1.2;
+}
+
+.deltaBadge {
+  font-weight: 500;
+}
+
+.deltaTail {
+  color: rgba(0, 0, 0, 0.45);
+}
+
+/* цвет только для badge */
+.deltaBadge.deltaUp {
+  color: #16a34a;
+}
+
+.deltaBadge.deltaDown {
+  color: #ef4444;
+}
+
+.deltaBadge.deltaSame {
+  color: rgba(0, 0, 0, 0.45);
+}
+
+/* ===== Fullscreen bottom sheet ===== */
+
+.sheet {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  background: #f4f6f8;
+  display: flex;
+  flex-direction: column;
+  transform: translateY(100%);
+  transition: transform 220ms ease;
+}
+
+.sheetOpen {
+  transform: translateY(0);
+}
+
+.sheetClosed {
+  transform: translateY(100%);
+}
+
+.sheetOverlayOpen {
+  opacity: 1;
+}
+
+.sheetHeader {
+  height: 56px;
+  padding: 12px 16px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.sheetIconBtn {
+  width: 36px;
+  height: 36px;
+  border-radius: 999px;
+  border: none;
+  background: rgba(255, 255, 255, 0.7);
+  backdrop-filter: blur(10px);
+  font-size: 18px;
+  cursor: pointer;
+}
+
+.sheetIconBtnDisabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.sheetContent {
+  align-content: start;
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px;
+  display: grid;
+  gap: 12px;
+}
+.addRow {
+  display: flex;
+  justify-content: flex-start;
+  /*margin-top: 10px;*/
+}
+.stepRow {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: start;
+}
+
+.stepMain {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+}
+
+/* корзина ровно по центру textarea */
+.stepTrashBtn {
+  justify-self: end;
+  align-self: start;
+  margin-top: 12px; /* если нужно идеально в середину - подгони под свою высоту textarea */
+  composes: trashBtn;
+}
+

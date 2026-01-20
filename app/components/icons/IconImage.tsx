@@ -1,0 +1,37 @@
+import { IconBase, type IconProps } from "./IconBase";
+
+export function IconImage(props: IconProps) {
+  return (
+    <IconBase {...props}>
+      <svg
+        width="20"
+        height="20"
+        viewBox="0 0 20 20"
+        fill="none"
+        xmlns="http://www.w3.org/2000/svg"
+      >
+        <path
+          d="M15.8333 2.5H4.16667C3.24619 2.5 2.5 3.24619 2.5 4.16667V15.8333C2.5 16.7538 3.24619 17.5 4.16667 17.5H15.8333C16.7538 17.5 17.5 16.7538 17.5 15.8333V4.16667C17.5 3.24619 16.7538 2.5 15.8333 2.5Z"
+          stroke="#4A4949"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+        <path
+          d="M7.0835 8.33301C7.77385 8.33301 8.3335 7.77336 8.3335 7.08301C8.3335 6.39265 7.77385 5.83301 7.0835 5.83301C6.39314 5.83301 5.8335 6.39265 5.8335 7.08301C5.8335 7.77336 6.39314 8.33301 7.0835 8.33301Z"
+          stroke="#4A4949"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+        <path
+          d="M17.4998 12.4997L13.3332 8.33301L4.1665 17.4997"
+          stroke="#4A4949"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      </svg>
+    </IconBase>
+  );
+}
