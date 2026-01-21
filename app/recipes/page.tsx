@@ -6,7 +6,7 @@ import PageFade from "@/app/components/PageFade/PageFade";
 import { IconArrow, IconTrash, IconPlus } from "@/app/components/icons";
 import { useRouter } from "next/navigation";
 
-type Category = { id: string; title: string };
+type Category = { id: string; title: string; order_index?: number | null };
 
 type CategoriesApi = { categories: Category[] };
 
@@ -29,6 +29,17 @@ async function fetchJson<T>(url: string): Promise<T> {
   if (!r.ok) throw new Error(j?.error ?? "Request failed");
   return j as T;
 }
+async function postJson<T>(url: string, body: any): Promise<T> {
+  const r = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+    cache: "no-store",
+  });
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(j?.error ?? "Request failed");
+  return j as T;
+}
 
 export default function RecipesMainPage() {
   const router = useRouter();
@@ -47,6 +58,8 @@ export default function RecipesMainPage() {
   const [noneCount, setNoneCount] = useState(0);
 
   const [newCatTitle, setNewCatTitle] = useState("");
+  const [addingCat, setAddingCat] = useState(false);
+  const [toast, setToast] = useState<string | null>(null);
 
   // ===== DRAG STATE =====
   const [dragId, setDragId] = useState<string | null>(null);
@@ -154,11 +167,32 @@ export default function RecipesMainPage() {
     dragFromIndexRef.current = null;
   };
 
-  const onAddCategory = () => {
+  const onAddCategory = async () => {
     const t = newCatTitle.trim();
-    if (!t) return;
-    alert(`Добавить категорию: ${t}\n(пока без API)`);
-    setNewCatTitle("");
+    if (!t || addingCat) return;
+
+    try {
+      setAddingCat(true);
+      setCatsErr(null);
+
+      const res = await postJson<{ ok: boolean; category: Category }>(
+        "/api/recipes/categories/create",
+        { title: t }
+      );
+
+      const created = res?.category;
+      if (!created?.id) throw new Error("Bad response");
+
+      setAllCats((prev) => [...prev, created]);
+      setNewCatTitle("");
+
+      setToast("Категория добавлена");
+      setTimeout(() => setToast(null), 2000);
+    } catch (e: any) {
+      setCatsErr(e?.message ?? "Не удалось добавить категорию");
+    } finally {
+      setAddingCat(false);
+    }
   };
 
   const onDeleteCategory = async (id: string, title: string) => {
@@ -384,6 +418,9 @@ export default function RecipesMainPage() {
                   placeholder="Новая категория"
                   value={newCatTitle}
                   onChange={(e) => setNewCatTitle(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") onAddCategory();
+                  }}                  
                 />
                 <button
                   type="button"
@@ -392,7 +429,7 @@ export default function RecipesMainPage() {
                   aria-label="Добавить категорию"
                   title="Добавить"
                 >
-                  <IconPlus size={18} />
+                  <IconPlus size={18} className={addingCat ? styles.iconSpin : undefined}/>
                 </button>
               </div>
             )}
@@ -531,6 +568,11 @@ export default function RecipesMainPage() {
             )}
           </div>
         </div>
+        {toast && (
+          <div className={styles.toast}>
+            {toast}
+          </div>
+        )}        
       </PageFade>
     </div>
   );

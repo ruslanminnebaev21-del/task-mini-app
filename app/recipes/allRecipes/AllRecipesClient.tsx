@@ -124,7 +124,7 @@ export default function AllRecipesClient() {
 
         <div className={styles.recipesList}>
           {rows.map((r) => (
-            <Link key={r.id} href={`/recipes/${r.id}`} className={styles.recipeLink}>
+            <Link key={r.id} href={`/recipes/curRecipe?id=${r.id}`} className={styles.recipeLink}>
               <div className={styles.recipeItem}>
                 <div className={styles.recipeImgWrap}>
                   {r.photo_url ? (

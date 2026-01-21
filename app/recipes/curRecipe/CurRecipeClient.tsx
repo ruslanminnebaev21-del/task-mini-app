@@ -6,6 +6,8 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import styles from "../recipes.module.css";
 import PageFade from "@/app/components/PageFade/PageFade";
+import { IconEdit, IconTrash } from "@/app/components/icons";
+
 
 type Category = { id: string; title: string };
 
@@ -54,6 +56,7 @@ export default function CurRecipeClient() {
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
   const [data, setData] = useState<RecipeFull | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
     let alive = true;
@@ -108,7 +111,36 @@ export default function CurRecipeClient() {
     if (window.history.length > 1) router.back();
     else router.push("/recipes/allRecipes");
   };
+  const onDelete = async () => {
+    if (!recipeId) return;
+    if (deleting) return;
 
+    const ok = window.confirm("Удалить рецепт? Это действие нельзя отменить.");
+    if (!ok) return;
+
+    setDeleting(true);
+    try {
+      const res = await fetch("/api/recipes/deleteRecipe", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ recipe_id: Number(recipeId) }),
+      });
+
+      const json = await res.json();
+
+      if (!res.ok) {
+        alert(json?.error ?? "Ошибка удаления");
+        return;
+      }
+
+      router.push("/recipes/allRecipes");
+    } catch (e) {
+      console.log("DELETE ERROR:", e);
+      alert("Ошибка удаления");
+    } finally {
+      setDeleting(false);
+    }
+  };
   return (
     <div className={styles.container}>
       <PageFade>
@@ -134,8 +166,39 @@ export default function CurRecipeClient() {
               </button>
 
               {catTitle && (
-                <div className={styles.recipeHeroChip}>
-                  {catTitle}
+                <div
+                  className={styles.recipePhotoRow}
+                >
+                  <button
+                    type="button"
+                    className={styles.RecipeTabBadge}
+                    onClick={onDelete}
+                    disabled={deleting}
+                    
+                    title="Удалить"
+                    aria-label="Удалить"
+                  >
+                    <span style={{ color: "#333" }}>
+                      <IconTrash size={11} />
+                    </span>
+                  </button>
+                  <button
+                    type="button"
+                    className={styles.RecipeTabBadge}
+                    disabled={deleting}
+                    onClick={() => {
+                        if (!recipeId) return;
+                        router.push(`/recipes/newRecipe?edit=1&recipe_id=${encodeURIComponent(recipeId)}`);
+                      }}
+                    
+                    title="Редактировать"
+                    aria-label="Редактировать"
+                  >
+                    <IconEdit size={11} />
+                  </button>
+                  <div className={styles.recipeHeroChip}>
+                    {catTitle}
+                  </div>
                 </div>
               )}
             </div>
