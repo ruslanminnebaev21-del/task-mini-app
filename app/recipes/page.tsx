@@ -39,6 +39,10 @@ export default function RecipesMainPage() {
   const [catsErr, setCatsErr] = useState<string | null>(null);
 
   const [allCats, setAllCats] = useState<Category[]>([]);
+  const allCatsRef = useRef<Category[]>([]);
+  useEffect(() => {
+    allCatsRef.current = allCats;
+  }, [allCats]);
   const [countsByCatId, setCountsByCatId] = useState<Record<string, number>>({});
   const [noneCount, setNoneCount] = useState(0);
 
@@ -49,6 +53,8 @@ export default function RecipesMainPage() {
   const [overId, setOverId] = useState<string | null>(null);
   const dragFromIndexRef = useRef<number | null>(null);
   const listRef = useRef<HTMLDivElement | null>(null);
+  const dragHandleElRef = useRef<HTMLElement | null>(null);
+  const pointerIdRef = useRef<number | null>(null);
 
   useEffect(() => {
     let alive = true;
@@ -220,6 +226,19 @@ export default function RecipesMainPage() {
     setOverId(null);
     dragFromIndexRef.current = null;
   }
+  function tgDisableSwipes() {
+    try {
+      // @ts-ignore
+      window?.Telegram?.WebApp?.disableVerticalSwipes?.();
+    } catch {}
+  }
+
+  function tgEnableSwipes() {
+    try {
+      // @ts-ignore
+      window?.Telegram?.WebApp?.enableVerticalSwipes?.();
+    } catch {}
+  }
   useEffect(() => {
     if (!editMode) return;
     if (!dragId) return;
@@ -231,20 +250,32 @@ export default function RecipesMainPage() {
     }
 
     function onMove(e: PointerEvent) {
+      e.preventDefault();
       const rowEl = getRowElFromPoint(e.clientX, e.clientY);
       const over = rowEl?.getAttribute("data-catid") ?? null;
 
       if (!over || over === "__none__" || over === dragId) return;
       setOverId(over);
+      const cur = allCatsRef.current;
 
-      const from = allCats.findIndex((x) => String(x.id) === String(dragId));
-      const to = allCats.findIndex((x) => String(x.id) === String(over));
+      const from = cur.findIndex((x) => String(x.id) === String(dragId));
+      const to = cur.findIndex((x) => String(x.id) === String(over));
       if (from < 0 || to < 0 || from === to) return;
 
       moveCatInAllCats(from, to);
     }
 
     function onUp() {
+      try {
+        if (dragHandleElRef.current && pointerIdRef.current !== null) {
+          dragHandleElRef.current.releasePointerCapture(pointerIdRef.current);
+        }
+      } catch {}
+
+      dragHandleElRef.current = null;
+      pointerIdRef.current = null;
+
+      tgEnableSwipes();
       setDragId(null);
       setOverId(null);
       dragFromIndexRef.current = null;
@@ -259,9 +290,10 @@ export default function RecipesMainPage() {
       window.removeEventListener("pointerup", onUp);
       window.removeEventListener("pointercancel", onUp);
     };
-  }, [editMode, dragId, allCats]);  
+  }, [editMode, dragId]);
 
   return (
+
     <div className={styles.container}>
       <PageFade>
         <div className={styles.headerRow}>
@@ -392,13 +424,15 @@ export default function RecipesMainPage() {
                             onMouseDown={(e) => e.stopPropagation()}
                           onPointerDown={(e) => {
                             if (!editMode || isNone) return;
+                            tgDisableSwipes();
 
                             e.preventDefault();
                             e.stopPropagation();
 
                             // захват указателя (важно для iOS/WebView)
+                            pointerIdRef.current = e.pointerId;
                             (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
-
+                            dragHandleElRef.current = e.currentTarget as HTMLElement;
                             setDragId(c.id);
                             setOverId(c.id);
 
