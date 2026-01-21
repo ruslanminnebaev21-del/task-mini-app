@@ -2,7 +2,7 @@
 
 "use client";
 
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import styles from "../recipes.module.css";
 import { IconTrash, IconPlus, IconImage } from "@/app/components/icons";
@@ -84,7 +84,38 @@ function useAutosizeTextareas(values: string[]) {
 
 export default function NewRecipePage() {
   const router = useRouter();
-  
+  const scrollFocusedToTopOffset = useCallback((el: HTMLElement) => {
+    // не трогаем клики по кнопкам/чипам и т.п.
+    const tag = el.tagName?.toLowerCase();
+    if (tag !== "input" && tag !== "textarea") return;
+
+    // если инпут внутри модалки категорий, можно не скроллить (по желанию)
+    // if ((el as HTMLElement).closest(`.${styles.modalBox}`)) return;
+
+    const rect = el.getBoundingClientRect();
+    const targetTop = 100; // px от верха экрана
+    const delta = rect.top - targetTop;
+
+    // уже почти на месте
+    if (Math.abs(delta) < 4) return;
+
+    window.scrollBy({ top: delta, behavior: "smooth" });
+  }, []);
+
+  useEffect(() => {
+    const onFocusIn = (e: FocusEvent) => {
+      const el = e.target as HTMLElement | null;
+      if (!el) return;
+
+      // даём iOS/Android поднять клаву, потом докрутим
+      requestAnimationFrame(() => scrollFocusedToTopOffset(el));
+      setTimeout(() => scrollFocusedToTopOffset(el), 50);
+      setTimeout(() => scrollFocusedToTopOffset(el), 180);
+    };
+
+    document.addEventListener("focusin", onFocusIn);
+    return () => document.removeEventListener("focusin", onFocusIn);
+  }, [scrollFocusedToTopOffset]);
   
   
   /* categories */
@@ -115,6 +146,8 @@ export default function NewRecipePage() {
   const [toast, setToast] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const initialSnapshotRef = useRef<string | null>(null);
+  const [keyboardOpen, setKeyboardOpen] = useState(false);
+
 
   function normalizeSnapshot() {
     const tTitle = String(title ?? "");
@@ -320,6 +353,26 @@ export default function NewRecipePage() {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    const vv = window.visualViewport;
+    if (!vv) return;
+
+    const onResize = () => {
+      // если клавиатура открылась, визуальная высота окна заметно уменьшается
+      const isOpen = vv.height < window.innerHeight - 120;
+      setKeyboardOpen(isOpen);
+    };
+
+    onResize();
+    vv.addEventListener("resize", onResize);
+    vv.addEventListener("scroll", onResize);
+    return () => {
+      vv.removeEventListener("resize", onResize);
+      vv.removeEventListener("scroll", onResize);
+    };
+  }, []);
+
   useEffect(() => {
     if (isEdit) return;
     initialSnapshotRef.current = normalizeSnapshot();
@@ -853,9 +906,9 @@ export default function NewRecipePage() {
             </button>
 
             {cookOpen && (
-              <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
+              <div style={{ display: "flex", gap: 8, marginTop: 12}}>
                 <input
-                  className={styles.input}
+                  className={`${styles.input} ${styles.timeInput}`}
                   placeholder="д"
                   value={cookTime.d}
                   onChange={(e) =>
@@ -863,7 +916,7 @@ export default function NewRecipePage() {
                   }
                 />
                 <input
-                  className={styles.input}
+                  className={`${styles.input} ${styles.timeInput}`}
                   placeholder="ч"
                   value={cookTime.h}
                   onChange={(e) =>
@@ -871,7 +924,7 @@ export default function NewRecipePage() {
                   }
                 />
                 <input
-                  className={styles.input}
+                  className={`${styles.input} ${styles.timeInput}`}
                   placeholder="м"
                   value={cookTime.m}
                   onChange={(e) =>

@@ -1,5 +1,9 @@
 /* app/recipes/recipes.module.css */
-
+.menuHidden {
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(12px);
+}
 
 .shell {
   min-height: 100vh;
@@ -2631,4 +2635,14 @@
   to {
     transform: rotate(360deg);
   }
+}
+.timeInput {
+  height: 40px;
+  width: 100%;
+  text-align: center;
+
+  padding: 0;              /* КРИТИЧНО */
+  line-height: 40px;       /* КРИТИЧНО */
+
+  box-sizing: border-box;
 }
