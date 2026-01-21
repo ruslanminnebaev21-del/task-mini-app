@@ -4,7 +4,8 @@ import { supabaseAdmin } from "@/lib/supabaseAdmin";
 export async function GET() {
   const { data, error } = await supabaseAdmin
     .from("recipe_categories")
-    .select("id, title")
+    .select("id, title, order_index")
+    .order("order_index", { ascending: true })
     .order("title", { ascending: true });
 
   if (error) {
@@ -14,5 +15,6 @@ export async function GET() {
     );
   }
 
+  // фронту order_index не обязателен, но пусть будет
   return NextResponse.json({ categories: data ?? [] }, { status: 200 });
 }

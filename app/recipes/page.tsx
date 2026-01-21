@@ -239,6 +239,27 @@ export default function RecipesMainPage() {
       window?.Telegram?.WebApp?.enableVerticalSwipes?.();
     } catch {}
   }
+  async function saveCatsOrder(nextCats: Category[]) {
+    try {
+      const order = nextCats.map((c, idx) => ({
+        id: String(c.id),
+        order_index: idx,
+      }));
+
+      const r = await fetch("/api/recipes/categories/reorder", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ order }),
+      });
+
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok) {
+        console.warn("reorder failed", j?.error ?? "unknown");
+      }
+    } catch (e) {
+      console.warn("reorder failed", e);
+    }
+  }  
   useEffect(() => {
     if (!editMode) return;
     if (!dragId) return;
@@ -274,8 +295,10 @@ export default function RecipesMainPage() {
 
       dragHandleElRef.current = null;
       pointerIdRef.current = null;
-
+      const latest = allCatsRef.current;
+      saveCatsOrder(latest); 
       tgEnableSwipes();
+       
       setDragId(null);
       setOverId(null);
       dragFromIndexRef.current = null;
