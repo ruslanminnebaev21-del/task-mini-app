@@ -2167,7 +2167,7 @@
   display: flex;
   flex-direction: column;
   gap: 10px;
-  padding-top: 8px;
+  padding-top: 10px;
 }
 
 .recipeItem {
@@ -2177,9 +2177,9 @@
   display: flex;
   align-items: stretch;
 
-  border-radius: 18px;
+  border-radius: 20px;
   background: #ffffff9e;
-  border: 1px solid rgba(0, 0, 0, 0.06);
+  border: 1px solid #ffffffb8;
   box-shadow:
     0 1px 0 rgba(255, 255, 255, 0.75) inset,
     0 12px 24px rgba(0, 0, 0, 0.05);
@@ -2223,9 +2223,17 @@
 
 .recipeTitle {
   font-size: 16px;
-  line-height: 1.15;
+  line-height: 1.2;
   font-weight: 600;
   margin: 0;
+
+  /* ключевые строки */
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+
+  /* важно для flex-контейнеров */
+  max-width: 100%;
 }
 
 .recipeSub {
@@ -2239,7 +2247,7 @@
 }
 
 .recipesState {
-  padding: 6px 2px;
+  padding: 10px 18px;
   opacity: 0.65;
 }
 
@@ -2250,7 +2258,7 @@
 /* ===== recipe meta row ===== */
 
 .recipeMetaRow {
-  margin-top: 8px;
+  margin-top: 10px;
   display: flex;
   gap: 6px;
   flex-wrap: wrap;
@@ -2265,3 +2273,308 @@
   color: rgba(0, 0, 0, 0.7);
   white-space: nowrap;
 }
+/* ===== Recipe page ===== */
+
+.recipePage {
+  width: 100%;
+}
+
+.recipeHero {
+  position: relative;
+
+  width: 100vw;
+  aspect-ratio: 1 / 1;
+
+  margin-left: calc(50% - 50vw);
+  margin-right: calc(50% - 50vw);
+
+  margin-top: -16px; /* если container даёт верхний отступ */
+  overflow: hidden;
+
+  background: rgba(0, 0, 0, 0.06);
+  border-bottom-left-radius: 20px;
+  border-bottom-right-radius: 20px;
+}
+
+.recipeHeroImg {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.recipeHeroEmpty {
+  width: 100%;
+  height: 100%;
+  display: grid;
+  place-items: center;
+  font-size: 13px;
+  opacity: 0.45;
+}
+
+.recipeBackBtn {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  padding: 10px 12px;
+  border-radius: 14px;
+  border: 1px solid rgba(0, 0, 0, 0.12);
+  background: #ffffff9e;
+  backdrop-filter: blur(10px);
+  font-size: 13px;
+  line-height: 1;
+}
+.recipeBackBtn2 {
+  position: static;
+}
+
+
+.recipeHeroChip {
+  position: absolute;
+  right: 12px;
+  bottom: 12px;
+  padding: 8px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  background: rgba(255, 255, 255, 0.78);
+  backdrop-filter: blur(10px);
+  font-size: 12px;
+  line-height: 1;
+  max-width: 75%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.recipeBody {
+  padding: 14px 2px 0;
+}
+
+.recipeH1 {
+  margin: 10px 0 0;
+  font-size: 26px;
+  line-height: 1.05;
+  /*font-weight: 900;*/
+}
+
+.recipeTimeRow {
+  margin-top: 8px;
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  font-size: 13px;
+  opacity: 0.55;
+}
+
+.recipeSectionTitle {
+  margin-top: 18px;
+  font-size: 18px;
+  opacity: 0.75;
+  font-weight: 900;
+}
+
+.recipeCard {
+  margin-top: 10px;
+  padding: 12px;
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.62);
+  border: 1px solid #ffffffb8;
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.75) inset,
+    0 12px 24px rgba(0, 0, 0, 0.05);
+}
+
+.recipeIngList {
+  margin: 0;
+  padding-left: 6px;
+}
+
+.recipeIngItem {
+  padding: 6px 0;
+  font-weight: 300;
+}
+
+.recipeEmptyText {
+  padding: 8px 2px;
+  opacity: 0.65;
+  font-size: 13px;
+}
+
+.recipeSteps {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding-top: 10px;
+}
+
+.recipeStep {
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.62);
+  border: 1px solid #ffffffb8;
+  overflow: hidden;
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.75) inset,
+    0 12px 24px rgba(0, 0, 0, 0.05);
+}
+
+.recipeStepNum {
+  padding: 12px 12px 0;
+  font-size: 12px;
+  opacity: 0.65;
+}
+
+.recipeStepPhotoWrap {
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  margin-top: 10px;
+  background: transparent;
+
+}
+
+.recipeStepPhoto {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  border-radius: 20px;
+}
+
+.recipeStepText {
+  padding-top: 12px;
+  padding-left: 12px;
+  padding-right: 12px;
+  font-size: 14px;
+  line-height: 1.35;
+  white-space: pre-wrap;
+  font-weight: 300;
+}
+
+/* ===== Categories block ===== */
+
+.categoriesWrap {
+  margin-top: 14px;
+}
+
+.categoriesTopRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 2px 10px;
+}
+
+.categoriesTitle {
+  font-size: 14px;
+  opacity: 0.7;
+}
+
+.categoriesEditBtn {
+  background: transparent;
+  border: 0;
+  padding: 6px 10px;
+  font-size: 14px;
+  color: rgba(17, 17, 17, 0.55);
+}
+
+.categoriesCard {
+  border-radius: 20px;
+  background: #ffffff9e;
+  border: 1px solid #ffffffb8;
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.75) inset,
+    0 12px 24px rgba(0, 0, 0, 0.05);
+  overflow: hidden;
+}
+
+.categoriesList {
+  display: flex;
+  flex-direction: column;
+}
+
+.categoryRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 18px 18px;
+}
+
+.categoryName {
+  font-size: 18px;
+  line-height: 1.15;
+}
+
+.categoryRight {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.categoryCount {
+  font-size: 12px;
+  opacity: 0.55;
+  min-width: 18px;
+  text-align: right;
+}
+
+.categoryArrow {
+  opacity: 0.35;
+  display: grid;
+  place-items: center;
+}
+
+.categoryDivider {
+  height: 1px;
+  background: rgba(0, 0, 0, 0.08);
+  /*margin-left: 72px;  визуально как на iOS списках, линия не под иконкой */
+}
+
+/* ===== Edit mode add row ===== */
+
+.categoryAddRow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 14px 10px;
+}
+
+.categoryTrashBtn {
+  width: 34px;
+  height: 34px;
+  border-radius: 999px;
+  border: 0;
+  display: grid;
+  place-items: center;
+  background: rgba(0, 0, 0, 0.06);
+}
+
+.categoryLeft {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.dragHandle {
+  width: 28px;
+  height: 28px;
+  border-radius: 10px;
+  /*border: 1px solid rgba(0,0,0,0.06);*/
+  /*background: rgba(255,255,255,0.6);*/
+  display: grid;
+  place-items: center;
+  line-height: 1;
+  font-size: 16px;
+  cursor: grab;
+  user-select: none;
+  touch-action: none;
+  opacity: 0.2;
+  transform: translateY(-1px);
+}
+
+.dragHandle:active { cursor: grabbing; }
+
+.dragHandleSpacer {
+  width: 28px;
+  height: 28px;
+}
+

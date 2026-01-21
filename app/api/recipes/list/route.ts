@@ -1,4 +1,3 @@
-// app/api/recipes/list/route.ts
 import { NextResponse } from "next/server";
 import jwt from "jsonwebtoken";
 import { cookies } from "next/headers";
@@ -39,65 +38,61 @@ export async function GET(req: Request) {
   const url = new URL(req.url);
   const view = cleanStr(url.searchParams.get("view")) || "meta"; // meta | ids
 
-  // 1) recipes
-  const { data: dataRecipes, error: rErr } = await supabaseAdmin
+  // 1) рецепты
+  const { data, error } = await supabaseAdmin
     .from("recipes")
     .select("id, title, photo_path, prep_time_min, cook_time_min, created_at")
     .eq("user_id", uid)
     .order("created_at", { ascending: false });
 
-  if (rErr) {
+  if (error) {
     return NextResponse.json(
-      { error: "Failed to load recipes", details: rErr.message },
+      { error: "Failed to load recipes", details: error.message },
       { status: 500 }
     );
   }
 
-  const baseRecipes = Array.isArray(dataRecipes) ? dataRecipes : [];
+  const rows = data ?? [];
 
   if (view === "ids") {
     return NextResponse.json(
-      { ok: true, recipes: baseRecipes.map((r: any) => ({ id: r.id })) },
+      { ok: true, recipes: rows.map((r: any) => ({ id: r.id })) },
       { status: 200 }
     );
   }
 
-  if (baseRecipes.length === 0) {
-    return NextResponse.json({ ok: true, recipes: [] }, { status: 200 });
-  }
+  const recipeIds = rows.map((r: any) => r.id);
 
-  const recipeIds = baseRecipes.map((r: any) => r.id);
-
-  // 2) links recipe -> category
-  const { data: links, error: lErr } = await supabaseAdmin
+  // 2) связи recipes_to_categories
+  const { data: links, error: linksErr } = await supabaseAdmin
     .from("recipes_to_categories")
     .select("recipe_id, category_id")
     .in("recipe_id", recipeIds);
 
-  if (lErr) {
+  if (linksErr) {
     return NextResponse.json(
-      { error: "Failed to load recipe categories links", details: lErr.message },
+      { error: "Failed to load recipes_to_categories", details: linksErr.message },
       { status: 500 }
     );
   }
 
-  const safeLinks = Array.isArray(links) ? links : [];
-  const categoryIds = Array.from(
-    new Set(safeLinks.map((x: any) => cleanStr(x.category_id)).filter(Boolean))
+  const linksArr = links ?? [];
+  const catIds = Array.from(
+    new Set(linksArr.map((x: any) => String(x.category_id)).filter(Boolean))
   );
 
-  // 3) categories dictionary
+  // 3) сами категории (title)
   let catMap = new Map<string, { id: string; title: string }>();
 
-  if (categoryIds.length) {
-    const { data: cats, error: cErr } = await supabaseAdmin
+  if (catIds.length) {
+    const { data: cats, error: catsErr } = await supabaseAdmin
       .from("recipe_categories")
       .select("id, title")
-      .in("id", categoryIds);
+      .in("id", catIds);
 
-    if (cErr) {
+    if (catsErr) {
       return NextResponse.json(
-        { error: "Failed to load categories", details: cErr.message },
+        { error: "Failed to load recipe_categories", details: catsErr.message },
         { status: 500 }
       );
     }
@@ -107,28 +102,26 @@ export async function GET(req: Request) {
     });
   }
 
-  // 4) group categories by recipe_id
-  const catsByRecipe = new Map<number, { id: string; title: string }[]>();
-  for (const l of safeLinks) {
-    const rid = Number(l.recipe_id);
-    const cid = cleanStr(l.category_id);
+  // 4) собрать categories по recipe_id
+  const catsByRecipeId: Record<string, { id: string; title: string }[]> = {};
+
+  linksArr.forEach((l: any) => {
+    const rid = String(l.recipe_id);
+    const cid = String(l.category_id);
     const cat = catMap.get(cid);
-    if (!rid || !cat) continue;
+    if (!cat) return;
+    if (!catsByRecipeId[rid]) catsByRecipeId[rid] = [];
+    catsByRecipeId[rid].push(cat);
+  });
 
-    const arr = catsByRecipe.get(rid) ?? [];
-    // защита от дублей
-    if (!arr.some((x) => x.id === cat.id)) arr.push(cat);
-    catsByRecipe.set(rid, arr);
-  }
-
-  const recipes = baseRecipes.map((r: any) => ({
+  const recipes = rows.map((r: any) => ({
     id: r.id,
     title: r.title ?? "",
     photo_path: r.photo_path ?? null,
     photo_url: publicUrlForPath(r.photo_path ?? null),
     prep_time_min: r.prep_time_min ?? null,
     cook_time_min: r.cook_time_min ?? null,
-    categories: catsByRecipe.get(Number(r.id)) ?? [],
+    categories: catsByRecipeId[String(r.id)] ?? [],
   }));
 
   return NextResponse.json({ ok: true, recipes }, { status: 200 });

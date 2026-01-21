@@ -1,14 +1,224 @@
-// app/recipes/main/page.tsx
-
 "use client";
 
+import { useEffect, useMemo, useRef, useState } from "react";
 import styles from "./recipes.module.css";
 import PageFade from "@/app/components/PageFade/PageFade";
-import { IconArrow } from "@/app/components/icons";
+import { IconArrow, IconTrash, IconPlus } from "@/app/components/icons";
 import { useRouter } from "next/navigation";
+
+type Category = { id: string; title: string };
+
+type CategoriesApi = { categories: Category[] };
+
+type RecipesIdsApi = { recipes: { id: number }[] };
+
+type CurRecipeFull = {
+  recipe: { id: number };
+  categories: { id: string; title: string }[];
+};
+
+type CategoryRow = {
+  id: string; // real id or "__none__"
+  title: string;
+  count: number;
+};
+
+async function fetchJson<T>(url: string): Promise<T> {
+  const r = await fetch(url, { method: "GET", cache: "no-store" });
+  const j = await r.json();
+  if (!r.ok) throw new Error(j?.error ?? "Request failed");
+  return j as T;
+}
 
 export default function RecipesMainPage() {
   const router = useRouter();
+
+  const [editMode, setEditMode] = useState(false);
+
+  const [catsLoading, setCatsLoading] = useState(true);
+  const [catsErr, setCatsErr] = useState<string | null>(null);
+
+  const [allCats, setAllCats] = useState<Category[]>([]);
+  const [countsByCatId, setCountsByCatId] = useState<Record<string, number>>({});
+  const [noneCount, setNoneCount] = useState(0);
+
+  const [newCatTitle, setNewCatTitle] = useState("");
+
+  // ===== DRAG STATE =====
+  const [dragId, setDragId] = useState<string | null>(null);
+  const [overId, setOverId] = useState<string | null>(null);
+  const dragFromIndexRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    let alive = true;
+
+    (async () => {
+      try {
+        setCatsLoading(true);
+        setCatsErr(null);
+
+        // 1) категории
+        const cats = await fetchJson<CategoriesApi>("/api/recipes/categories");
+        if (!alive) return;
+        setAllCats(Array.isArray(cats?.categories) ? cats.categories : []);
+
+        // 2) рецепты -> считаем кол-во по категориям
+        const idsRes = await fetchJson<RecipesIdsApi>("/api/recipes/list?view=ids");
+        if (!alive) return;
+
+        const ids = Array.isArray(idsRes?.recipes) ? idsRes.recipes.map((x) => x.id) : [];
+        if (!ids.length) {
+          setCountsByCatId({});
+          setNoneCount(0);
+          return;
+        }
+
+        const concurrency = 6;
+        let idx = 0;
+
+        const localCounts: Record<string, number> = {};
+        let localNone = 0;
+
+        async function worker() {
+          while (idx < ids.length) {
+            const my = ids[idx++];
+            try {
+              const one = await fetchJson<CurRecipeFull>(
+                `/api/recipes/curRecipe?view=full&recipe_id=${encodeURIComponent(String(my))}`
+              );
+
+              const catArr = Array.isArray(one?.categories) ? one.categories : [];
+              if (catArr.length === 0) {
+                localNone += 1;
+                continue;
+              }
+
+              catArr.forEach((c) => {
+                const k = String(c.id);
+                localCounts[k] = (localCounts[k] ?? 0) + 1;
+              });
+            } catch {
+              // пропускаем
+            }
+          }
+        }
+
+        const pool = Array.from({ length: Math.min(concurrency, ids.length) }, () => worker());
+        await Promise.all(pool);
+
+        if (!alive) return;
+        setCountsByCatId(localCounts);
+        setNoneCount(localNone);
+      } catch (e: any) {
+        if (!alive) return;
+        setCatsErr(e?.message ?? "Ошибка загрузки категорий");
+      } finally {
+        if (!alive) return;
+        setCatsLoading(false);
+      }
+    })();
+
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  const rows: CategoryRow[] = useMemo(() => {
+    const base = allCats.map((c) => ({
+      id: c.id,
+      title: c.title,
+      count: countsByCatId[String(c.id)] ?? 0,
+    }));
+
+    base.push({
+      id: "__none__",
+      title: "Без категорий",
+      count: noneCount,
+    });
+
+    return base;
+  }, [allCats, countsByCatId, noneCount]);
+
+  const onToggleEdit = () => {
+    setEditMode((v) => !v);
+
+    setDragId(null);
+    setOverId(null);
+    dragFromIndexRef.current = null;
+  };
+
+  const onAddCategory = () => {
+    const t = newCatTitle.trim();
+    if (!t) return;
+    alert(`Добавить категорию: ${t}\n(пока без API)`);
+    setNewCatTitle("");
+  };
+
+  const onDeleteCategory = (id: string, title: string) => {
+    alert(`Удалить категорию: ${title} (${id})\n(пока просто alert)`);
+  };
+
+  // ===== DRAG HELPERS (двигаем только реальные категории, без "__none__") =====
+  function moveCatInAllCats(fromIndex: number, toIndex: number) {
+    setAllCats((prev) => {
+      if (fromIndex === toIndex) return prev;
+      if (fromIndex < 0 || toIndex < 0) return prev;
+      if (fromIndex >= prev.length || toIndex >= prev.length) return prev;
+
+      const next = [...prev];
+      const [picked] = next.splice(fromIndex, 1);
+      next.splice(toIndex, 0, picked);
+      return next;
+    });
+  }
+
+  function onDragStartCat(catId: string) {
+    if (!editMode) return;
+    if (catId === "__none__") return;
+
+    const from = allCats.findIndex((x) => String(x.id) === String(catId));
+    dragFromIndexRef.current = from >= 0 ? from : null;
+
+    setDragId(catId);
+    setOverId(null);
+  }
+
+  function onDragOverCat(catId: string) {
+    if (!editMode) return;
+    if (!dragId) return;
+    if (catId === "__none__") return;
+    if (catId === dragId) return;
+
+    setOverId(catId);
+  }
+
+  function onDropCat(catId: string) {
+    if (!editMode) return;
+    if (!dragId) return;
+    if (catId === "__none__") return;
+
+    const from = dragFromIndexRef.current;
+    const to = allCats.findIndex((x) => String(x.id) === String(catId));
+
+    if (from === null || from < 0 || to < 0) {
+      setDragId(null);
+      setOverId(null);
+      dragFromIndexRef.current = null;
+      return;
+    }
+
+    moveCatInAllCats(from, to);
+
+    setDragId(null);
+    setOverId(null);
+    dragFromIndexRef.current = null;
+  }
+
+  function onDragEndAny() {
+    setDragId(null);
+    setOverId(null);
+    dragFromIndexRef.current = null;
+  }
 
   return (
     <div className={styles.container}>
@@ -25,10 +235,149 @@ export default function RecipesMainPage() {
           <div className={styles.bigCtaRow}>
             <span className={styles.bigCtaText}>Новый рецепт</span>
             <span className={styles.bigCtaIcon}>
-              <IconArrow size={25} style={{ color: "#fff" }} />
+              <IconArrow size={25} />
             </span>
           </div>
         </button>
+
+        {/* ===== CATEGORIES BLOCK ===== */}
+        <div className={styles.categoriesWrap}>
+          <div className={styles.categoriesTopRow}>
+            <div className={styles.sectionTitle}>Категории</div>
+
+            <button
+              type="button"
+              className={styles.categoriesEditBtn}
+              onClick={onToggleEdit}
+            >
+              {editMode ? "Готово" : "Править"}
+            </button>
+          </div>
+
+          <div className={styles.categoriesCard}>
+            {editMode && (
+              <div className={styles.categoryAddRow}>
+                <input
+                  className={`${styles.input} ${styles.inputGrow}`}
+                  placeholder="Новая категория"
+                  value={newCatTitle}
+                  onChange={(e) => setNewCatTitle(e.target.value)}
+                />
+                <button
+                  type="button"
+                  className={styles.btnCircle}
+                  onClick={onAddCategory}
+                  aria-label="Добавить категорию"
+                  title="Добавить"
+                >
+                  <IconPlus size={18} />
+                </button>
+              </div>
+            )}
+
+            {catsLoading && <div className={styles.recipesState}>Загружаю…</div>}
+            {catsErr && <div className={styles.recipesError}>{catsErr}</div>}
+
+            {!catsLoading && !catsErr && (
+              <div className={styles.categoriesList}>
+                {rows.map((c, i) => {
+                  const isNone = c.id === "__none__";
+                  const canDelete = editMode && !isNone;
+
+                  const isDragging = editMode && dragId === c.id;
+                  const isOver = editMode && overId === c.id;
+
+                  const rowClassName = [
+                    styles.categoryRow,
+                    isDragging ? styles.categoryRowDragging : "",
+                    isOver ? styles.categoryRowOver : "",
+                  ]
+                    .filter(Boolean)
+                    .join(" ");
+
+                  return (
+                    <div key={c.id}>
+                      <div
+                        className={rowClassName}
+                        draggable={editMode && !isNone}
+                        onDragStart={() => onDragStartCat(c.id)}
+                        onDragOver={(e) => {
+                          if (!editMode || isNone) return;
+                          e.preventDefault();
+                          onDragOverCat(c.id);
+                        }}
+                        onDrop={(e) => {
+                          if (!editMode || isNone) return;
+                          e.preventDefault();
+                          onDropCat(c.id);
+                        }}
+                        onDragEnd={onDragEndAny}
+                        onClick={() => {
+                          if (editMode) return;
+
+                          const cat = isNone ? "__none__" : c.id;
+                          const catTitle = c.title;
+
+                          router.push(
+                            `/recipes/allRecipes?cat=${encodeURIComponent(cat)}&catTitle=${encodeURIComponent(
+                              catTitle
+                            )}`
+                          );
+                        }}
+                        role="button"
+                        tabIndex={0}
+                      >
+                        {/* LEFT */}
+                        <div className={styles.categoryLeft}>
+                          {editMode && !isNone ? (
+                            <div
+                              className={styles.dragHandle}
+                              title="Перетащить"
+                              aria-label="Перетащить"
+                              onMouseDown={(e) => e.stopPropagation()}
+                            >
+                              ≡
+                            </div>
+                          ) : null}
+
+                          <div className={styles.titleText}>{c.title}</div>
+                        </div>
+
+                        {/* RIGHT */}
+                        <div className={styles.categoryRight}>
+                          <div className={styles.categoryCount}>{c.count}</div>
+
+                          {!editMode && (
+                            <div className={styles.categoryArrow}>
+                              <IconArrow size={18} />
+                            </div>
+                          )}
+
+                          {canDelete && (
+                            <button
+                              type="button"
+                              className={styles.categoryTrashBtn}
+                              aria-label={`Удалить ${c.title}`}
+                              title="Удалить"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                onDeleteCategory(c.id, c.title);
+                              }}
+                            >
+                              <IconTrash size={16} />
+                            </button>
+                          )}
+                        </div>
+                      </div>
+
+                      {i !== rows.length - 1 && <div className={styles.categoryDivider} />}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        </div>
       </PageFade>
     </div>
   );
