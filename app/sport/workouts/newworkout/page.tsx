@@ -461,19 +461,24 @@ function NewWorkoutInner() {
   }
 
   // ---------- ui helpers ----------
+  function clearTimer() {
+    setTimerRunning(false);
+    setElapsedMs(0);
+    setStartedAtMs(null);
+    setSeconds(0);
+
+    try {
+      localStorage.removeItem(timerKey);
+    } catch {}
+  }
+
   function resetAll() {
     setTitle("");
     setType("strength");
     setDurationMin("");
     setWorkoutDate(todayYmd());
 
-    // сброс таймера
-  setTimerRunning(false);
-  setElapsedMs(0);
-  setStartedAtMs(null);
-  setSeconds(0);
-
-  try { localStorage.removeItem(timerKey); } catch {}
+    clearTimer();
 
     const first = makeEmptyExercise();
     setWorkoutExercises([first]);
@@ -485,6 +490,8 @@ function NewWorkoutInner() {
 
     setWorkoutStatus(null);
   }
+
+  
 
   function updateExercise(exId: string, patch: Partial<WorkoutExercise>) {
     setWorkoutExercises((prev) => prev.map((x) => (x.id === exId ? { ...x, ...patch } : x)));
@@ -667,9 +674,12 @@ function NewWorkoutInner() {
         setTimeout(() => router.push("/sport/workouts"), 1000);
       } else {
         showToast(isEdit ? "Изменения сохранены" : "Тренировка записана");
+
+        // ✅ важно: чистим таймер ТОЛЬКО после успешного сохранения
+        clearTimer();
+
         setTimeout(() => router.push("/sport/workouts"), 1000);
-      }
-    } catch (e: any) {
+      }    } catch (e: any) {
       showToast(String(e?.message || e));
     } finally {
       setSaving(false);
@@ -692,8 +702,7 @@ function NewWorkoutInner() {
 
   function confirmDone() {
     if (saving || loadingDraft) return;
-    // стопаем таймер и сохраняем duration
-    setTimerRunning(false);
+
     setShowDoneConfirm(false);
     void saveWorkout("done");
   }
@@ -706,6 +715,7 @@ function NewWorkoutInner() {
 
   const isEdit = Boolean(editId);
   const isEditingDoneWorkout = isEdit && workoutStatus === "done";
+  const hasTime = timerRunning || seconds > 0;
 
   return (
     <div className={styles.shell}>
@@ -720,7 +730,14 @@ function NewWorkoutInner() {
         </div>
 
         <nav className={styles.tabWrap} aria-label="Навигация">
-          <Link href="/sport/workouts" className={styles.tabBadge} title="Назад">
+          <Link
+            href="/sport/workouts"
+            className={styles.tabBadge}
+            title="Назад"
+            onClick={() => {
+              clearTimer();
+            }}
+          >
             <span className={styles.dot} />
             Назад
           </Link>
@@ -769,10 +786,17 @@ function NewWorkoutInner() {
             </button>
 
             {/* Таймер */}
-            <div className={`${styles.timerWrap} ${timerRunning ? styles.timerExpanded : ""}`}>
-              <div className={`${styles.timerValue} ${timerRunning ? styles.timerValueActive : ""}`}>
-                {formatTime(seconds)}
-              </div>
+
+            <div
+              className={`${styles.timerWrap} ${
+                hasTime ? styles.timerExpanded : ""
+              }`}
+            >
+              {hasTime && (
+                <div className={`${styles.timerValue} ${hasTime ? styles.timerValueActive : ""}`}>
+                  {formatTime(seconds)}
+                </div>                
+              )}
 
               <button
                 type="button"
@@ -803,6 +827,7 @@ function NewWorkoutInner() {
                 {timerRunning ? <IconPause size={17} /> : <IconPlay size={17} />}
               </button>
             </div>
+
           </div>
         </div>
 
