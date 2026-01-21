@@ -161,8 +161,34 @@ export default function RecipesMainPage() {
     setNewCatTitle("");
   };
 
-  const onDeleteCategory = (id: string, title: string) => {
-    alert(`Удалить категорию: ${title} (${id})\n(пока просто alert)`);
+  const onDeleteCategory = async (id: string, title: string) => {
+    if (!confirm(`Удалить категорию "${title}"?`)) return;
+
+    try {
+      const r = await fetch("/api/recipes/categories/delete", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id }),
+      });
+
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok) {
+        alert(j?.error ?? "Не удалось удалить категорию");
+        return;
+      }
+
+      // локально убираем категорию из списка
+      setAllCats((prev) => prev.filter((c) => String(c.id) !== String(id)));
+
+      // на всякий случай убираем счётчик
+      setCountsByCatId((prev) => {
+        const next = { ...prev };
+        delete next[String(id)];
+        return next;
+      });
+    } catch (e: any) {
+      alert(e?.message ?? "Ошибка удаления");
+    }
   };
 
   // ===== DRAG HELPERS (двигаем только реальные категории, без "__none__") =====
@@ -298,7 +324,7 @@ export default function RecipesMainPage() {
       const latest = allCatsRef.current;
       saveCatsOrder(latest); 
       tgEnableSwipes();
-       
+
       setDragId(null);
       setOverId(null);
       dragFromIndexRef.current = null;
