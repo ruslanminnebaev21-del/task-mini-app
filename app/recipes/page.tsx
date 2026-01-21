@@ -48,6 +48,7 @@ export default function RecipesMainPage() {
   const [dragId, setDragId] = useState<string | null>(null);
   const [overId, setOverId] = useState<string | null>(null);
   const dragFromIndexRef = useRef<number | null>(null);
+  const listRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     let alive = true;
@@ -219,6 +220,46 @@ export default function RecipesMainPage() {
     setOverId(null);
     dragFromIndexRef.current = null;
   }
+  useEffect(() => {
+    if (!editMode) return;
+    if (!dragId) return;
+
+    function getRowElFromPoint(x: number, y: number) {
+      const el = document.elementFromPoint(x, y) as HTMLElement | null;
+      if (!el) return null;
+      return el.closest("[data-catid]") as HTMLElement | null;
+    }
+
+    function onMove(e: PointerEvent) {
+      const rowEl = getRowElFromPoint(e.clientX, e.clientY);
+      const over = rowEl?.getAttribute("data-catid") ?? null;
+
+      if (!over || over === "__none__" || over === dragId) return;
+      setOverId(over);
+
+      const from = allCats.findIndex((x) => String(x.id) === String(dragId));
+      const to = allCats.findIndex((x) => String(x.id) === String(over));
+      if (from < 0 || to < 0 || from === to) return;
+
+      moveCatInAllCats(from, to);
+    }
+
+    function onUp() {
+      setDragId(null);
+      setOverId(null);
+      dragFromIndexRef.current = null;
+    }
+
+    window.addEventListener("pointermove", onMove, { passive: false });
+    window.addEventListener("pointerup", onUp);
+    window.addEventListener("pointercancel", onUp);
+
+    return () => {
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+      window.removeEventListener("pointercancel", onUp);
+    };
+  }, [editMode, dragId, allCats]);  
 
   return (
     <div className={styles.container}>
@@ -279,7 +320,7 @@ export default function RecipesMainPage() {
             {catsErr && <div className={styles.recipesError}>{catsErr}</div>}
 
             {!catsLoading && !catsErr && (
-              <div className={styles.categoriesList}>
+              <div className={styles.categoriesList} ref={listRef}>
                 {rows.map((c, i) => {
                   const isNone = c.id === "__none__";
                   const canDelete = editMode && !isNone;
@@ -299,19 +340,33 @@ export default function RecipesMainPage() {
                     <div key={c.id}>
                       <div
                         className={rowClassName}
-                        draggable={editMode && !isNone}
-                        onDragStart={() => onDragStartCat(c.id)}
-                        onDragOver={(e) => {
-                          if (!editMode || isNone) return;
-                          e.preventDefault();
-                          onDragOverCat(c.id);
-                        }}
-                        onDrop={(e) => {
-                          if (!editMode || isNone) return;
-                          e.preventDefault();
-                          onDropCat(c.id);
-                        }}
-                        onDragEnd={onDragEndAny}
+                        data-catid={c.id}
+                        // draggable={editMode && !isNone}
+                        // onDragStart={(e) => {
+
+                        //   e.dataTransfer.setData("text/plain", c.id);
+                        //   e.dataTransfer.effectAllowed = "move";
+                        //   onDragStartCat(c.id);
+                        // }}
+                        // onDragOver={(e) => {
+                        //   if (!editMode || isNone) return;
+                        //   e.preventDefault();
+                        //   onDragOverCat(c.id);
+                        // }}
+                        // onDrop={(e) => {
+                        //   if (!editMode || isNone) return;
+                        //   e.preventDefault();
+
+                        //   const dragged = e.dataTransfer.getData("text/plain");
+                        //   if (dragged) {
+                        //     // подстрахуем state
+                        //     setDragId(dragged);
+                        //     dragFromIndexRef.current = allCats.findIndex((x) => String(x.id) === String(dragged));
+                        //   }
+
+                        //   onDropCat(c.id);
+                        // }}
+                        // onDragEnd={onDragEndAny}
                         onClick={() => {
                           if (editMode) return;
 
@@ -329,16 +384,31 @@ export default function RecipesMainPage() {
                       >
                         {/* LEFT */}
                         <div className={styles.categoryLeft}>
-                          {editMode && !isNone ? (
-                            <div
-                              className={styles.dragHandle}
-                              title="Перетащить"
-                              aria-label="Перетащить"
-                              onMouseDown={(e) => e.stopPropagation()}
-                            >
-                              ≡
-                            </div>
-                          ) : null}
+                        {editMode && !isNone ? (
+                          <div
+                            className={styles.dragHandle}
+                            title="Перетащить"
+                            aria-label="Перетащить"
+                            onMouseDown={(e) => e.stopPropagation()}
+                          onPointerDown={(e) => {
+                            if (!editMode || isNone) return;
+
+                            e.preventDefault();
+                            e.stopPropagation();
+
+                            // захват указателя (важно для iOS/WebView)
+                            (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+
+                            setDragId(c.id);
+                            setOverId(c.id);
+
+                            const from = allCats.findIndex((x) => String(x.id) === String(c.id));
+                            dragFromIndexRef.current = from >= 0 ? from : null;
+                          }}
+                          >
+                            ≡
+                          </div>
+                        ) : null}
 
                           <div className={styles.titleText}>{c.title}</div>
                         </div>
