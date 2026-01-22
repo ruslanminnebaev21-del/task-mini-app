@@ -1,3 +1,5 @@
+// app/recipes/layout.tsx
+
 import styles from "./recipes.module.css";
 import RecMenu from "@/app/components/RecMenu/RecMenu";
 
@@ -16,8 +18,9 @@ export default function RecipesLayout({
 
       {children}
       {modal ?? null}
-
-      <RecMenu />
+      <div className={styles.menuRoot}>
+        <RecMenu />
+      </div>
     </div>
   );
 }

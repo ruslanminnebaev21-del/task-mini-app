@@ -13,6 +13,29 @@ function uid() {
   return Math.random().toString(16).slice(2) + Date.now().toString(16);
 }
 
+async function ensureJpeg(file: File): Promise<File> {
+  const name = (file.name || "").toLowerCase();
+  const type = (file.type || "").toLowerCase();
+
+  const isHeic =
+    type.includes("heic") ||
+    type.includes("heif") ||
+    name.endsWith(".heic") ||
+    name.endsWith(".heif");
+
+  if (!isHeic) return file;
+
+  const heic2any = (await import("heic2any")).default;
+
+  const converted = (await heic2any({
+    blob: file,
+    toType: "image/jpeg",
+    quality: 0.9,
+  })) as Blob;
+
+  return new File([converted], `${Date.now()}.jpg`, { type: "image/jpeg" });
+}
+
 /* ===== types ===== */
 
 type Ingredient = {
@@ -440,16 +463,18 @@ export default function NewRecipePage() {
 
   async function onRecipePhotoChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
+    const safeFile = file ? await ensureJpeg(file) : null;
+    if (!safeFile) return;
     if (!file) return;
 
     setRecipePhoto((prev) => {
       if (prev?.url) URL.revokeObjectURL(prev.url);
-      return { file, url: URL.createObjectURL(file) };
+      return { file: safeFile, url: URL.createObjectURL(safeFile) };
     });
     // ===== TEMP TEST UPLOAD =====
     try {
       const fd = new FormData();
-      fd.append("file", file);
+      fd.append("file", safeFile);
       fd.append("folder", "main");
       fd.append("recipe_id", "tmp");
 
@@ -493,14 +518,15 @@ export default function NewRecipePage() {
   }
 
   function onStepPhotoChange(stepId: string) {
-    return (e: React.ChangeEvent<HTMLInputElement>) => {
+    return async (e: React.ChangeEvent<HTMLInputElement>) => {
       const file = e.target.files?.[0];
-      if (!file) return;
+      const safeFile = file ? await ensureJpeg(file) : null;
+      if (!safeFile) return;
 
       setStepPhotos((prev) => {
         const old = prev[stepId];
         if (old?.url) URL.revokeObjectURL(old.url);
-        return { ...prev, [stepId]: { file, url: URL.createObjectURL(file) } };
+        return { ...prev, [stepId]: { file: safeFile, url: URL.createObjectURL(safeFile) } };
       });
 
       e.target.value = "";

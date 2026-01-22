@@ -165,42 +165,42 @@ export default function CurRecipeClient() {
                 Назад
               </button>
 
-              {catTitle && (
-                <div
-                  className={styles.recipePhotoRow}
+              <div className={styles.recipePhotoRow}>
+                <button
+                  type="button"
+                  className={styles.RecipeTabBadge}
+                  onClick={onDelete}
+                  disabled={deleting}
+                  title="Удалить"
+                  aria-label="Удалить"
                 >
-                  <button
-                    type="button"
-                    className={styles.RecipeTabBadge}
-                    onClick={onDelete}
-                    disabled={deleting}
-                    
-                    title="Удалить"
-                    aria-label="Удалить"
-                  >
-                    <span style={{ color: "#333" }}>
-                      <IconTrash size={11} />
-                    </span>
-                  </button>
-                  <button
-                    type="button"
-                    className={styles.RecipeTabBadge}
-                    disabled={deleting}
-                    onClick={() => {
-                        if (!recipeId) return;
-                        router.push(`/recipes/newRecipe?edit=1&recipe_id=${encodeURIComponent(recipeId)}`);
-                      }}
-                    
-                    title="Редактировать"
-                    aria-label="Редактировать"
-                  >
-                    <IconEdit size={11} />
-                  </button>
+                  <span style={{ color: "#333" }}>
+                    <IconTrash size={11} />
+                  </span>
+                </button>
+
+                <button
+                  type="button"
+                  className={styles.RecipeTabBadge}
+                  disabled={deleting}
+                  onClick={() => {
+                    if (!recipeId) return;
+                    router.push(
+                      `/recipes/newRecipe?edit=1&recipe_id=${encodeURIComponent(recipeId)}`
+                    );
+                  }}
+                  title="Редактировать"
+                  aria-label="Редактировать"
+                >
+                  <IconEdit size={11} />
+                </button>
+
+                {catTitle && (
                   <div className={styles.recipeHeroChip}>
                     {catTitle}
                   </div>
-                </div>
-              )}
+                )}
+              </div>
             </div>
 
             {/* BODY */}

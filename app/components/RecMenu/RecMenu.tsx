@@ -12,9 +12,44 @@ type MenuItem = {
   icon: "home" | "all" | "fav";
 };
 
+function useKeyboardOpen(thresholdPx = 140) {
+  const [open, setOpen] = useState(false);
+
+  useEffect(() => {
+    const vv = window.visualViewport;
+
+    // Фоллбек, если visualViewport нет (редко, но бывает)
+    if (!vv) {
+      const base = window.innerHeight;
+
+      const onResize = () => {
+        const diff = base - window.innerHeight;
+        setOpen(diff > thresholdPx);
+      };
+
+      window.addEventListener("resize", onResize);
+      return () => window.removeEventListener("resize", onResize);
+    }
+
+    // base берём при монтировании
+    const baseHeight = vv.height;
+
+    const onResize = () => {
+      const diff = baseHeight - vv.height;
+      setOpen(diff > thresholdPx);
+    };
+
+    vv.addEventListener("resize", onResize);
+    return () => vv.removeEventListener("resize", onResize);
+  }, [thresholdPx]);
+
+  return open;
+}
+
 export default function RecMenu() {
   const router = useRouter();
   const pathname = usePathname();
+  const keyboardOpen = useKeyboardOpen(140);
 
   const items: MenuItem[] = useMemo(
     () => [
@@ -62,7 +97,7 @@ export default function RecMenu() {
   };
 
   return (
-    <div className={styles.fixedWrap}>
+    <div className={`${styles.fixedWrap} ${keyboardOpen ? styles.hiddenOnKeyboard : ""}`}>
       <div className={styles.safePad} />
 
       <div className={styles.barRow}>
