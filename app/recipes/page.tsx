@@ -9,7 +9,6 @@ import { useRouter } from "next/navigation";
 type Category = { id: string; title: string; order_index?: number | null };
 
 type CategoriesApi = { categories: Category[] };
-
 type RecipesIdsApi = { recipes: { id: number }[] };
 
 type CurRecipeFull = {
@@ -21,6 +20,13 @@ type CategoryRow = {
   id: string; // real id or "__none__"
   title: string;
   count: number;
+};
+
+type CatsStatsApi = {
+  ok: boolean;
+  categories: Category[];
+  countsByCatId: Record<string, number>;
+  noneCount: number;
 };
 
 async function fetchJson<T>(url: string): Promise<T> {
@@ -54,6 +60,7 @@ export default function RecipesMainPage() {
   useEffect(() => {
     allCatsRef.current = allCats;
   }, [allCats]);
+
   const [countsByCatId, setCountsByCatId] = useState<Record<string, number>>({});
   const [noneCount, setNoneCount] = useState(0);
 
@@ -77,58 +84,13 @@ export default function RecipesMainPage() {
         setCatsLoading(true);
         setCatsErr(null);
 
-        // 1) категории
-        const cats = await fetchJson<CategoriesApi>("/api/recipes/categories");
-        if (!alive) return;
-        setAllCats(Array.isArray(cats?.categories) ? cats.categories : []);
-
-        // 2) рецепты -> считаем кол-во по категориям
-        const idsRes = await fetchJson<RecipesIdsApi>("/api/recipes/list?view=ids");
+        // ✅ 1 запрос вместо N запросов
+        const stats = await fetchJson<CatsStatsApi>("/api/recipes/categories/stats");
         if (!alive) return;
 
-        const ids = Array.isArray(idsRes?.recipes) ? idsRes.recipes.map((x) => x.id) : [];
-        if (!ids.length) {
-          setCountsByCatId({});
-          setNoneCount(0);
-          return;
-        }
-
-        const concurrency = 6;
-        let idx = 0;
-
-        const localCounts: Record<string, number> = {};
-        let localNone = 0;
-
-        async function worker() {
-          while (idx < ids.length) {
-            const my = ids[idx++];
-            try {
-              const one = await fetchJson<CurRecipeFull>(
-                `/api/recipes/curRecipe?view=full&recipe_id=${encodeURIComponent(String(my))}`
-              );
-
-              const catArr = Array.isArray(one?.categories) ? one.categories : [];
-              if (catArr.length === 0) {
-                localNone += 1;
-                continue;
-              }
-
-              catArr.forEach((c) => {
-                const k = String(c.id);
-                localCounts[k] = (localCounts[k] ?? 0) + 1;
-              });
-            } catch {
-              // пропускаем
-            }
-          }
-        }
-
-        const pool = Array.from({ length: Math.min(concurrency, ids.length) }, () => worker());
-        await Promise.all(pool);
-
-        if (!alive) return;
-        setCountsByCatId(localCounts);
-        setNoneCount(localNone);
+        setAllCats(Array.isArray(stats?.categories) ? stats.categories : []);
+        setCountsByCatId(stats?.countsByCatId ?? {});
+        setNoneCount(Number(stats?.noneCount ?? 0));
       } catch (e: any) {
         if (!alive) return;
         setCatsErr(e?.message ?? "Ошибка загрузки категорий");
@@ -214,7 +176,7 @@ export default function RecipesMainPage() {
       // локально убираем категорию из списка
       setAllCats((prev) => prev.filter((c) => String(c.id) !== String(id)));
 
-      // на всякий случай убираем счётчик
+      // убираем счётчик
       setCountsByCatId((prev) => {
         const next = { ...prev };
         delete next[String(id)];
@@ -286,6 +248,7 @@ export default function RecipesMainPage() {
     setOverId(null);
     dragFromIndexRef.current = null;
   }
+
   function tgDisableSwipes() {
     try {
       // @ts-ignore
@@ -299,6 +262,7 @@ export default function RecipesMainPage() {
       window?.Telegram?.WebApp?.enableVerticalSwipes?.();
     } catch {}
   }
+
   async function saveCatsOrder(nextCats: Category[]) {
     try {
       const order = nextCats.map((c, idx) => ({
@@ -319,7 +283,8 @@ export default function RecipesMainPage() {
     } catch (e) {
       console.warn("reorder failed", e);
     }
-  }  
+  }
+
   useEffect(() => {
     if (!editMode) return;
     if (!dragId) return;
@@ -337,8 +302,8 @@ export default function RecipesMainPage() {
 
       if (!over || over === "__none__" || over === dragId) return;
       setOverId(over);
-      const cur = allCatsRef.current;
 
+      const cur = allCatsRef.current;
       const from = cur.findIndex((x) => String(x.id) === String(dragId));
       const to = cur.findIndex((x) => String(x.id) === String(over));
       if (from < 0 || to < 0 || from === to) return;
@@ -355,8 +320,9 @@ export default function RecipesMainPage() {
 
       dragHandleElRef.current = null;
       pointerIdRef.current = null;
+
       const latest = allCatsRef.current;
-      saveCatsOrder(latest); 
+      saveCatsOrder(latest);
       tgEnableSwipes();
 
       setDragId(null);
@@ -376,7 +342,6 @@ export default function RecipesMainPage() {
   }, [editMode, dragId]);
 
   return (
-
     <div className={styles.container}>
       <PageFade>
         <div className={styles.headerRow}>
@@ -420,7 +385,7 @@ export default function RecipesMainPage() {
                   onChange={(e) => setNewCatTitle(e.target.value)}
                   onKeyDown={(e) => {
                     if (e.key === "Enter") onAddCategory();
-                  }}                  
+                  }}
                 />
                 <button
                   type="button"
@@ -429,7 +394,10 @@ export default function RecipesMainPage() {
                   aria-label="Добавить категорию"
                   title="Добавить"
                 >
-                  <IconPlus size={18} className={addingCat ? styles.iconSpin : undefined}/>
+                  <IconPlus
+                    size={18}
+                    className={addingCat ? styles.iconSpin : undefined}
+                  />
                 </button>
               </div>
             )}
@@ -459,32 +427,6 @@ export default function RecipesMainPage() {
                       <div
                         className={rowClassName}
                         data-catid={c.id}
-                        // draggable={editMode && !isNone}
-                        // onDragStart={(e) => {
-
-                        //   e.dataTransfer.setData("text/plain", c.id);
-                        //   e.dataTransfer.effectAllowed = "move";
-                        //   onDragStartCat(c.id);
-                        // }}
-                        // onDragOver={(e) => {
-                        //   if (!editMode || isNone) return;
-                        //   e.preventDefault();
-                        //   onDragOverCat(c.id);
-                        // }}
-                        // onDrop={(e) => {
-                        //   if (!editMode || isNone) return;
-                        //   e.preventDefault();
-
-                        //   const dragged = e.dataTransfer.getData("text/plain");
-                        //   if (dragged) {
-                        //     // подстрахуем state
-                        //     setDragId(dragged);
-                        //     dragFromIndexRef.current = allCats.findIndex((x) => String(x.id) === String(dragged));
-                        //   }
-
-                        //   onDropCat(c.id);
-                        // }}
-                        // onDragEnd={onDragEndAny}
                         onClick={() => {
                           if (editMode) return;
 
@@ -492,9 +434,9 @@ export default function RecipesMainPage() {
                           const catTitle = c.title;
 
                           router.push(
-                            `/recipes/allRecipes?cat=${encodeURIComponent(cat)}&catTitle=${encodeURIComponent(
-                              catTitle
-                            )}`
+                            `/recipes/allRecipes?cat=${encodeURIComponent(
+                              cat
+                            )}&catTitle=${encodeURIComponent(catTitle)}`
                           );
                         }}
                         role="button"
@@ -502,33 +444,36 @@ export default function RecipesMainPage() {
                       >
                         {/* LEFT */}
                         <div className={styles.categoryLeft}>
-                        {editMode && !isNone ? (
-                          <div
-                            className={styles.dragHandle}
-                            title="Перетащить"
-                            aria-label="Перетащить"
-                            onMouseDown={(e) => e.stopPropagation()}
-                          onPointerDown={(e) => {
-                            if (!editMode || isNone) return;
-                            tgDisableSwipes();
+                          {editMode && !isNone ? (
+                            <div
+                              className={styles.dragHandle}
+                              title="Перетащить"
+                              aria-label="Перетащить"
+                              onMouseDown={(e) => e.stopPropagation()}
+                              onPointerDown={(e) => {
+                                if (!editMode || isNone) return;
+                                tgDisableSwipes();
 
-                            e.preventDefault();
-                            e.stopPropagation();
+                                e.preventDefault();
+                                e.stopPropagation();
 
-                            // захват указателя (важно для iOS/WebView)
-                            pointerIdRef.current = e.pointerId;
-                            (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
-                            dragHandleElRef.current = e.currentTarget as HTMLElement;
-                            setDragId(c.id);
-                            setOverId(c.id);
+                                pointerIdRef.current = e.pointerId;
+                                (e.currentTarget as HTMLElement).setPointerCapture(
+                                  e.pointerId
+                                );
+                                dragHandleElRef.current = e.currentTarget as HTMLElement;
+                                setDragId(c.id);
+                                setOverId(c.id);
 
-                            const from = allCats.findIndex((x) => String(x.id) === String(c.id));
-                            dragFromIndexRef.current = from >= 0 ? from : null;
-                          }}
-                          >
-                            ≡
-                          </div>
-                        ) : null}
+                                const from = allCats.findIndex(
+                                  (x) => String(x.id) === String(c.id)
+                                );
+                                dragFromIndexRef.current = from >= 0 ? from : null;
+                              }}
+                            >
+                              ≡
+                            </div>
+                          ) : null}
 
                           <div className={styles.titleText}>{c.title}</div>
                         </div>
@@ -560,7 +505,9 @@ export default function RecipesMainPage() {
                         </div>
                       </div>
 
-                      {i !== rows.length - 1 && <div className={styles.categoryDivider} />}
+                      {i !== rows.length - 1 && (
+                        <div className={styles.categoryDivider} />
+                      )}
                     </div>
                   );
                 })}
@@ -568,11 +515,8 @@ export default function RecipesMainPage() {
             )}
           </div>
         </div>
-        {toast && (
-          <div className={styles.toast}>
-            {toast}
-          </div>
-        )}        
+
+        {toast && <div className={styles.toast}>{toast}</div>}
       </PageFade>
     </div>
   );
