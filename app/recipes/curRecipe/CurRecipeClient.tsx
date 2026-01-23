@@ -58,7 +58,7 @@ function fmtKbyu(r?: { kcal?: number | null; b?: number | null; j?: number | nul
   const u = r?.u ?? null;
 
   const hasAny = [kcal, b, j, u].some((v) => v !== null && v !== undefined);
-  if (!hasAny) return "—";
+  if (!hasAny) return "";
 
   const kcalTxt = kcal !== null && kcal !== undefined ? `${kcal} ккал` : "—";
   const bTxt = b !== null && b !== undefined ? `Б${b}` : "Б —";

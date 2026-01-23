@@ -9,10 +9,63 @@
   min-height: 100vh;
   position: relative;
   overflow-x: hidden;
-  padding-bottom: 50px;
+  padding-bottom: 100px;
+}
+.bg {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background:
+    /* Petal Glaze: мягкий верхний румянец */
+    radial-gradient(860px 520px at 72% 22%, rgba(234, 156, 175, 0.18), transparent 64%),
+
+    /* Sorbet Stem: поддержка под карточкой */
+    radial-gradient(760px 560px at 18% 42%, rgba(194, 220, 128, 0.18), transparent 68%),
+
+    /* белый смягчитель */
+    radial-gradient(980px 680px at 45% 10%, rgba(255, 255, 255, 0.78), transparent 60%),
+
+    /* базовый фон, чуть теплее */
+    linear-gradient(180deg, #F6F5F1, #F3F4F6 45%, #F7F6F2);
 }
 
-.bg {
+.orbA,
+.orbB {
+  position: fixed;
+  width: 520px;
+  height: 520px;
+  border-radius: 999px;
+  filter: blur(28px);
+  opacity: 0.40;
+  z-index: 1;
+  pointer-events: none;
+}
+
+/* orbA была “черной”. Делаем её зеленой (Sorbet Stem) и чуть ниже, чтобы подсвечивала блок категорий */
+.orbA {
+  left: -260px;
+  top: 320px;
+  background: radial-gradient(
+    circle at 35% 35%,
+    rgba(194, 220, 128, 0.55),
+    rgba(194, 220, 128, 0.18) 58%,
+    transparent 76%
+  );
+}
+
+/* orbB была синей. Делаем её розовой (Petal Glaze) и чуть выше, чтобы давала “румянец” в верхней зоне */
+.orbB {
+  right: -280px;
+  top: 120px;
+  background: radial-gradient(
+    circle at 55% 45%,
+    rgba(234, 156, 175, 0.55),
+    rgba(234, 156, 175, 0.18) 55%,
+    transparent 78%
+  );
+}
+/*.bg {
   position: fixed;
   inset: 0;
   z-index: 0;
@@ -47,7 +100,7 @@
   top: 180px;
   background: radial-gradient(circle at 55% 45%, rgba(85, 155, 255, 0.40), rgba(85, 155, 255, 0.14) 55%, transparent 76%);
 }
-
+*/
 /*--------------------*/
 
 .container {
@@ -588,45 +641,51 @@
 .bigCta {
   width: 100%;
   margin-top: 10px;
-  border: 1px solid rgba(0, 0, 0, 0.08);
-  /*background: #111111eb;*/
+  border: 1px solid rgba(0, 0, 0, 0.06);
   background: linear-gradient(
     135deg,
-    #0b0b0b,
-    #111111eb 60%,
-    #1a1a1a
+    rgba(255, 255, 255, 0.85),
+    rgba(255, 255, 255, 0.65)
   );
   border-radius: 22px;
   padding: 16px;
-  box-shadow: 0 14px 34px rgba(0, 0, 0, 0.07);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
+  box-shadow:
+    0 18px 40px rgba(0, 0, 0, 0.10);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
   cursor: pointer;
   text-align: left;
   user-select: none;
-  color: #fff;
+  color: #222;
 }
 .bigCtaRec {
   width: 100%;
   margin-top: 14px;
-  border: 1px solid rgba(0, 0, 0, 0.08);
-  background: #00000066;
+  border: 1px solid rgba(120, 150, 90, 0.35);
+background: linear-gradient(
+  135deg,
+  #d6e9b8,
+  #c2dc80
+);
+color: #2a3323;
+
   display: flex;
   align-items: center;
-  justify-content: center; /* вот это центрирует по горизонтали */
-  text-align: center;
+  justify-content: center;
+
   border-radius: 22px;
-  padding: 10px;
-  /*box-shadow: 0 14px 34px rgba(0, 0, 0, 0.07);*/
-  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.8) inset, 0 10px 20px rgba(0, 0, 0, 0.05);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
+  padding: 12px;
+
   cursor: pointer;
-  text-align: left;
   user-select: none;
-  color: #ffffff;
 }
 
+.bigCtaRec:active {
+  transform: translateY(1px);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.7) inset,
+    0 6px 14px rgba(0, 0, 0, 0.06);
+}
 
 /*.bigCta:active {
   transform: translateY(1px);
