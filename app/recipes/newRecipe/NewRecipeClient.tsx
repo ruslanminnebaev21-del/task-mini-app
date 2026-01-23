@@ -497,24 +497,38 @@ export default function NewRecipePage() {
     const file = e.target.files?.[0];
     const safeFile = file ? await ensureJpeg(file) : null;
     if (!safeFile) return;
-    if (!file) return;
 
+    // превью сразу
     setRecipePhoto((prev) => {
       if (prev?.url) URL.revokeObjectURL(prev.url);
       return { file: safeFile, url: URL.createObjectURL(safeFile) };
     });
-    // ===== TEMP TEST UPLOAD =====
+
+    // ВАЖНО:
+    // - если новый рецепт -> не грузим, пока не появится recipe_id (после сохранения)
+    if (!isEdit) {
+      setRecipePhotoPath(null);
+      e.target.value = "";
+      return;
+    }
+
+    // edit режим, но вдруг id нет
+    if (!editRecipeId) {
+      console.log("UPLOAD SKIP: no editRecipeId");
+      setRecipePhotoPath(null);
+      e.target.value = "";
+      return;
+    }
+
+    // грузим сразу, потому что recipe_id уже есть
     try {
       const fd = new FormData();
       fd.append("file", safeFile);
       fd.append("folder", "main");
-      fd.append("recipe_id", "tmp");
+      fd.append("recipe_id", String(editRecipeId));
 
       const res = await fetch("/api/recipes/upload", { method: "POST", body: fd });
       const json = await res.json();
-
-      console.log("UPLOAD RESULT:", json);
-      if (json?.photo_path) setRecipePhotoPath(json.photo_path);
 
       if (json?.ok && json?.photo_path) {
         setRecipePhotoPath(String(json.photo_path));
@@ -526,7 +540,6 @@ export default function NewRecipePage() {
       setRecipePhotoPath(null);
       console.log("UPLOAD ERROR:", err);
     }
-    // ===== /TEMP TEST UPLOAD =====
 
     e.target.value = "";
   }

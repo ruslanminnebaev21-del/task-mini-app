@@ -44,8 +44,15 @@ export async function POST(req: Request) {
   }
 
   const folder = cleanStr(form.get("folder")) || "main";
-  const recipe_id = cleanStr(form.get("recipe_id")) || "tmp";
+  const recipe_id_raw = cleanStr(form.get("recipe_id"));
   const step_id_raw = cleanStr(form.get("step_id"));
+
+  // Вариант А: аплоад разрешаем только когда рецепт уже создан
+  const recipeIdNum = Number(recipe_id_raw);
+  if (!recipe_id_raw || recipe_id_raw === "tmp" || !Number.isFinite(recipeIdNum) || recipeIdNum <= 0) {
+    return NextResponse.json({ error: "recipe_id_required" }, { status: 400 });
+  }
+
   const step_id = step_id_raw ? Number(step_id_raw) : null;
 
   // простая валидация folder
@@ -53,7 +60,7 @@ export async function POST(req: Request) {
 
   // путь: u_{uid}/r_{recipe_id}/{folder}/{timestamp}.webp
   const ts = Date.now();
-  const photo_path = `u_${uid}/r_${recipe_id}/${safeFolder}/${ts}.webp`;
+  const photo_path = `u_${uid}/r_${recipeIdNum}/${safeFolder}/${ts}.webp`;
 
   // читаем файл
   const arrayBuffer = await file.arrayBuffer();
@@ -74,29 +81,24 @@ export async function POST(req: Request) {
     );
   }
 
-  const bytes = new Uint8Array(out);
-
   // 1) upload to storage
   const { error: upErr } = await supabaseAdmin.storage
     .from("recipes")
-    .upload(photo_path, bytes, {
+    .upload(photo_path, out, {
       contentType: "image/webp",
       upsert: false,
       cacheControl: "3600",
     });
 
   if (upErr) {
-    return NextResponse.json(
-      { error: "Upload failed", details: upErr.message },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: "Upload failed", details: upErr.message }, { status: 500 });
   }
 
   // 2) get public url (bucket public)
   const { data: pub } = supabaseAdmin.storage.from("recipes").getPublicUrl(photo_path);
   const photo_url = pub?.publicUrl ?? null;
 
-  // 3) если это фото шага — сразу пишем photo_path в recipe_steps
+  // 3) если это фото шага — пишем photo_path в recipe_steps
   if (step_id && Number.isFinite(step_id)) {
     const { error: stepErr } = await supabaseAdmin
       .from("recipe_steps")
@@ -114,8 +116,29 @@ export async function POST(req: Request) {
         { status: 500 }
       );
     }
-  } else if (step_id_raw) {
-    console.log("UPLOAD STEP UPDATE SKIP (bad step_id)", { step_id_raw, step_id });
+
+    return NextResponse.json({ ok: true, photo_path, photo_url }, { status: 200 });
+  }
+
+  // 4) иначе это главное фото рецепта (folder=main)
+  if (safeFolder === "main") {
+    const { error: recErr } = await supabaseAdmin
+      .from("recipes")
+      .update({ photo_path })
+      .eq("id", recipeIdNum)
+      .eq("user_id", uid);
+
+    if (recErr) {
+      return NextResponse.json(
+        {
+          error: "Uploaded but failed to update recipe",
+          details: recErr.message,
+          photo_path,
+          photo_url,
+        },
+        { status: 500 }
+      );
+    }
   }
 
   return NextResponse.json({ ok: true, photo_path, photo_url }, { status: 200 });
