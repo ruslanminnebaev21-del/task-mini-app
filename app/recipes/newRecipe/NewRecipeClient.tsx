@@ -62,6 +62,12 @@ type CurRecipeApi = {
     portions: string | null;
     prep_time_min: number | null;
     cook_time_min: number | null;
+
+    kcal: number | null;
+    b: number | null;
+    j: number | null;
+    u: number | null;
+
     photo_url: string | null;
     photo_path: string | null;
   };
@@ -148,6 +154,9 @@ export default function NewRecipePage() {
   const [selectedCategoryIds, setSelectedCategoryIds] = useState<string[]>([]);
   const [categoriesOpen, setCategoriesOpen] = useState(false);
   const [draftCategoryIds, setDraftCategoryIds] = useState<string[]>([]);
+  const [newCatTitle, setNewCatTitle] = useState("");
+  const [addingCat, setAddingCat] = useState(false);
+  const [catsErr, setCatsErr] = useState<string | null>(null);  
   const selectedCategories = ALL_CATEGORIES.filter((c) =>
     selectedCategoryIds.includes(c.id)
   );
@@ -166,6 +175,9 @@ export default function NewRecipePage() {
 
   const [prepTime, setPrepTime] = useState({ d: "", h: "", m: "" });
   const [cookTime, setCookTime] = useState({ d: "", h: "", m: "" });
+  const [kbyuOpen, setKbyuOpen] = useState(false);
+  const [kbyu, setKbyu] = useState({ kcal: "", b: "", j: "", u: "" });
+
   const [toast, setToast] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const initialSnapshotRef = useRef<string | null>(null);
@@ -184,6 +196,7 @@ export default function NewRecipePage() {
       category_ids: [...selectedCategoryIds].sort(),
       prep_time: prepTime,
       cook_time: cookTime,
+      kbyu,
       ingredients: ingredients.map((i) => String(i.name ?? "").trim()).filter(Boolean),
       steps: steps.map((s) => String(s.text ?? "").trim()).filter(Boolean),
       photo_path: recipePhotoPath ?? null,
@@ -330,6 +343,12 @@ export default function NewRecipePage() {
 
         setPrepTime(minToParts(data.recipe?.prep_time_min ?? null));
         setCookTime(minToParts(data.recipe?.cook_time_min ?? null));
+        setKbyu({
+          kcal: data.recipe?.kcal != null ? String(data.recipe.kcal) : "",
+          b: data.recipe?.b != null ? String(data.recipe.b) : "",
+          j: data.recipe?.j != null ? String(data.recipe.j) : "",
+          u: data.recipe?.u != null ? String(data.recipe.u) : "",
+        });
 
         // 7) почистим фотки шагов (если ты пока их не подтягиваешь)
         setStepPhotos({});
@@ -342,6 +361,12 @@ export default function NewRecipePage() {
           category_ids: (data.categories ?? []).map((c) => String(c.id)).sort(),
           prep_time: minToParts(data.recipe?.prep_time_min ?? null),
           cook_time: minToParts(data.recipe?.cook_time_min ?? null),
+          kbyu: {
+              kcal: data.recipe?.kcal != null ? String(data.recipe.kcal) : "",
+              b: data.recipe?.b != null ? String(data.recipe.b) : "",
+              j: data.recipe?.j != null ? String(data.recipe.j) : "",
+              u: data.recipe?.u != null ? String(data.recipe.u) : "",
+            },          
           ingredients: (data.ingredients ?? [])
             .slice()
             .sort((a, b) => (a.pos ?? 0) - (b.pos ?? 0))
@@ -402,10 +427,17 @@ export default function NewRecipePage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);  
 
-  const close = () => {
+  const close = (opts?: { skipConfirm?: boolean }) => {
+    const skip = !!opts?.skipConfirm;
+
+    if (!skip) {
+      const ok = window.confirm("Выйти? Результат не сохранится");
+      if (!ok) return;
+    }
+
     if (window.history.length > 1) router.back();
     else router.push("/recipes");
-  };
+  };  
 
   /* ===== ingredients ===== */
 
@@ -591,28 +623,69 @@ export default function NewRecipePage() {
     setSelectedCategoryIds(draftCategoryIds);
     setCategoriesOpen(false);
   }
+  async function onAddCategory() {
+    const t = newCatTitle.trim();
+    if (!t || addingCat) return;
+
+    try {
+      setAddingCat(true);
+      setCatsErr(null);
+
+      const r = await fetch("/api/recipes/categories/create", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ title: t }),
+        cache: "no-store",
+      });
+
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(j?.error ?? "Не удалось добавить категорию");
+
+      const created = j?.category as Category | undefined;
+      if (!created?.id) throw new Error("Bad response");
+
+      // 1) добавили в общий список
+      setAllCategories((prev) => [...prev, created]);
+
+      // 2) сразу выбрали в модалке (галочка)
+      setDraftCategoryIds((prev) =>
+        prev.includes(String(created.id)) ? prev : [...prev, String(created.id)]
+      );
+
+      setNewCatTitle("");
+      showToast("Категория добавлена");
+    } catch (e: any) {
+      setCatsErr(e?.message ?? "Не удалось добавить категорию");
+    } finally {
+      setAddingCat(false);
+    }
+  }
 
   function cancelCategories() {
     setCategoriesOpen(false);
   }
+  function onlyDigits(s: string) {
+    return String(s ?? "").replace(/\D/g, "");
+  }  
   async function handleSave() {
     if (saving) return;
     if (isEdit) {
       if (!editRecipeId) {
         alert("Не найден recipe_id для редактирования");
         return;
-      }      
+      }
+
       const cur = normalizeSnapshot();
       const base = initialSnapshotRef.current;
 
       if (!base) {
         initialSnapshotRef.current = cur;
-        close(); // возвращаем на страницу, откуда пришли
+        close({ skipConfirm: true });
         return;
       }
 
       if (cur === base) {
-         close();
+        close({ skipConfirm: true });
         return;
       }
     }
@@ -634,6 +707,12 @@ export default function NewRecipePage() {
         category_ids: selectedCategoryIds,
         prep_time: prepTime,
         cook_time: cookTime,
+        kbyu: {
+          kcal: kbyu.kcal.trim() ? Number(kbyu.kcal) : null,
+          b: kbyu.b.trim() ? Number(kbyu.b) : null,
+          j: kbyu.j.trim() ? Number(kbyu.j) : null,
+          u: kbyu.u.trim() ? Number(kbyu.u) : null,
+        },        
         ingredients: ingredients.map((i) => String(i.name ?? "").trim()).filter(Boolean),
         steps: steps.map((s) => ({ text: String(s.text ?? "").trim() })).filter((s) => s.text.length > 0),
         photo_path: recipePhotoPath ?? null,
@@ -663,7 +742,7 @@ export default function NewRecipePage() {
       }
       showToast("Рецепт сохранён");
       initialSnapshotRef.current = normalizeSnapshot();
-      setTimeout(close, 2000);
+      setTimeout(() => close({ skipConfirm: true }), 200);
       console.log("STEPS STATE:", steps);
       console.log("STEP PHOTOS:", stepPhotos);
       console.log("STEP IDS FROM DB:", json.step_ids);
@@ -717,13 +796,15 @@ export default function NewRecipePage() {
     <>
     <PageFade>
       {/* overlay */}
-      <div className={styles.sheetOverlayOpen} onClick={close} />
+      <div className={styles.sheetOverlayOpen} onClick={() => close()} />
 
       {/* sheet */}
       <div className={styles.sheet}>
         {/* header */}
+        <div className={styles.sheetOverlayOpen} onClick={() => close()} />
         <div className={styles.sheetHeader}>
-          <button className={styles.sheetIconBtn} onClick={close} aria-label="Закрыть">
+         
+          <button className={styles.sheetIconBtn} onClick={() => close()} aria-label="Закрыть">
             ✕
           </button>
           <div style={{ opacity: 0.6, fontSize: 12 }}>
@@ -735,7 +816,9 @@ export default function NewRecipePage() {
             aria-label="Сохранить"
             onClick={handleSave}
           >
-            ✓
+            <span className={saving ? styles.iconSpin : undefined}>
+              ✓
+            </span>
           </button>          
         </div>
 
@@ -799,9 +882,13 @@ export default function NewRecipePage() {
           {/* portions */}
           <input
             className={`${styles.input} ${styles.inputRecipes}`}
-            placeholder="Количество порций"
-            value={portions}
-            onChange={(e) => setPortions(e.target.value)}
+            placeholder="Количество порций: "
+            value={portions ? `Количество порций: ${portions}` : ""}
+            onChange={(e) => {
+              const digits = onlyDigits(e.target.value);
+              setPortions(digits);
+            }}
+            inputMode="numeric"
           />
           {/* ===== CATEGORIES ===== */}
           <button
@@ -832,6 +919,33 @@ export default function NewRecipePage() {
                 onClick={(e) => e.stopPropagation()}
               >
                 <div className={styles.modalTitle}>Категории</div>
+                  <div className={styles.categoryAddRowNR}>
+                    <input
+                      className={`${styles.input} ${styles.inputGrow}`}
+                      placeholder="Новая категория"
+                      value={newCatTitle}
+                      onChange={(e) => setNewCatTitle(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") onAddCategory();
+                      }}
+                    />
+
+                    <button
+                      type="button"
+                      className={styles.btnCircle}
+                      onClick={onAddCategory}
+                      aria-label="Добавить категорию"
+                      title="Добавить"
+                    >
+                      <IconPlus size={18} className={addingCat ? styles.iconSpin : undefined} />
+                    </button>
+                  </div>
+
+                  {catsErr ? (
+                    <div style={{ padding: "8px 12px", color: "rgba(180,0,0,0.85)", fontSize: 13 }}>
+                      {catsErr}
+                    </div>
+                  ) : null}                
                 {catsLoading ? (
                   <div style={{ padding: 12, opacity: 0.6 }}>Загружаю категории…</div>
                 ) : null}
@@ -861,8 +975,9 @@ export default function NewRecipePage() {
                   </button>
 
                   <button
-                    className={`${styles.modalBtn} ${styles.modalDelete}`}
+                    className={`${styles.modalBtn} ${styles.modalDelete} `}
                     onClick={saveCats}
+        
                   >
                     Сохранить
                   </button>
@@ -889,7 +1004,7 @@ export default function NewRecipePage() {
             {prepOpen && (
               <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
                 <input
-                  className={styles.input}
+                  className={`${styles.input} ${styles.timeInput}`}
                   placeholder="д"
                   value={prepTime.d}
                   onChange={(e) =>
@@ -897,7 +1012,7 @@ export default function NewRecipePage() {
                   }
                 />
                 <input
-                  className={styles.input}
+                  className={`${styles.input} ${styles.timeInput}`}
                   placeholder="ч"
                   value={prepTime.h}
                   onChange={(e) =>
@@ -905,7 +1020,7 @@ export default function NewRecipePage() {
                   }
                 />
                 <input
-                  className={styles.input}
+                  className={`${styles.input} ${styles.timeInput}`}
                   placeholder="м"
                   value={prepTime.m}
                   onChange={(e) =>
@@ -960,6 +1075,58 @@ export default function NewRecipePage() {
               </div>
             )}
           </div>
+          {/* ===== KBYU ===== */}
+          <div className={styles.card}>
+            <button
+              type="button"
+              onClick={() => setKbyuOpen((v) => !v)}
+              style={{ display: "flex", justifyContent: "space-between", width: "100%" }}
+            >
+              <span className={styles.titleText}>КБЖУ</span>
+
+              {(kbyu.kcal || kbyu.b || kbyu.j || kbyu.u) ? (
+                <span style={{ whiteSpace: "nowrap", lineHeight: "1", color: "rgb(17 17 17 / 36%)" }}>
+                  {kbyu.kcal ? `${kbyu.kcal} ккал` : "—"} ·
+                  {kbyu.b ? ` Б ${kbyu.b}` : " Б —"} ·
+                  {kbyu.j ? ` Ж ${kbyu.j}` : " Ж —"} ·
+                  {kbyu.u ? ` У ${kbyu.u}` : " У —"}
+                </span>
+              ) : null}
+            </button>
+
+            {kbyuOpen && (
+              <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
+                <input
+                  className={`${styles.input} ${styles.timeInput}`}
+                  placeholder="ккал"
+                  value={kbyu.kcal}
+                  onChange={(e) => setKbyu({ ...kbyu, kcal: e.target.value.replace(/\D/g, "") })}
+                  inputMode="numeric"
+                />
+                <input
+                  className={`${styles.input} ${styles.timeInput}`}
+                  placeholder="б"
+                  value={kbyu.b}
+                  onChange={(e) => setKbyu({ ...kbyu, b: e.target.value.replace(/\D/g, "") })}
+                  inputMode="numeric"
+                />
+                <input
+                  className={`${styles.input} ${styles.timeInput}`}
+                  placeholder="ж"
+                  value={kbyu.j}
+                  onChange={(e) => setKbyu({ ...kbyu, j: e.target.value.replace(/\D/g, "") })}
+                  inputMode="numeric"
+                />
+                <input
+                  className={`${styles.input} ${styles.timeInput}`}
+                  placeholder="у"
+                  value={kbyu.u}
+                  onChange={(e) => setKbyu({ ...kbyu, u: e.target.value.replace(/\D/g, "") })}
+                  inputMode="numeric"
+                />
+              </div>
+            )}
+          </div>          
 
           {/* ===== INGREDIENTS ===== */}
           <section className={styles.listWrap}>

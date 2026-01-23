@@ -25,13 +25,18 @@ type Step = {
 };
 
 type RecipeFull = {
-  recipe: {
+ recipe: {
     id: number;
     title: string;
     photo_url: string | null;
     prep_time_min: number | null;
     cook_time_min: number | null;
     portions: string | null;
+
+    kcal?: number | null;
+    b?: number | null;
+    j?: number | null;
+    u?: number | null;
   };
   categories: Category[];
   ingredients: Ingredient[];
@@ -45,6 +50,22 @@ function fmtMin(min: number | null) {
   if (h > 0 && m > 0) return `${h} ч ${m} мин`;
   if (h > 0) return `${h} ч`;
   return `${m} мин`;
+}
+function fmtKbyu(r?: { kcal?: number | null; b?: number | null; j?: number | null; u?: number | null } | null) {
+  const kcal = r?.kcal ?? null;
+  const b = r?.b ?? null;
+  const j = r?.j ?? null;
+  const u = r?.u ?? null;
+
+  const hasAny = [kcal, b, j, u].some((v) => v !== null && v !== undefined);
+  if (!hasAny) return "—";
+
+  const kcalTxt = kcal !== null && kcal !== undefined ? `${kcal} ккал` : "—";
+  const bTxt = b !== null && b !== undefined ? `Б${b}` : "Б —";
+  const jTxt = j !== null && j !== undefined ? `Ж${j}` : "Ж —";
+  const uTxt = u !== null && u !== undefined ? `У${u}` : "У —";
+
+  return `${kcalTxt} · ${bTxt} · ${jTxt} · ${uTxt}`;
 }
 
 export default function CurRecipeClient() {
@@ -175,7 +196,7 @@ export default function CurRecipeClient() {
                   aria-label="Удалить"
                 >
                   <span style={{ color: "#333" }}>
-                    <IconTrash size={11} />
+                    <IconTrash size={11} className={deleting ? styles.iconSpin : undefined}/>
                   </span>
                 </button>
 
@@ -208,11 +229,11 @@ export default function CurRecipeClient() {
               <h1 className={styles.recipeH1}>{data.recipe.title || "Без названия"}</h1>
 
               <div className={styles.recipeTimeRow}>
-                <span >Подготовка: {fmtMin(data.recipe.prep_time_min)}</span>
+                <span>Подготовка: {fmtMin(data.recipe.prep_time_min)}</span>
                 <span>Готовка: {fmtMin(data.recipe.cook_time_min)}</span>
-                <span>Порций: {data.recipe.portions || "не указано"}</span>
+                <span>Порций: {data.recipe.portions || "—"}</span>
+                <span>{fmtKbyu(data.recipe)}</span>
               </div>
-
               {/* INGREDIENTS */}
               <div className={styles.recipeSectionTitle}>Ингредиенты</div>
               <div className={styles.recipeCard}>

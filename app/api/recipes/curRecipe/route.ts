@@ -61,7 +61,7 @@ export async function GET(req: Request) {
   const { data: recipe, error: rErr } = await supabaseAdmin
     .from("recipes")
     .select(
-      "id, user_id, title, photo_path, source_url, portions, prep_time_min, cook_time_min, created_at, updated_at"
+      "id, user_id, title, photo_path, source_url, portions, prep_time_min, cook_time_min, kcal, b, j, u, created_at, updated_at"
     )
     .eq("id", recipe_id)
     .single();
@@ -102,6 +102,10 @@ export async function GET(req: Request) {
           portions: recipe.portions ?? null,
           prep_time_min: recipe.prep_time_min ?? null,
           cook_time_min: recipe.cook_time_min ?? null,
+          kcal: recipe.kcal ?? null,
+          b: recipe.b ?? null,
+          j: recipe.j ?? null,
+          u: recipe.u ?? null,
           photo_path: recipe.photo_path ?? null,
           photo_url: recipe_photo_url,
         },
@@ -198,6 +202,10 @@ export async function GET(req: Request) {
         portions: recipe.portions ?? null,
         prep_time_min: recipe.prep_time_min ?? null,
         cook_time_min: recipe.cook_time_min ?? null,
+        kcal: recipe.kcal ?? null,
+        b: recipe.b ?? null,
+        j: recipe.j ?? null,
+        u: recipe.u ?? null,
         created_at: recipe.created_at ?? null,
         updated_at: recipe.updated_at ?? null,
       },

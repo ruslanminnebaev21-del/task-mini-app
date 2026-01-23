@@ -52,6 +52,7 @@ export async function POST(req: Request) {
   const { data: existing, error: exErr } = await supabaseAdmin
     .from("recipe_categories")
     .select("id")
+    .eq("user_id", uid)
     .in("id", ids);
 
   if (exErr) {
@@ -79,7 +80,11 @@ export async function POST(req: Request) {
   // 4) обновляем только существующие строки (без INSERT)
   const updates = await Promise.all(
     payload.map((p) =>
-      supabaseAdmin.from("recipe_categories").update({ order_index: p.order_index }).eq("id", p.id)
+      supabaseAdmin
+        .from("recipe_categories")
+        .update({ order_index: p.order_index })
+        .eq("id", p.id)
+        .eq("user_id", uid)
     )
   );
 

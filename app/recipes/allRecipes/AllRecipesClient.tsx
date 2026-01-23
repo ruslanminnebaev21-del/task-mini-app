@@ -6,6 +6,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import styles from "../recipes.module.css";
 import PageFade from "@/app/components/PageFade/PageFade";
+import { IconArrow } from "@/app/components/icons";
 
 type RecipeCategory = { id: string; title: string };
 
@@ -114,6 +115,19 @@ export default function AllRecipesClient() {
             Назад
           </button>
         ) : null}
+
+        <button
+          type="button"
+          className={styles.bigCta}
+          onClick={() => router.push("/recipes/newRecipe")}
+        >
+          <div className={styles.bigCtaRow}>
+            <span className={styles.bigCtaText}>Новый рецепт</span>
+            <span className={styles.bigCtaIcon}>
+              <IconArrow size={25} />
+            </span>
+          </div>
+        </button>        
 
         {loading && <div className={styles.recipesState}>Загружаю…</div>}
         {err && <div className={styles.recipesError}>{err}</div>}

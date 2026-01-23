@@ -27,11 +27,13 @@ export async function GET() {
   const { data: cats, error: catsErr } = await supabaseAdmin
     .from("recipe_categories")
     .select("id,title,order_index")
+    .eq("user_id", uid)
     .order("order_index", { ascending: true });
 
   if (catsErr) {
     return NextResponse.json({ ok: false, error: "db_error_categories" }, { status: 500 });
   }
+  const catIds = new Set((cats ?? []).map((x: any) => String(x.id)));
 
   // 2) counts по категориям
   // Берём связку -> рецепты, чтобы учитывать только рецепты текущего пользователя
@@ -47,6 +49,7 @@ export async function GET() {
   const countsByCatId: Record<string, number> = {};
   (links ?? []).forEach((row: any) => {
     const cid = String(row.category_id);
+    if (!catIds.has(cid)) return;
     countsByCatId[cid] = (countsByCatId[cid] ?? 0) + 1;
   });
 

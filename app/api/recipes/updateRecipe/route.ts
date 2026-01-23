@@ -5,6 +5,12 @@ import { cookies } from "next/headers";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 
 type TimeParts = { d?: string; h?: string; m?: string };
+type KbyuParts = {
+  kcal?: number | string | null;
+  b?: number | string | null;
+  j?: number | string | null;
+  u?: number | string | null;
+};
 
 function partsToMin(t: TimeParts | null | undefined) {
   const d = Math.max(0, Number((t?.d ?? "").toString().replace(/\D/g, "")) || 0);
@@ -25,6 +31,19 @@ async function getUidFromSession(): Promise<number | null> {
   } catch {
     return null;
   }
+}
+
+function toNumSafe(v: any): number | null {
+  if (v === null || v === undefined) return null;
+  const s = String(v).trim();
+  if (!s) return null;
+  const n = Number(s);
+  return Number.isFinite(n) ? n : null;
+}
+
+function clampNonNeg(n: number | null): number | null {
+  if (n === null) return null;
+  return n < 0 ? 0 : n;
 }
 
 export async function POST(req: Request) {
@@ -58,6 +77,13 @@ export async function POST(req: Request) {
 
   const prep_time_min = partsToMin(body?.prep_time);
   const cook_time_min = partsToMin(body?.cook_time);
+
+  // ===== KBYU =====
+  const kbyu: KbyuParts | null = body?.kbyu ?? null;
+  const kcal = clampNonNeg(toNumSafe(kbyu?.kcal));
+  const b = clampNonNeg(toNumSafe(kbyu?.b));
+  const j = clampNonNeg(toNumSafe(kbyu?.j));
+  const u = clampNonNeg(toNumSafe(kbyu?.u));
 
   const category_ids: string[] = Array.isArray(body?.category_ids)
     ? Array.from(new Set(body.category_ids.map((x: any) => String(x)).filter(Boolean)))
@@ -104,6 +130,10 @@ export async function POST(req: Request) {
         prep_time_min,
         cook_time_min,
         photo_path,
+        kcal,
+        b,
+        j,
+        u,
       })
       .eq("id", recipeId)
       .eq("user_id", uid);
@@ -147,7 +177,6 @@ export async function POST(req: Request) {
 
     const exist = (existing ?? []) as { id: number; pos: number }[];
 
-    // апдейты / вставки
     for (let i = 0; i < ingredients.length; i++) {
       const text = ingredients[i];
       const pos = i + 1;
@@ -175,7 +204,6 @@ export async function POST(req: Request) {
       }
     }
 
-    // удалить хвост
     if (exist.length > ingredients.length) {
       const idsToDelete = exist.slice(ingredients.length).map((x) => x.id);
       if (idsToDelete.length) {
@@ -187,9 +215,7 @@ export async function POST(req: Request) {
     }
   }
 
-  // 5) шаги: гибрид
-  // если длина изменилась — пересобираем полностью (иначе фото по позициям может "уехать")
-  // если длина та же — апдейтим по позиции, не трогая photo_path/photo_url
+  // 5) шаги
   {
     const { data: existing, error } = await supabaseAdmin
       .from("recipe_steps")

@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import styles from "./recipes.module.css";
 import PageFade from "@/app/components/PageFade/PageFade";
-import { IconArrow, IconTrash, IconPlus } from "@/app/components/icons";
+import { IconArrow, IconTrash, IconPlus, IconEdit } from "@/app/components/icons";
 import { useRouter } from "next/navigation";
 
 type Category = { id: string; title: string; order_index?: number | null };
@@ -67,6 +67,12 @@ export default function RecipesMainPage() {
   const [newCatTitle, setNewCatTitle] = useState("");
   const [addingCat, setAddingCat] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
+  // ===== INLINE EDIT CATEGORY TITLE =====
+  const [editingCatId, setEditingCatId] = useState<string | null>(null);
+  const editDraftTitleRef = useRef<string>("");
+  const titleRefs = useRef<Record<string, HTMLDivElement | null>>({});  
+  const originalTitleRef = useRef<Record<string, string>>({});
+  const renameBusyRef = useRef<Record<string, boolean>>({});  
 
   // ===== DRAG STATE =====
   const [dragId, setDragId] = useState<string | null>(null);
@@ -341,6 +347,87 @@ export default function RecipesMainPage() {
     };
   }, [editMode, dragId]);
 
+  function setCaretToEnd(el: HTMLElement) {
+    const range = document.createRange();
+    range.selectNodeContents(el);
+    range.collapse(false);
+    const sel = window.getSelection();
+    sel?.removeAllRanges();
+    sel?.addRange(range);
+  }
+
+  function startEditTitle(catId: string, currentTitle: string) {
+
+    setEditingCatId(catId);
+    editDraftTitleRef.current = currentTitle;
+    originalTitleRef.current[catId] = currentTitle;
+
+    const focusIt = () => {
+      const el = titleRefs.current[catId];
+      if (!el) return;
+
+      // важно: положили текст прямо в DOM один раз
+      el.textContent = currentTitle;
+
+      el.focus();
+      setCaretToEnd(el);
+    };
+
+    requestAnimationFrame(focusIt);
+  }
+
+  async function commitRenameCategory(catId: string) {
+    if (renameBusyRef.current[catId]) return;
+
+    const el = titleRefs.current[catId];
+    const prevTitle = originalTitleRef.current[catId] ?? "";
+
+    const raw = (el?.textContent ?? "").toString();
+    const nextTitle = raw.replace(/\s+/g, " ").trim();
+
+    // пусто — откат
+    if (!nextTitle) {
+      if (el) el.textContent = prevTitle;
+      return;
+    }
+
+    // не менялось — ничего не делаем
+    if (nextTitle === prevTitle) return;
+
+    // оптимистично обновим список
+    setAllCats((prev) =>
+      prev.map((x) => (String(x.id) === String(catId) ? { ...x, title: nextTitle } : x))
+    );
+
+    renameBusyRef.current[catId] = true;
+    try {
+      await postJson<{ ok: boolean }>("/api/recipes/categories/rename", {
+        id: catId,
+        title: nextTitle,
+      });
+
+      originalTitleRef.current[catId] = nextTitle;
+    } catch (e: any) {
+      // откат
+      setAllCats((prev) =>
+        prev.map((x) => (String(x.id) === String(catId) ? { ...x, title: prevTitle } : x))
+      );
+      if (el) el.textContent = prevTitle;
+
+      setToast(e?.message ?? "Не удалось сохранить");
+      setTimeout(() => setToast(null), 2000);
+    } finally {
+      renameBusyRef.current[catId] = false;
+    }
+  }
+
+  function finishEditTitle(catId: string) {
+    setEditingCatId(null);
+    editDraftTitleRef.current = "";
+
+    commitRenameCategory(catId);
+  }
+
   return (
     <div className={styles.container}>
       <PageFade>
@@ -409,7 +496,7 @@ export default function RecipesMainPage() {
               <div className={styles.categoriesList} ref={listRef}>
                 {rows.map((c, i) => {
                   const isNone = c.id === "__none__";
-                  const canDelete = editMode && !isNone;
+                  const canDelete = editMode && !isNone && !dragId;
 
                   const isDragging = editMode && dragId === c.id;
                   const isOver = editMode && overId === c.id;
@@ -429,6 +516,7 @@ export default function RecipesMainPage() {
                         data-catid={c.id}
                         onClick={() => {
                           if (editMode) return;
+                          if (editingCatId) return;
 
                           const cat = isNone ? "__none__" : c.id;
                           const catTitle = c.title;
@@ -475,7 +563,54 @@ export default function RecipesMainPage() {
                             </div>
                           ) : null}
 
-                          <div className={styles.titleText}>{c.title}</div>
+                          <div
+                            style={{
+                              outline: "none",
+                              cursor: editingCatId === c.id ? "text" : "default",
+                            }}                            
+                            ref={(el) => {
+                              titleRefs.current[c.id] = el;
+                            }}
+                            className={styles.titleText}
+                            contentEditable={editMode && !isNone && editingCatId === c.id}
+                            suppressContentEditableWarning
+                            spellCheck={false}
+                            tabIndex={editMode && !isNone ? 0 : -1}
+                            onClick={(e) => {
+                              // чтобы клик по тексту не запускал переход в список рецептов
+                              e.stopPropagation();
+                            }}
+                            onInput={(e) => {
+                              if (!editMode || isNone || editingCatId !== c.id) return;
+                              editDraftTitleRef.current = (e.currentTarget.textContent ?? "").replace(/\s+/g, " ");
+                            }}
+                            onKeyDown={(e) => {
+                              if (!editMode || isNone || editingCatId !== c.id) return;
+
+                              if (e.key === "Enter") {
+                                e.preventDefault();
+                                (e.currentTarget as HTMLDivElement).blur();
+                              }
+
+                              if (e.key === "Escape") {
+                                e.preventDefault();
+                                // отмена: вернуть старое и выйти
+                                const current = allCatsRef.current.find((x) => String(x.id) === String(c.id));
+                                if (current && titleRefs.current[c.id]) {
+                                  titleRefs.current[c.id]!.textContent = current.title;
+                                }
+                                setEditingCatId(null);
+                                
+                                (e.currentTarget as HTMLDivElement).blur();
+                              }
+                            }}
+                            onBlur={() => {
+                              if (!editMode || isNone || editingCatId !== c.id) return;
+                              finishEditTitle(c.id);
+                            }}
+                          >
+                            {editingCatId === c.id ? null : c.title}
+                          </div>
                         </div>
 
                         {/* RIGHT */}
@@ -489,18 +624,34 @@ export default function RecipesMainPage() {
                           )}
 
                           {canDelete && (
-                            <button
-                              type="button"
-                              className={styles.categoryTrashBtn}
-                              aria-label={`Удалить ${c.title}`}
-                              title="Удалить"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                onDeleteCategory(c.id, c.title);
-                              }}
-                            >
-                              <IconTrash size={16} />
-                            </button>
+                            <>
+                              <button
+                                type="button"
+                                className={styles.categoryTrashBtn}
+                                aria-label={`Редактировать ${c.title}`}
+                                title="Редактировать"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  if (!editMode || isNone) return;
+                                    startEditTitle(c.id, c.title);
+                                }}
+                              >
+                                <IconEdit size={12} />
+                              </button>
+
+                              <button
+                                type="button"
+                                className={styles.categoryTrashBtn}
+                                aria-label={`Удалить ${c.title}`}
+                                title="Удалить"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  onDeleteCategory(c.id, c.title);
+                                }}
+                              >
+                                <IconTrash size={12} />
+                              </button>
+                            </>
                           )}
                         </div>
                       </div>

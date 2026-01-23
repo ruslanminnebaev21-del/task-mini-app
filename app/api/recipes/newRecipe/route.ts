@@ -6,7 +6,7 @@ import { cookies } from "next/headers";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 
 type TimeParts = { d?: string; h?: string; m?: string };
-
+type KbyuParts = { kcal?: number | string | null; b?: number | string | null; j?: number | string | null; u?: number | string | null };
 type NewRecipeBody = {
   title: string;
   url?: string | null;
@@ -18,6 +18,7 @@ type NewRecipeBody = {
   cook_time?: TimeParts | null;
   prep_time_min?: number | null;
   cook_time_min?: number | null;
+  kbyu?: KbyuParts | null;
 
   ingredients?: string[];
 
@@ -108,6 +109,13 @@ export async function POST(req: Request) {
       : timePartsToMinutes(body.cook_time)
   );
 
+  const kbyu = body.kbyu ?? null;
+
+  const kcal = clampNonNeg(toIntSafe(kbyu?.kcal));
+  const b = clampNonNeg(toIntSafe(kbyu?.b));
+  const j = clampNonNeg(toIntSafe(kbyu?.j));
+  const u = clampNonNeg(toIntSafe(kbyu?.u));
+
   const category_ids = Array.isArray(body.category_ids)
     ? body.category_ids.map(cleanStr).filter(Boolean)
     : [];
@@ -138,6 +146,10 @@ export async function POST(req: Request) {
       prep_time_min,
       cook_time_min,
       photo_path,
+      kcal,
+        b,
+        j,
+        u,      
     })
     .select("id, photo_path")
     .single();
@@ -196,23 +208,6 @@ export async function POST(req: Request) {
     { ok: true, recipe_id, step_ids: createdSteps },
     { status: 200 }
   );
-
-  // public urls (bucket public)
-  const recipe_photo_url = publicUrlForPath(photo_path);
-  const step_photo_urls = steps.map((s, idx) => ({
-    pos: idx + 1,
-    photo_path: s.photo_path,
-    photo_url: publicUrlForPath(s.photo_path ?? null),
-  }));
-
-  return NextResponse.json(
-    {
-      ok: true,
-      recipe_id,
-      photo_path,
-      photo_url: recipe_photo_url,
-      step_photos: step_photo_urls,
-    },
-    { status: 200 }
-  );
 }
+
+  

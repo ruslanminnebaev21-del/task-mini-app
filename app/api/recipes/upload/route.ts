@@ -4,6 +4,9 @@ import { NextResponse } from "next/server";
 import jwt from "jsonwebtoken";
 import { cookies } from "next/headers";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
+import sharp from "sharp";
+
+export const runtime = "nodejs";
 
 async function getUidFromSession(): Promise<number | null> {
   const c = await cookies();
@@ -48,22 +51,36 @@ export async function POST(req: Request) {
   // простая валидация folder
   const safeFolder = folder === "steps" ? "steps" : "main";
 
-  // расширение
-  const extFromName = (file.name?.split(".").pop() || "").toLowerCase();
-  const ext = extFromName && extFromName.length <= 6 ? extFromName : "png";
-
-  // путь: u_{uid}/r_{recipe_id}/{folder}/{timestamp}.{ext}
+  // путь: u_{uid}/r_{recipe_id}/{folder}/{timestamp}.webp
   const ts = Date.now();
-  const photo_path = `u_${uid}/r_${recipe_id}/${safeFolder}/${ts}.${ext}`;
+  const photo_path = `u_${uid}/r_${recipe_id}/${safeFolder}/${ts}.webp`;
 
+  // читаем файл
   const arrayBuffer = await file.arrayBuffer();
-  const bytes = new Uint8Array(arrayBuffer);
+  const input = Buffer.from(arrayBuffer);
+
+  // конвертим в webp
+  let out: Buffer;
+  try {
+    out = await sharp(input)
+      .rotate() // чтобы не поехала ориентация с телефона
+      .webp({ quality: 82 })
+      .toBuffer();
+  } catch (e: any) {
+    console.log("sharp convert error:", e);
+    return NextResponse.json(
+      { error: "Convert failed", details: String(e?.message ?? e) },
+      { status: 500 }
+    );
+  }
+
+  const bytes = new Uint8Array(out);
 
   // 1) upload to storage
   const { error: upErr } = await supabaseAdmin.storage
     .from("recipes")
     .upload(photo_path, bytes, {
-      contentType: file.type || "image/png",
+      contentType: "image/webp",
       upsert: false,
       cacheControl: "3600",
     });
@@ -81,20 +98,10 @@ export async function POST(req: Request) {
 
   // 3) если это фото шага — сразу пишем photo_path в recipe_steps
   if (step_id && Number.isFinite(step_id)) {
-    
-
     const { error: stepErr } = await supabaseAdmin
       .from("recipe_steps")
       .update({ photo_path })
       .eq("id", step_id);
-
-    const { data: checkRow, error: checkErr } = await supabaseAdmin
-      .from("recipe_steps")
-      .select("id, photo_path")
-      .eq("id", step_id)
-      .single();
-
-    
 
     if (stepErr) {
       return NextResponse.json(

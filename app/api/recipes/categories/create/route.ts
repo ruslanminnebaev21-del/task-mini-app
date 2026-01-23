@@ -57,6 +57,7 @@ export async function POST(req: Request) {
   const { data: maxRow, error: maxErr } = await supabaseAdmin
     .from("recipe_categories")
     .select("order_index")
+    .eq("user_id", uid)
     .order("order_index", { ascending: false })
     .limit(1)
     .maybeSingle();
@@ -71,12 +72,12 @@ export async function POST(req: Request) {
   const maxIndex = typeof maxRow?.order_index === "number" ? maxRow.order_index : -1;
   const nextIndex = maxIndex + 1;
 
-  const id = slugifyId(title);
+  const id = `${uid}-${slugifyId(title)}`;
 
   // пробуем insert. если id уже есть — добавим суффикс
   const { data: inserted, error: insErr } = await supabaseAdmin
     .from("recipe_categories")
-    .insert({ id, title, order_index: nextIndex })
+    .insert({ id, title, order_index: nextIndex, user_id: uid })
     .select("id, title, order_index")
     .single();
 
@@ -85,7 +86,7 @@ export async function POST(req: Request) {
     const id2 = `${id}-${Date.now()}`;
     const { data: inserted2, error: insErr2 } = await supabaseAdmin
       .from("recipe_categories")
-      .insert({ id: id2, title, order_index: nextIndex })
+      .insert({ id: id2, title, order_index: nextIndex, user_id: uid })
       .select("id, title, order_index")
       .single();
 

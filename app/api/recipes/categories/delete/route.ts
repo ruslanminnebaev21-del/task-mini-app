@@ -41,6 +41,19 @@ export async function POST(req: Request) {
   if (category_id === "__none__") {
     return NextResponse.json({ error: "Cannot delete __none__" }, { status: 400 });
   }
+  const { data: owned, error: ownErr } = await supabaseAdmin
+    .from("recipe_categories")
+    .select("id")
+    .eq("id", category_id)
+    .eq("user_id", uid)
+    .maybeSingle();
+
+  if (ownErr) {
+    return NextResponse.json({ error: "Failed to check owner", details: ownErr.message }, { status: 500 });
+  }
+  if (!owned?.id) {
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
+  }
 
   // 1) удаляем связи (чтобы не упереться в FK)
   const { error: linkErr } = await supabaseAdmin
@@ -59,7 +72,8 @@ export async function POST(req: Request) {
   const { error: catErr } = await supabaseAdmin
     .from("recipe_categories")
     .delete()
-    .eq("id", category_id);
+    .eq("id", category_id)
+    .eq("user_id", uid);
 
   if (catErr) {
     return NextResponse.json(
