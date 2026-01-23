@@ -41,7 +41,7 @@ export async function GET(req: Request) {
   // 1) рецепты
   const { data, error } = await supabaseAdmin
     .from("recipes")
-    .select("id, title, photo_path, prep_time_min, cook_time_min, created_at")
+    .select("id, title, photo_path, prep_time_min, cook_time_min, kcal, created_at")
     .eq("user_id", uid)
     .order("created_at", { ascending: false });
 
@@ -121,6 +121,7 @@ export async function GET(req: Request) {
     photo_url: publicUrlForPath(r.photo_path ?? null),
     prep_time_min: r.prep_time_min ?? null,
     cook_time_min: r.cook_time_min ?? null,
+    kcal: r.kcal ?? null,
     categories: catsByRecipeId[String(r.id)] ?? [],
   }));
 

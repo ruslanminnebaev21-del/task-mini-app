@@ -16,6 +16,7 @@ type RecipeMeta = {
   photo_url: string | null;
   prep_time_min: number | null;
   cook_time_min: number | null;
+  kcal?: number | null;
   categories?: RecipeCategory[];
 };
 
@@ -156,13 +157,19 @@ export default function AllRecipesClient() {
                     <span>Готовка: {fmtMin(r.cook_time_min)}</span>
                   </div>
 
-                  {(r.categories?.length ?? 0) > 0 && (
+                  {((r.categories?.length ?? 0) > 0 || r.kcal != null) && (
                     <div className={styles.recipeMetaRow}>
                       {(r.categories ?? []).map((c) => (
                         <span key={c.id} className={styles.recipeChip}>
                           {c.title}
                         </span>
                       ))}
+
+                      {r.kcal != null && (
+                        <span className={styles.recipeChip}>
+                          {r.kcal} ккал
+                        </span>
+                      )}
                     </div>
                   )}
                 </div>

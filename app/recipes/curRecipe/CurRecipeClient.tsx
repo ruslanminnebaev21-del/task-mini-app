@@ -57,15 +57,33 @@ function fmtKbyu(r?: { kcal?: number | null; b?: number | null; j?: number | nul
   const j = r?.j ?? null;
   const u = r?.u ?? null;
 
-  const hasAny = [kcal, b, j, u].some((v) => v !== null && v !== undefined);
-  if (!hasAny) return "";
+  const hasBju = b != null || j != null || u != null;
+  const hasAny = kcal != null || hasBju;
+  if (!hasAny) return null;
 
-  const kcalTxt = kcal !== null && kcal !== undefined ? `${kcal} ккал` : "—";
-  const bTxt = b !== null && b !== undefined ? `Б${b}` : "Б —";
-  const jTxt = j !== null && j !== undefined ? `Ж${j}` : "Ж —";
-  const uTxt = u !== null && u !== undefined ? `У${u}` : "У —";
+  const parts: string[] = [];
+  if (b != null) parts.push(`Б ${b}`);
+  if (j != null) parts.push(`Ж ${j}`);
+  if (u != null) parts.push(`У ${u}`);
 
-  return `${kcalTxt} · ${bTxt} · ${jTxt} · ${uTxt}`;
+  return (
+    <span style={{ display: "inline-flex", alignItems: "center" }}>
+      {kcal != null ? (
+        <span className={styles.recipeChip}>{kcal} ккал</span>
+      ) : null}
+
+      {parts.length ? (
+        <span style={{ marginLeft: kcal != null ? 10 : 0 }}>
+          {parts.map((p, i) => (
+            <span key={i}>
+              {i > 0 && <span style={{ opacity: 0.4 }}> · </span>}
+              {p}
+            </span>
+          ))}
+        </span>
+      ) : null}
+    </span>
+  );
 }
 
 export default function CurRecipeClient() {
@@ -163,8 +181,14 @@ export default function CurRecipeClient() {
     }
   };
   return (
+
     <div className={styles.container}>
+      <div className={styles.bgWash} />
+
+      <div className={styles.pageTop}>
       <PageFade>
+        
+      
         {loading && <div className={styles.recipesState}>Загружаю…</div>}
         {err && <div className={styles.recipesError}>{err}</div>}
 
@@ -281,7 +305,9 @@ export default function CurRecipeClient() {
             </div>
           </div>
         )}
+      
       </PageFade>
     </div>
+   </div>
   );
 }

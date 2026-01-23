@@ -1,5 +1,18 @@
 /* app/recipes/recipes.module.css */
+.bgWash {
+  position: fixed;
+  inset: 0;
+  z-index: 1;              /* ВАЖНО: выше .bg, но ниже контента */
+  pointer-events: none;
+  background: #ffffff96;  /* регулируй силу */
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
 
+.pageTop {
+  position: relative;
+  z-index: 2;              /* контент выше bgWash */
+}
 .bg {
   position: fixed;
   inset: 0;
