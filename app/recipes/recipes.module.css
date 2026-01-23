@@ -1,4 +1,77 @@
 /* app/recipes/recipes.module.css */
+
+.bg {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background:
+    /* Petal Glaze — верхний розовый свет */
+    radial-gradient(
+      980px 620px at 72% 18%,
+      rgba(234, 156, 175, 0.34),
+      transparent 60%
+    ),
+
+    /* Sorbet Stem — яркая поддержка снизу */
+    radial-gradient(
+      860px 640px at 18% 46%,
+      rgba(194, 220, 128, 0.36),
+      transparent 64%
+    ),
+
+    /* сильный белый свет сверху */
+    radial-gradient(
+      1100px 820px at 45% 6%,
+      rgba(255, 255, 255, 0.96),
+      transparent 56%
+    ),
+
+    /* очень светлый базовый фон */
+    linear-gradient(
+      180deg,
+      #FEFCFA,
+      #F6F7F8 48%,
+      #FBFAF6
+    );
+}
+
+.orbA,
+.orbB {
+  position: fixed;
+  width: 600px;
+  height: 600px;
+  border-radius: 999px;
+  filter: blur(34px);
+  opacity: 0.48;
+  z-index: 1;
+  pointer-events: none;
+}
+
+/* orbA — зелёный свет под контентом */
+.orbA {
+  left: -300px;
+  top: 340px;
+  background: radial-gradient(
+    circle at 35% 35%,
+    rgba(194, 220, 128, 0.72),
+    rgba(194, 220, 128, 0.28) 54%,
+    transparent 76%
+  );
+}
+
+/* orbB — розовый свет сверху */
+.orbB {
+  right: -300px;
+  top: 100px;
+  background: radial-gradient(
+    circle at 55% 45%,
+    rgba(234, 156, 175, 0.72),
+    rgba(234, 156, 175, 0.28) 52%,
+    transparent 78%
+  );
+}
+
 .menuHidden {
   opacity: 0;
   pointer-events: none;
@@ -11,97 +84,8 @@
   overflow-x: hidden;
   padding-bottom: 100px;
 }
-.bg {
-  position: fixed;
-  inset: 0;
-  z-index: 0;
-  pointer-events: none;
-  background:
-    /* Petal Glaze: мягкий верхний румянец */
-    radial-gradient(860px 520px at 72% 22%, rgba(234, 156, 175, 0.18), transparent 64%),
 
-    /* Sorbet Stem: поддержка под карточкой */
-    radial-gradient(760px 560px at 18% 42%, rgba(194, 220, 128, 0.18), transparent 68%),
 
-    /* белый смягчитель */
-    radial-gradient(980px 680px at 45% 10%, rgba(255, 255, 255, 0.78), transparent 60%),
-
-    /* базовый фон, чуть теплее */
-    linear-gradient(180deg, #F6F5F1, #F3F4F6 45%, #F7F6F2);
-}
-
-.orbA,
-.orbB {
-  position: fixed;
-  width: 520px;
-  height: 520px;
-  border-radius: 999px;
-  filter: blur(28px);
-  opacity: 0.40;
-  z-index: 1;
-  pointer-events: none;
-}
-
-/* orbA была “черной”. Делаем её зеленой (Sorbet Stem) и чуть ниже, чтобы подсвечивала блок категорий */
-.orbA {
-  left: -260px;
-  top: 320px;
-  background: radial-gradient(
-    circle at 35% 35%,
-    rgba(194, 220, 128, 0.55),
-    rgba(194, 220, 128, 0.18) 58%,
-    transparent 76%
-  );
-}
-
-/* orbB была синей. Делаем её розовой (Petal Glaze) и чуть выше, чтобы давала “румянец” в верхней зоне */
-.orbB {
-  right: -280px;
-  top: 120px;
-  background: radial-gradient(
-    circle at 55% 45%,
-    rgba(234, 156, 175, 0.55),
-    rgba(234, 156, 175, 0.18) 55%,
-    transparent 78%
-  );
-}
-/*.bg {
-  position: fixed;
-  inset: 0;
-  z-index: 0;
-  pointer-events: none;
-  background:
-    radial-gradient(860px 520px at 72% 26%, rgba(85, 155, 255, 0.20), transparent 64%),
-    radial-gradient(760px 520px at 18% 38%, rgba(85, 155, 255, 0.10), transparent 66%),
-    radial-gradient(900px 640px at 45% 10%, rgba(255, 255, 255, 0.70), transparent 60%),
-    linear-gradient(180deg, #eef2f6, #f4f6f8 45%, #f7f6f3);
-}
-
-.orbA,
-.orbB {
-  position: fixed;
-  width: 520px;
-  height: 520px;
-  border-radius: 999px;
-  filter: blur(24px);
-  opacity: 0.45;
-  z-index: 1;
-  pointer-events: none;
-}
-
-.orbA {
-  left: -240px;
-  top: 280px;
-  background: radial-gradient(circle at 35% 35%, rgba(0, 0, 0, 0.14), rgba(0, 0, 0, 0.04) 58%, transparent 74%);
-}
-
-.orbB {
-  right: -260px;
-  top: 180px;
-  background: radial-gradient(circle at 55% 45%, rgba(85, 155, 255, 0.40), rgba(85, 155, 255, 0.14) 55%, transparent 76%);
-}
-*/
-/*--------------------*/
 
 .container {
   position: relative;
@@ -641,22 +625,23 @@
 .bigCta {
   width: 100%;
   margin-top: 10px;
-  border: 1px solid rgba(0, 0, 0, 0.06);
+  border: 1px solid rgba(214, 112, 140, 0.45);
   background: linear-gradient(
     135deg,
-    rgba(255, 255, 255, 0.85),
-    rgba(255, 255, 255, 0.65)
+    #e88aa3,
+    #d96b8f 60%,
+    #c85c7e
   );
   border-radius: 22px;
   padding: 16px;
   box-shadow:
-    0 18px 40px rgba(0, 0, 0, 0.10);
-  backdrop-filter: blur(14px);
-  -webkit-backdrop-filter: blur(14px);
+    0 18px 40px rgba(216, 107, 143, 0.45);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
   cursor: pointer;
   text-align: left;
   user-select: none;
-  color: #222;
+  color: #ffffff;
 }
 .bigCtaRec {
   width: 100%;
