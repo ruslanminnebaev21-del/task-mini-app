@@ -233,7 +233,15 @@ export default function NewRecipePage() {
   const [recipePhoto, setRecipePhoto] = useState<PhotoState | null>(null);
   const recipeFileRef = useRef<HTMLInputElement | null>(null);
   const [recipePhotoPath, setRecipePhotoPath] = useState<string | null>(null);
-
+  const recipePhotoPathRef = useRef<string | null>(null);
+  useEffect(() => {
+    recipePhotoPathRef.current = recipePhotoPath;
+  }, [recipePhotoPath]);  
+  // последний реально загруженный tmp путь (нужен для удаления при замене)
+  const tmpLastUploadedPathRef = useRef<string | null>(null);
+  // чтобы второй tmp-upload ждал завершения первого и получил old_path
+  const tmpUploadPromiseRef = useRef<Promise<void> | null>(null);
+  const tmpUploadSeqRef = useRef(0);
   /* ingredients */
   const [ingredients, setIngredients] = useState<Ingredient[]>([makeIngredient()]);
 
@@ -506,8 +514,61 @@ export default function NewRecipePage() {
 
     // ВАЖНО:
     // - если новый рецепт -> не грузим, пока не появится recipe_id (после сохранения)
+    // НОВЫЙ рецепт: грузим сразу в tmp и запоминаем photo_path
     if (!isEdit) {
-      setRecipePhotoPath(null);
+      // если прошлый tmp-upload еще идет — дождемся, чтобы появился recipePhotoPathRef.current
+      if (tmpUploadPromiseRef.current) {
+        try {
+          await tmpUploadPromiseRef.current;
+        } catch {
+          // игнор
+        }
+      }
+
+      const mySeq = ++tmpUploadSeqRef.current;
+
+      const run = (async () => {
+        try {
+          const fd = new FormData();
+          fd.append("file", safeFile);
+          fd.append("folder", "main");
+          fd.append("recipe_id", "tmp");
+
+          // если уже было tmp-фото, просим сервер удалить его
+          const old = tmpLastUploadedPathRef.current;
+          if (old) fd.append("old_path", old);
+
+          const res = await fetch("/api/recipes/upload", { method: "POST", body: fd });
+          const json = await res.json();
+
+          if (json?.ok && json?.photo_path) {
+            const p = String(json.photo_path);
+            setRecipePhotoPath(p);
+            recipePhotoPathRef.current = p;
+            tmpLastUploadedPathRef.current = p;
+          } else {
+            console.log("TMP UPLOAD BAD RESPONSE:", json);
+            setRecipePhotoPath(null);
+            recipePhotoPathRef.current = null;
+          }
+        } catch (err) {
+          console.log("TMP UPLOAD ERROR:", err);
+          setRecipePhotoPath(null);
+          recipePhotoPathRef.current = null;
+        }
+      })();
+
+      tmpUploadPromiseRef.current = run;
+
+      try {
+        await run;
+      } finally {
+        // чистим ref только если это всё ещё последняя загрузка
+        if (tmpUploadSeqRef.current === mySeq) {
+          tmpUploadPromiseRef.current = null;
+        }
+      }
+
       e.target.value = "";
       return;
     }
@@ -531,7 +592,9 @@ export default function NewRecipePage() {
       const json = await res.json();
 
       if (json?.ok && json?.photo_path) {
-        setRecipePhotoPath(String(json.photo_path));
+        const p = String(json.photo_path);
+        setRecipePhotoPath(p);
+        recipePhotoPathRef.current = p;
       } else {
         setRecipePhotoPath(null);
         console.log("UPLOAD BAD RESPONSE:", json);
@@ -550,6 +613,7 @@ export default function NewRecipePage() {
       return null;
     });
     setRecipePhotoPath(null);
+    recipePhotoPathRef.current = null;
   }
 
   function setStepFileRef(stepId: string) {
@@ -750,9 +814,15 @@ export default function NewRecipePage() {
 
       const savedRecipeId = isEdit ? Number(editRecipeId) : Number(json?.recipe_id ?? 0);
 
+      // если это новый рецепт и фото выбрано — грузим главное фото после появления recipe_id
+      if (!isEdit && savedRecipeId) {
+        await uploadMainPhotoAfterSave(savedRecipeId);
+      }
+
       if (json?.ok && savedRecipeId && Array.isArray(json.step_ids)) {
         uploadStepPhotosInBackground(savedRecipeId, json.step_ids);
       }
+
       showToast("Рецепт сохранён");
       initialSnapshotRef.current = normalizeSnapshot();
       setTimeout(() => close({ skipConfirm: true }), 200);
@@ -773,7 +843,37 @@ export default function NewRecipePage() {
     setToast(message);
     setTimeout(() => setToast(null), 2000);
   }
+  async function uploadMainPhotoAfterSave(recipeId: number) {
+    const f = recipePhoto?.file;
+    if (!f) return;
 
+    try {
+      const fd = new FormData();
+      fd.append("file", f);
+      fd.append("folder", "main");
+      fd.append("recipe_id", String(recipeId));
+      // если до этого было tmp-фото — попросим сервер удалить его после успешной загрузки финального
+      const old = tmpLastUploadedPathRef.current;
+      if (old) fd.append("old_path", old);
+
+      const res = await fetch("/api/recipes/upload", { method: "POST", body: fd });
+      const json = await res.json();
+
+      if (json?.ok && json?.photo_path) {
+      const p = String(json.photo_path);
+      setRecipePhotoPath(p);
+      recipePhotoPathRef.current = p;
+        // опционально: можно заменить превью на public url, но не обязательно
+        // if (json?.photo_url) setRecipePhoto({ file: null, url: String(json.photo_url) });
+      } else {
+        console.log("MAIN PHOTO UPLOAD BAD RESPONSE:", json);
+        setRecipePhotoPath(null);
+      }
+    } catch (e) {
+      console.log("MAIN PHOTO UPLOAD ERROR:", e);
+      setRecipePhotoPath(null);
+    }
+  }
   async function uploadStepPhotosInBackground(
     recipeId: number,
     stepIds: { id: number; pos: number }[]

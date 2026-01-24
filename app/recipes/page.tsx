@@ -355,25 +355,35 @@ export default function RecipesMainPage() {
     sel?.removeAllRanges();
     sel?.addRange(range);
   }
+  function scrollElToTopOffset(el: HTMLElement, topOffset = 100) {
+    const rect = el.getBoundingClientRect();
+    const delta = rect.top - topOffset;
+    if (Math.abs(delta) < 4) return;
+    window.scrollBy({ top: delta, behavior: "smooth" });
+  }  
 
   function startEditTitle(catId: string, currentTitle: string) {
+    const el = titleRefs.current[catId];
+    if (!el) return;
 
+    // включаем editable прямо в клик-хендлере (важно для iOS)
+    el.setAttribute("contenteditable", "true");
+
+    // гарантируем текст в DOM
+    el.textContent = currentTitle;
+
+    // фокус + курсор в конец
+    el.focus();
+    setCaretToEnd(el);
+
+    // теперь уже стейт (для React-логики)
     setEditingCatId(catId);
     editDraftTitleRef.current = currentTitle;
     originalTitleRef.current[catId] = currentTitle;
 
-    const focusIt = () => {
-      const el = titleRefs.current[catId];
-      if (!el) return;
-
-      // важно: положили текст прямо в DOM один раз
-      el.textContent = currentTitle;
-
-      el.focus();
-      setCaretToEnd(el);
-    };
-
-    requestAnimationFrame(focusIt);
+    requestAnimationFrame(() => scrollElToTopOffset(el, 100));
+    setTimeout(() => scrollElToTopOffset(el, 100), 50);
+    setTimeout(() => scrollElToTopOffset(el, 100), 180);
   }
 
   async function commitRenameCategory(catId: string) {
@@ -609,7 +619,7 @@ export default function RecipesMainPage() {
                               finishEditTitle(c.id);
                             }}
                           >
-                            {editingCatId === c.id ? null : c.title}
+                              {c.title}
                           </div>
                         </div>
 

@@ -290,7 +290,7 @@ export default function CurRecipeClient() {
                               src={s.photo_url}
                               alt={`Шаг ${s.pos}`}
                               className={styles.recipeStepPhoto}
-                            />
+                          />
                           </div>
                         ) : null}
 
