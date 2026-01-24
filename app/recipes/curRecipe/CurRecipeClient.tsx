@@ -62,26 +62,13 @@ function fmtKbyu(r?: { kcal?: number | null; b?: number | null; j?: number | nul
   if (!hasAny) return null;
 
   const parts: string[] = [];
-  if (b != null) parts.push(`Б ${b}`);
-  if (j != null) parts.push(`Ж ${j}`);
-  if (u != null) parts.push(`У ${u}`);
+  if (kcal == null || b == null || j == null || u == null) {
+    return null;
+  }
 
   return (
-    <span style={{ display: "inline-flex", alignItems: "center" }}>
-      {kcal != null ? (
-        <span className={styles.recipeChip}>{kcal} ккал</span>
-      ) : null}
-
-      {parts.length ? (
-        <span style={{ marginLeft: kcal != null ? 10 : 0 }}>
-          {parts.map((p, i) => (
-            <span key={i}>
-              {i > 0 && <span style={{ opacity: 0.4 }}> · </span>}
-              {p}
-            </span>
-          ))}
-        </span>
-      ) : null}
+    <span className={styles.recipeChip}>
+      КБЖУ: {kcal} · {b} · {j} · {u}
     </span>
   );
 }

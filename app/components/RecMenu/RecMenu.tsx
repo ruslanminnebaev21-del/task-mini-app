@@ -55,7 +55,7 @@ export default function RecMenu() {
     () => [
       { key: "home", label: "Главная", href: "/recipes", icon: "home" },
       { key: "all", label: "Все рецепты", href: "/recipes/allRecipes", icon: "all" },
-      { key: "fav", label: "Избранное", href: "/recipes/favorites", icon: "fav" },
+      { key: "fav", label: "Заготовки", href: "/recipes/preps", icon: "fav" },
     ],
     []
   );
