@@ -60,6 +60,7 @@ async function updateCounts(id: string, delta: number) {
     };
   }>("/api/recipes/updatePreps", { id, delta });
 }
+
 async function deletePrep(id: string) {
   return postJson<{ ok: boolean }>("/api/recipes/deletePreps", { id });
 }
@@ -68,6 +69,12 @@ function unitLabel(u: Unit | null | undefined) {
   if (u === "pieces") return "штук";
   if (u === "portions") return "порц";
   return "ед.";
+}
+
+function sortByTitle(a: Prep, b: Prep) {
+  const ta = String(a.title ?? "").trim();
+  const tb = String(b.title ?? "").trim();
+  return ta.localeCompare(tb, "ru", { sensitivity: "base" });
 }
 
 export default function PrepsPage() {
@@ -98,7 +105,7 @@ export default function PrepsPage() {
     return () => {
       if (toastTimerRef.current) window.clearTimeout(toastTimerRef.current);
     };
-  }, []);  
+  }, []);
 
   // ===== CATEGORIES =====
   const [categories, setCategories] = useState<PrepCategory[]>([]);
@@ -107,7 +114,6 @@ export default function PrepsPage() {
 
   const [catOpen, setCatOpen] = useState(false);
   const catWrapRef = useRef<HTMLDivElement | null>(null);
-
 
   // ===== ADD FORM STATE =====
   const [newTitle, setNewTitle] = useState("");
@@ -118,8 +124,15 @@ export default function PrepsPage() {
 
   const titleInputRef = useRef<HTMLInputElement | null>(null);
 
-  const inStock = useMemo(() => items.filter((x) => (x.counts ?? 0) > 0), [items]);
-  const outOfStock = useMemo(() => items.filter((x) => (x.counts ?? 0) <= 0), [items]);
+  // ✅ сортируем внутри useMemo (items не мутируем)
+  const inStock = useMemo(
+    () => items.filter((x) => (x.counts ?? 0) > 0).slice().sort(sortByTitle),
+    [items]
+  );
+  const outOfStock = useMemo(
+    () => items.filter((x) => (x.counts ?? 0) <= 0).slice().sort(sortByTitle),
+    [items]
+  );
 
   const canAdd = useMemo(() => newTitle.trim().length > 0 && !saving, [newTitle, saving]);
 
@@ -145,7 +158,6 @@ export default function PrepsPage() {
       setHint(null);
 
       try {
-        // грузим параллельно
         setCatLoading(true);
 
         const [prepsRes, catsRes] = await Promise.all([
@@ -239,7 +251,7 @@ export default function PrepsPage() {
         title,
         counts,
         unit,
-        category_id: catIdToSend, // ✅ отправляем выбранную категорию
+        category_id: catIdToSend,
       });
 
       const p = res?.prep;
@@ -254,11 +266,7 @@ export default function PrepsPage() {
             (p as any)?.unit === "pieces" || (p as any)?.unit === "portions"
               ? (p as any).unit
               : unit,
-          // ✅ если бэк вернёт category_title, берём его, иначе подставляем локально
-          category_title:
-            (p as any)?.category_title != null
-              ? String((p as any).category_title)
-              : catTitleLocal,
+          category_title: (p as any)?.category_title != null ? String((p as any).category_title) : catTitleLocal,
         },
         ...prev,
       ]);
@@ -266,7 +274,7 @@ export default function PrepsPage() {
       setNewTitle("");
       setNewCount("");
       setUnit("portions");
-      setCategoryId(""); // сброс категории
+      setCategoryId("");
       setShowForm(false);
       showToast("Добавлено");
 
@@ -291,9 +299,7 @@ export default function PrepsPage() {
       if (!Number.isFinite(next)) throw new Error("Bad response");
       setItems((prev) => prev.map((x) => (x.id === id ? { ...x, counts: next } : x)));
     } catch (e: any) {
-      setItems((prev) =>
-        prev.map((x) => (x.id === id ? { ...x, counts: Math.max(0, (x.counts ?? 0) - 1) } : x))
-      );
+      setItems((prev) => prev.map((x) => (x.id === id ? { ...x, counts: Math.max(0, (x.counts ?? 0) - 1) } : x)));
       setHint(e?.message ?? "Не удалось обновить количество");
     } finally {
       setUpdatingIds((s) => {
@@ -310,9 +316,7 @@ export default function PrepsPage() {
     const cur = items.find((x) => x.id === id)?.counts ?? 0;
     if (cur <= 0) return;
 
-    setItems((prev) =>
-      prev.map((x) => (x.id === id ? { ...x, counts: Math.max(0, (x.counts ?? 0) - 1) } : x))
-    );
+    setItems((prev) => prev.map((x) => (x.id === id ? { ...x, counts: Math.max(0, (x.counts ?? 0) - 1) } : x)));
     setUpdatingIds((s) => new Set(s).add(id));
     setHint(null);
 
@@ -339,7 +343,6 @@ export default function PrepsPage() {
 
     setHint(null);
 
-    // оптимистично убираем из списка
     const prevItems = items;
     setItems((prev) => prev.filter((x) => x.id !== id));
 
@@ -348,7 +351,6 @@ export default function PrepsPage() {
       if (!res?.ok) throw new Error("Bad response");
       showToast("Удалено");
     } catch (e: any) {
-      // откат если не получилось
       setItems(prevItems);
       setHint(e?.message ?? "Не удалось удалить");
     }
@@ -475,69 +477,67 @@ export default function PrepsPage() {
                     disabled={!canAdd}
                     title={!canAdd ? "Введи название" : saving ? "Сохраняю..." : "Добавить"}
                   >
-                    <IconPlus
-                    size={18}
-                    className={saving ? styles.iconSpin : undefined}
-                  />
+                    <IconPlus size={18} className={saving ? styles.iconSpin : undefined} />
                   </button>
                 </div>
               </div>
 
               <div className={styles.field}>
                 <div className={styles.unitRow} role="radiogroup" aria-label="Единицы учета">
-                  {/* ✅ категория слева от количества */}
-              <div className={styles.unitCatWrap} ref={catWrapRef}>
-                <button
-                  type="button"
-                  className={`${styles.chipBtn} ${styles.unitChip} ${categoryId ? styles.chipBtnActive : ""} ${styles.unitCatBtn}`}
-                  onClick={() => {
-                    if (catLoading) return;
-                    setCatOpen((v) => !v);
-                  }}
-                  aria-label="Категория"
-                  aria-haspopup="listbox"
-                  aria-expanded={catOpen}
-                  disabled={catLoading}
-                >
-                  <span className={styles.unitCatBtnText}>
-                    {catLoading ? "Загружаю..." : (selectedCatTitle || "Категория")}
-                  </span>
-                </button>
-
-                {catOpen ? (
-                  <div className={styles.unitCatMenu} role="listbox" aria-label="Категории">
+                  <div className={styles.unitCatWrap} ref={catWrapRef}>
                     <button
                       type="button"
-                      className={`${styles.unitCatItem} ${!categoryId ? styles.unitCatItemActive : ""}`}
+                      className={`${styles.chipBtn} ${styles.unitChip} ${
+                        categoryId ? styles.chipBtnActive : ""
+                      } ${styles.unitCatBtn}`}
                       onClick={() => {
-                        setCategoryId("");
-                        setCatOpen(false);
+                        if (catLoading) return;
+                        setCatOpen((v) => !v);
                       }}
+                      aria-label="Категория"
+                      aria-haspopup="listbox"
+                      aria-expanded={catOpen}
+                      disabled={catLoading}
                     >
-                      <span className={styles.unitCatCheck}>{!categoryId ? "✓" : ""}</span>
-                      <span className={styles.unitCatItemText}>Без категории</span>
+                      <span className={styles.unitCatBtnText}>
+                        {catLoading ? "Загружаю..." : selectedCatTitle || "Категория"}
+                      </span>
                     </button>
 
-                    {categories.map((c) => {
-                      const active = categoryId === c.id;
-                      return (
+                    {catOpen ? (
+                      <div className={styles.unitCatMenu} role="listbox" aria-label="Категории">
                         <button
-                          key={c.id}
                           type="button"
-                          className={`${styles.unitCatItem} ${active ? styles.unitCatItemActive : ""}`}
+                          className={`${styles.unitCatItem} ${!categoryId ? styles.unitCatItemActive : ""}`}
                           onClick={() => {
-                            setCategoryId(c.id);
+                            setCategoryId("");
                             setCatOpen(false);
                           }}
                         >
-                          <span className={styles.unitCatCheck}>{active ? "✓" : ""}</span>
-                          <span className={styles.unitCatItemText}>{c.title}</span>
+                          <span className={styles.unitCatCheck}>{!categoryId ? "✓" : ""}</span>
+                          <span className={styles.unitCatItemText}>Без категории</span>
                         </button>
-                      );
-                    })}
+
+                        {categories.map((c) => {
+                          const active = categoryId === c.id;
+                          return (
+                            <button
+                              key={c.id}
+                              type="button"
+                              className={`${styles.unitCatItem} ${active ? styles.unitCatItemActive : ""}`}
+                              onClick={() => {
+                                setCategoryId(c.id);
+                                setCatOpen(false);
+                              }}
+                            >
+                              <span className={styles.unitCatCheck}>{active ? "✓" : ""}</span>
+                              <span className={styles.unitCatItemText}>{c.title}</span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    ) : null}
                   </div>
-                ) : null}
-              </div>
 
                   <input
                     className={`${styles.input} ${styles.unitInput}`}
@@ -549,7 +549,9 @@ export default function PrepsPage() {
 
                   <button
                     type="button"
-                    className={`${styles.chipBtn} ${styles.unitChip} ${unit === "portions" ? styles.chipBtnActive : ""}`}
+                    className={`${styles.chipBtn} ${styles.unitChip} ${
+                      unit === "portions" ? styles.chipBtnActive : ""
+                    }`}
                     onClick={() => setUnit("portions")}
                   >
                     Порции
@@ -557,7 +559,9 @@ export default function PrepsPage() {
 
                   <button
                     type="button"
-                    className={`${styles.chipBtn} ${styles.unitChip} ${unit === "pieces" ? styles.chipBtnActive : ""}`}
+                    className={`${styles.chipBtn} ${styles.unitChip} ${
+                      unit === "pieces" ? styles.chipBtnActive : ""
+                    }`}
                     onClick={() => setUnit("pieces")}
                   >
                     Штуки
@@ -603,8 +607,11 @@ export default function PrepsPage() {
             </div>
           )}
         </section>
+
         {toast ? <div className={styles.toast}>{toast}</div> : null}
       </PageFade>
+
+      <RecMenu />
     </div>
   );
 }
