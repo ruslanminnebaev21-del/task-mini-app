@@ -27,10 +27,10 @@ export async function GET() {
   const uid = await getUidFromSession();
   if (!uid) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  // если категории общие (не по юзеру) — убери .eq("user_id", uid)
   const { data, error } = await supabaseAdmin
     .from("recipe_categories")
     .select("id, title")
+    .eq("user_id", uid) // ✅ только категории текущего пользователя
     .order("title", { ascending: true });
 
   if (error) {
