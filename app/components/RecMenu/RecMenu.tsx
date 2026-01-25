@@ -64,7 +64,7 @@ export default function RecMenu() {
     if (!pathname) return "home";
 
     if (pathname.startsWith("/recipes/allRecipes")) return "all";
-    if (pathname.startsWith("/recipes/favorites")) return "fav";
+    if (pathname.startsWith("/recipes/preps")) return "fav";
     if (pathname === "/recipes") return "home";
 
     return "home";
@@ -126,7 +126,7 @@ export default function RecMenu() {
                     ) : it.icon === "all" ? (
                       <ListIcon />
                     ) : (
-                      <StarIcon />
+                      <SnowflakeIcon />
                     )}
                   </span>
 
@@ -181,14 +181,32 @@ function ListIcon() {
   );
 }
 
-function StarIcon() {
+function SnowflakeIcon() {
   return (
     <svg viewBox="0 0 24 24" className={styles.svg} fill="none">
       <path
-        d="M12 3.6l2.6 5.3 5.8.85-4.2 4.1 1 5.8-5.2-2.75-5.2 2.75 1-5.8-4.2-4.1 5.8-.85L12 3.6Z"
+        d="M12 4v16"
         stroke="currentColor"
         strokeWidth="1.8"
-        strokeLinejoin="round"
+        strokeLinecap="round"
+      />
+      <path
+        d="M4 12h16"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+      />
+      <path
+        d="M6.2 6.2l11.6 11.6"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+      />
+      <path
+        d="M17.8 6.2L6.2 17.8"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
       />
     </svg>
   );

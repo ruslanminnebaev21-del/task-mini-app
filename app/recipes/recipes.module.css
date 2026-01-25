@@ -227,6 +227,8 @@
 .field {
   display: grid;
   gap: 16px;
+  width: 100%;
+   grid-template-columns: 1fr;
 }
 
 .label {
@@ -253,7 +255,8 @@
 }
 
 .input:focus {
-  border-color: rgba(85, 155, 255, 0.28);
+  border-color: #e88aa380;
+
   background: rgba(255, 255, 255, 0.92);
  /* box-shadow:
     var(--shadowB),
@@ -335,8 +338,13 @@
 }
 
 .chipBtnActive {
-  border: 1px solid rgba(0, 0, 0, 0.16);
-  background: rgba(17, 17, 17, 0.92);
+  border: 1px solid rgba(214, 112, 140, 0.45);
+  background: linear-gradient(
+    135deg,
+    #e88aa3,
+    #d96b8f 60%,
+    #c85c7e
+  );
   color: #fff;
 }
 
@@ -364,8 +372,13 @@
   width: 44px;
   height: 44px;
   border-radius: 999px;
-  border: 1px solid rgba(0, 0, 0, 0.1);
-  background: #111;
+  border: 1px solid rgba(214, 112, 140, 0.45);
+  background: linear-gradient(
+    135deg,
+    #e88aa3,
+    #d96b8f 60%,
+    #c85c7e
+  );
   color: #fff;
   cursor: pointer;
   user-select: none;
@@ -404,6 +417,8 @@
   font-weight: 900;
   opacity: 0.85;
   letter-spacing: -0.2px;
+  position: relative;
+  z-index: 1;
 }
 
 .empty {
@@ -418,6 +433,7 @@
 
 .listItem {
   display: flex;
+  flex-direction: column;
   gap: 12px;
   align-items: flex-start;
   justify-content: space-between;
@@ -429,6 +445,14 @@
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
 }
+.listItemHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+}
+
 .listItemRec {
   display: flex;
   gap: 10px;
@@ -440,10 +464,12 @@
 }
 
 .listItemMain {
-  display: grid;
-  gap: 8px;
-  flex: 1;
-  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.counterRow {
+  width: 100%;
 }
 
 .titleText {
@@ -848,12 +874,7 @@ color: #2a3323;
   margin-bottom: 10px;
 }
 
-.sectionTitle {
-  font-size: 18px;
-  font-weight: 900;
-  opacity: 0.9;
-  letter-spacing: -0.2px;
-}
+
 
 .empty {
   opacity: 0.7;
@@ -2711,4 +2732,182 @@ color: #2a3323;
   line-height: 40px;       /* КРИТИЧНО */
 
   box-sizing: border-box;
+}
+
+/* раскрывающаяся форма добавления заготовки */
+.addFormWrap {
+  overflow: hidden;
+  max-height: 0;
+  opacity: 0;
+  transform: translateY(-6px);
+  transition: max-height 260ms ease, opacity 200ms ease, transform 200ms ease;
+  will-change: max-height, opacity, transform;
+  border-radius: 22px;
+  position: relative;
+  z-index: 200;
+}
+
+.addFormWrapOpen {
+  max-height: 320px; /* если захочешь точнее, подберем */
+  opacity: 1;
+  transform: translateY(0);
+  overflow: visible;
+}
+
+.addFormCard {
+  margin-top: 12px;
+  z-index: 50;
+}
+
+.formHint {
+  margin-bottom: 10px;
+  color: rgba(180, 0, 0, 0.85);
+  font-size: 13px;
+}
+
+/* input + chips в одну строку */
+.unitRow {
+  display: grid;
+  grid-template-columns: 100px 1fr auto auto; /* select фикс, input тянется, кнопки по контенту */
+  gap: 8px;
+  align-items: center;
+  width: 100%;
+  flex-wrap: nowrap;
+}
+
+.unitInput {
+  min-width: 0;
+  height: 32px;
+  font-size: 12px;
+  width: 100%;
+}
+
+.unitChip {
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.counter {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  width: 100%;
+}
+
+.counterBtn {
+  width: 25px;
+  height: 25px;
+  flex-shrink: 0;
+
+  display: flex;
+  align-items: center;      /* по вертикали */
+  justify-content: center;  /* по горизонтали */
+}
+
+.counterValue {
+  flex: 1;                  /* растягивается */
+  min-width: 0;
+  height: 25px;
+
+  display: flex;
+  align-items: center;      /* по вертикали */
+  justify-content: center;  /* по горизонтали */
+
+  text-align: center;
+}
+.unitSelect {
+  appearance: none;
+  width: 100px;
+  height: 32px;
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding: 0px;
+  padding-left: 16px;
+
+}
+
+.unitCatWrap {
+  position: relative;
+  flex-shrink: 0;
+}
+
+.unitCatBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  max-width: 130px; /* регулируй ширину "чипа" категории */
+}
+
+.unitCatBtnText {
+  display: block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.unitCatMenu {
+  position: absolute;
+  left: 0;
+  top: calc(100% + 8px);
+  width: max-content;   /* 👈 по контенту */
+  max-width: 90vw;      /* защита от вылета за экран */
+  white-space: nowrap; /* 👈 не переносить строки */
+  max-height: 260px;
+  overflow: auto;
+  z-index: 50;
+  border-radius: 18px;
+  /*padding-top: 6px;
+  padding-bottom: 6px;*/
+
+  background: rgba(255, 255, 255, 0.92);
+  backdrop-filter: blur(12px);
+  font-size: 12px;
+  box-shadow: 0 12px 30px rgba(0,0,0,0.12);
+  border: 1px solid rgba(0,0,0,0.06);
+}
+
+.unitCatItem {
+  width: 100%;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+
+  display: grid;
+  grid-template-columns: 18px 1fr;
+  gap: 5px;
+  align-items: center;
+
+  padding: 6px 10px;
+  border-radius: 14px;
+  text-align: left;
+}
+
+.unitCatItem:hover {
+  background: rgba(0,0,0,0.05);
+}
+
+.unitCatItemActive {
+  border: 1px solid rgba(214, 112, 140, 0.45);
+  background: linear-gradient(
+    135deg,
+    #e88aa3,
+    #d96b8f 60%,
+    #c85c7e
+  );
+  color: #fff;
+}
+
+.unitCatCheck {
+  width: 18px;
+  text-align: center;
+  opacity: 0.9;
+}
+
+.unitCatItemText {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
