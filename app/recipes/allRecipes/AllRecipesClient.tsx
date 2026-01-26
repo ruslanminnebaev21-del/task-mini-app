@@ -154,6 +154,8 @@ export default function AllRecipesClient() {
 
                   <div className={styles.recipeSub}>
                     <span>Подготовка: {fmtMin(r.prep_time_min)}</span>
+                  </div>
+                  <div className={styles.recipeSub}>
                     <span>Готовка: {fmtMin(r.cook_time_min)}</span>
                   </div>
 
