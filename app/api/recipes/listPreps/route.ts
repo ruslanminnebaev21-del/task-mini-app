@@ -15,8 +15,7 @@ async function getUidFromSession(): Promise<number | null> {
   try {
     const payload = jwt.verify(token, process.env.APP_JWT_SECRET!) as any;
     const uid = Number(payload?.uid);
-    if (!uid || Number.isNaN(uid)) return null;
-    return uid;
+    return Number.isFinite(uid) ? uid : null;
   } catch {
     return null;
   }
@@ -43,7 +42,7 @@ function normUnit(v: any): PrepUnit {
 export async function GET(req: Request) {
   const uid = await getUidFromSession();
   if (!uid) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
   }
 
   const url = new URL(req.url);
@@ -52,17 +51,20 @@ export async function GET(req: Request) {
 
   let query = supabaseAdmin
     .from("recipes_preps")
-    .select(`
+    .select(
+      `
       id,
       title,
       counts,
       unit,
       prep_category_id,
       created_at,
-      prep_category_id (
+      prep_category:prep_category_id (
+        id,
         title
       )
-    `)
+    `
+    )
     .eq("user_id", uid);
 
   if (view === "stock") query = query.gt("counts", 0);
@@ -73,20 +75,17 @@ export async function GET(req: Request) {
     .limit(Math.max(1, Math.min(2000, limit)));
 
   if (error) {
-    return NextResponse.json(
-      { error: "Select failed", details: error.message },
-      { status: 500 }
-    );
+    return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
   }
 
   const preps = (data ?? []).map((x: any) => ({
-    id: x.id,
-    title: x.title,
-    counts: x.counts,
+    id: String(x.id),
+    title: String(x.title ?? ""),
+    counts: Number(x.counts ?? 0),
     unit: normUnit(x.unit),
-    category_id: x.category_id,
-    category_title: x.recipe_categories?.title ?? null,
-    created_at: x.created_at,
+    category_id: x.prep_category_id != null ? String(x.prep_category_id) : null,
+    category_title: x.prep_category?.title != null ? String(x.prep_category.title) : null,
+    created_at: x.created_at ?? null,
   }));
 
   return NextResponse.json({ ok: true, preps }, { status: 200 });

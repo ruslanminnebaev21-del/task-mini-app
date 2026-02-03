@@ -2963,10 +2963,13 @@ color: #2a3323;
   inset: 0;
   z-index: 50;
   background: rgba(0, 0, 0, 0.35);
+
   display: flex;
-  align-items: center;
   justify-content: center;
+  align-items: flex-start;
+
   padding: 16px;
+  padding-top: 100px; /* отступ от верха */
 }
 
 .modalCard {
@@ -2974,8 +2977,6 @@ color: #2a3323;
   border-radius: 18px;
   padding: 14px;
   background: #fff;
-
-  margin-top: -500px; /* ⬅️ регулируешь высоту от верха */
 }
 
 .modalHead {
