@@ -59,13 +59,11 @@ export async function GET(req: Request) {
       unit,
       category_id,
       created_at,
-      category:recipe_categories!recipes_preps_category_id_fkey (
-        title,
-        user_id
+      recipe_categories (
+        title
       )
     `)
-    .eq("user_id", uid)
-    .or(`category.is.null,category.user_id.eq.${uid}`);
+    .eq("user_id", uid);
 
   if (view === "stock") query = query.gt("counts", 0);
   if (view === "out") query = query.lte("counts", 0);
