@@ -512,6 +512,21 @@
   margin-top: 2px;
   opacity: 0.55;
 }
+.EditBtn {
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-top: 2px;
+  opacity: 0.4;
+}
+
+
 .iconSmallBtn {
   width: 20px;
   height: 20px;

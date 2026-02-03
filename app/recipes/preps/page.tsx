@@ -5,7 +5,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import styles from "../recipes.module.css";
 import PageFade from "@/app/components/PageFade/PageFade";
-import { IconArrow, IconPlus, IconTrash } from "@/app/components/icons";
+import { IconArrow, IconPlus, IconTrash, IconEdit } from "@/app/components/icons";
 import RecMenu from "@/app/components/RecMenu/RecMenu";
 
 type Unit = "portions" | "pieces";
@@ -15,7 +15,9 @@ type Prep = {
   title: string;
   counts: number;
   unit?: Unit | null;
+  category_id?: string | null;
   category_title?: string | null;
+
 };
 
 type PrepCategory = {
@@ -121,8 +123,16 @@ export default function PrepsPage() {
   const [newCount, setNewCount] = useState("");
   const [saving, setSaving] = useState(false);
   const [showForm, setShowForm] = useState(false);
-
+  const [isEditing, setIsEditing] = useState(false); // режим формы: создание/редактирование
+  const [editId, setEditId] = useState<string | null>(null); // id редактируемой заготовки
   const titleInputRef = useRef<HTMLInputElement | null>(null);
+  const formWrapRef = useRef<HTMLDivElement | null>(null);
+
+  function scrollToForm() {
+    const el = formWrapRef.current;
+    if (!el) return;
+    el.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
 
   // ✅ сортируем внутри useMemo (items не мутируем)
   const inStock = useMemo(
@@ -175,6 +185,7 @@ export default function PrepsPage() {
           title: String(p.title ?? ""),
           counts: Number(p.counts ?? 0),
           unit: p.unit === "pieces" || p.unit === "portions" ? p.unit : null,
+          category_id: p.category_id != null ? String(p.category_id) : null, // <-- добавь
           category_title: p.category_title != null ? String(p.category_title) : null,
         }));
 
@@ -219,9 +230,106 @@ export default function PrepsPage() {
 
   // ===== ACTIONS =====
   const focusAddForm = () => {
+    setHint(null);
+    setIsEditing(false);
+    setEditId(null);
+
     setShowForm(true);
-    requestAnimationFrame(() => titleInputRef.current?.focus());
+    requestAnimationFrame(() => {
+      scrollToForm();
+      titleInputRef.current?.focus();
+    });
   };
+  function closeForm() {
+    setShowForm(false);
+    setCatOpen(false);
+
+    setIsEditing(false);
+    setEditId(null);
+
+    setNewTitle("");
+    setNewCount("");
+    setUnit("portions");
+    setCategoryId("");
+  }
+  async function submitForm() {
+    if (saving) return;
+
+    const title = newTitle.trim();
+    if (!title) return;
+
+    if (isEditing) {
+      await onSaveEdit();
+      closeForm(); // по галочке закрываем форму
+    } else {
+      await onAdd();
+      closeForm(); // по галочке закрываем форму
+    }
+  }  
+
+  function openEdit(p: Prep) {
+    setHint(null);
+
+    setIsEditing(true);
+    setEditId(p.id);
+
+    setShowForm(true);
+
+    setNewTitle(p.title ?? "");
+    setNewCount(String(p.counts ?? 0));
+    setUnit(p.unit === "pieces" || p.unit === "portions" ? p.unit : "portions");
+    setCategoryId(p.category_id ? String(p.category_id) : "");
+    setCatOpen(false);
+
+    requestAnimationFrame(() => {
+      scrollToForm();
+      titleInputRef.current?.focus();
+    });
+  }
+
+
+  async function onSaveEdit() {
+    const id = editId; // <<< ВАЖНО
+    const title = newTitle.trim();
+    if (!id || !title || saving) return;
+
+    const counts = Math.max(0, Number(onlyDigits(newCount) || "0"));
+    const nextCatId = categoryId ? categoryId : null;
+    const nextCatTitle = nextCatId ? (categoryTitleById.get(nextCatId) ?? null) : null;
+
+    setSaving(true);
+    setHint(null);
+
+    try {
+      const res = await postJson<{
+        ok: boolean;
+        prep: { id: string; title: string; counts: number; unit?: Unit | null; category_title?: string | null };
+      }>("/api/recipes/EditPreps", {
+        id,
+        title,
+        counts,
+        unit,
+        category_id: nextCatId,
+      });
+
+      const p = res?.prep;
+      if (!p?.id) throw new Error("Bad response");
+
+      setItems((prev) =>
+        prev.map((x) =>
+          x.id === id
+            ? { ...x, title, counts, unit, category_id: nextCatId, category_title: nextCatTitle }
+            : x
+        )
+      );
+
+      showToast("Сохранено");
+    } catch (e: any) {
+      setHint(e?.message ?? "Не удалось сохранить");
+    } finally {
+      setSaving(false);
+    }
+  }
 
   const onAdd = async () => {
     const title = newTitle.trim();
@@ -271,11 +379,6 @@ export default function PrepsPage() {
         ...prev,
       ]);
 
-      setNewTitle("");
-      setNewCount("");
-      setUnit("portions");
-      setCategoryId("");
-      setShowForm(false);
       showToast("Добавлено");
 
       requestAnimationFrame(() => titleInputRef.current?.focus());
@@ -401,7 +504,15 @@ export default function PrepsPage() {
               </div>
             ) : null}
           </div>
-
+          <button
+            type="button"
+            className={styles.EditBtn}
+            onClick={() => openEdit(p)}
+            aria-label="Редактировать"
+            title="Редактировать"
+          >
+            <IconEdit size={14} />
+          </button>
           <button
             type="button"
             className={styles.trashBtn}
@@ -411,6 +522,8 @@ export default function PrepsPage() {
           >
             <IconTrash size={15} />
           </button>
+          
+          
         </div>
 
         <div className={styles.counterRow}>
@@ -431,8 +544,11 @@ export default function PrepsPage() {
           type="button"
           className={styles.bigCta}
           onClick={() => {
-            setShowForm((v) => !v);
-            requestAnimationFrame(() => titleInputRef.current?.focus());
+            if (showForm && !isEditing) {
+              closeForm(); // вторым кликом закрыть
+              return;
+            }
+            focusAddForm();
           }}
         >
           <div className={styles.bigCtaRow}>
@@ -444,7 +560,10 @@ export default function PrepsPage() {
         </button>
 
         {/* ===== ADD FORM ===== */}
-        <div className={`${styles.addFormWrap} ${showForm ? styles.addFormWrapOpen : ""}`}>
+        <div
+          ref={formWrapRef}
+          className={`${styles.addFormWrap} ${showForm ? styles.addFormWrapOpen : ""}`}
+        >
           <section className={`${styles.card} ${styles.addFormCard}`}>
             {hint ? <div className={styles.formHint}>{hint}</div> : null}
 
@@ -465,20 +584,22 @@ export default function PrepsPage() {
                       if (e.key === "Enter") {
                         e.preventDefault();
                         if (!canAdd) return;
-                        onAdd();
+                        submitForm();
                       }
                     }}
                   />
 
-                  <button
-                    type="button"
-                    className={`${styles.btnCircle} ${!canAdd ? styles.btnDisabled : ""}`}
-                    onClick={onAdd}
-                    disabled={!canAdd}
-                    title={!canAdd ? "Введи название" : saving ? "Сохраняю..." : "Добавить"}
-                  >
+                <button
+                  type="button"
+                  className={`${styles.btnCircle} ${!canAdd ? styles.btnDisabled : ""}`}
+                  onClick={submitForm}
+                  disabled={!canAdd}
+                  title={saving ? "Сохраняю..." : isEditing ? "Сохранить" : "Добавить"}
+                >
+                  {isEditing ? "✓" : (
                     <IconPlus size={18} className={saving ? styles.iconSpin : undefined} />
-                  </button>
+                  )}
+                </button>
                 </div>
               </div>
 
@@ -571,6 +692,7 @@ export default function PrepsPage() {
             </div>
           </section>
         </div>
+
 
         {loading ? <div className={styles.recipesState}>Загружаю…</div> : null}
 

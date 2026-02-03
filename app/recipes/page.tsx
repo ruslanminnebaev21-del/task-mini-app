@@ -587,8 +587,8 @@ export default function RecipesMainPage() {
                             spellCheck={false}
                             tabIndex={editMode && !isNone ? 0 : -1}
                             onClick={(e) => {
-                              // чтобы клик по тексту не запускал переход в список рецептов
-                              e.stopPropagation();
+                              // блокируем переход только в режиме редактирования (и когда реально редактируем текст)
+                              if (editMode || editingCatId === c.id) e.stopPropagation();
                             }}
                             onInput={(e) => {
                               if (!editMode || isNone || editingCatId !== c.id) return;
