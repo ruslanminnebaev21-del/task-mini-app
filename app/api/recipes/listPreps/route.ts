@@ -57,9 +57,9 @@ export async function GET(req: Request) {
       title,
       counts,
       unit,
-      category_id,
+      prep_category_id,
       created_at,
-      recipe_categories (
+      prep_category_id (
         title
       )
     `)

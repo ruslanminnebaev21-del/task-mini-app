@@ -1,8 +1,11 @@
 // app/recipes/preps/page.tsx
 
+
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import Link from "next/link";
+import { usePathname, useSearchParams } from "next/navigation";
 import styles from "../recipes.module.css";
 import PageFade from "@/app/components/PageFade/PageFade";
 import { IconArrow, IconPlus, IconTrash, IconEdit } from "@/app/components/icons";
@@ -17,7 +20,6 @@ type Prep = {
   unit?: Unit | null;
   category_id?: string | null;
   category_title?: string | null;
-
 };
 
 type PrepCategory = {
@@ -117,14 +119,15 @@ export default function PrepsPage() {
   const [catOpen, setCatOpen] = useState(false);
   const catWrapRef = useRef<HTMLDivElement | null>(null);
 
-  // ===== ADD FORM STATE =====
+  // ===== ADD/EDIT PREP FORM =====
   const [newTitle, setNewTitle] = useState("");
   const [unit, setUnit] = useState<Unit>("portions");
   const [newCount, setNewCount] = useState("");
   const [saving, setSaving] = useState(false);
   const [showForm, setShowForm] = useState(false);
-  const [isEditing, setIsEditing] = useState(false); // режим формы: создание/редактирование
-  const [editId, setEditId] = useState<string | null>(null); // id редактируемой заготовки
+  const [isEditing, setIsEditing] = useState(false);
+  const [editId, setEditId] = useState<string | null>(null);
+
   const titleInputRef = useRef<HTMLInputElement | null>(null);
   const formWrapRef = useRef<HTMLDivElement | null>(null);
 
@@ -134,14 +137,22 @@ export default function PrepsPage() {
     el.scrollIntoView({ behavior: "smooth", block: "start" });
   }
 
-  // ✅ сортируем внутри useMemo (items не мутируем)
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const activeCatId = (searchParams.get("cat") ?? "").trim(); // "" = все
+
+  const filteredItems = useMemo(() => {
+    if (!activeCatId) return items;
+    return items.filter((x) => String(x.category_id ?? "") === activeCatId);
+  }, [items, activeCatId]);
+
   const inStock = useMemo(
-    () => items.filter((x) => (x.counts ?? 0) > 0).slice().sort(sortByTitle),
-    [items]
+    () => filteredItems.filter((x) => (x.counts ?? 0) > 0).slice().sort(sortByTitle),
+    [filteredItems]
   );
   const outOfStock = useMemo(
-    () => items.filter((x) => (x.counts ?? 0) <= 0).slice().sort(sortByTitle),
-    [items]
+    () => filteredItems.filter((x) => (x.counts ?? 0) <= 0).slice().sort(sortByTitle),
+    [filteredItems]
   );
 
   const canAdd = useMemo(() => newTitle.trim().length > 0 && !saving, [newTitle, saving]);
@@ -158,6 +169,136 @@ export default function PrepsPage() {
     if (!categoryId) return "";
     return categoryTitleById.get(categoryId) ?? "";
   }, [categoryId, categoryTitleById]);
+  type CatModalMode = "add" | "edit";
+
+  const [catModalMode, setCatModalMode] = useState<CatModalMode>("add");
+  const [catEdits, setCatEdits] = useState<Record<string, string>>({});  
+
+  // ===== ADD CATEGORY MODAL =====
+  const [catModalOpen, setCatModalOpen] = useState(false);
+  const [catTitle, setCatTitle] = useState("");
+  const [catSaving2, setCatSaving2] = useState(false);
+  const [catSavingId, setCatSavingId] = useState<string | null>(null);
+  const [catHint2, setCatHint2] = useState<string | null>(null);
+  const catInputRef = useRef<HTMLInputElement | null>(null);
+
+  const openCatModal = () => {
+    setCatModalMode("add");
+    setCatHint2(null);
+    setCatTitle("");
+    setCatModalOpen(true);
+    requestAnimationFrame(() => catInputRef.current?.focus());
+  };
+  const openCatEditModal = () => {
+    setCatModalMode("edit");
+    setCatHint2(null);
+    setCatTitle(""); // в edit не нужен, но пусть очищается
+    setCatEdits(() => {
+      const m: Record<string, string> = {};
+      for (const c of categories) m[String(c.id)] = String(c.title ?? "");
+      return m;
+    });
+    setCatModalOpen(true);
+    requestAnimationFrame(() => {
+      // фокус на первый инпут списка (если найдется)
+      const first = document.querySelector<HTMLInputElement>("[data-cat-edit='1']");
+      first?.focus();
+    });
+  };
+
+  const closeCatModal = () => {
+    if (catSaving2) return;
+    setCatModalOpen(false);
+    setCatHint2(null);
+    setCatTitle("");
+  };
+
+  async function addCategoryFromModal() {
+    const title = catTitle.trim();
+    if (!title || catSaving2) return;
+
+    setCatSaving2(true);
+    setCatHint2(null);
+
+    try {
+      const res = await postJson<{
+        ok: boolean;
+        category: { id: string; title: string; created_at?: string };
+      }>("/api/recipes/prepCategories/addPrepCategories", { title });
+
+      const c = res?.category;
+      if (!c?.id) throw new Error("Bad response");
+
+      setCategories((prev) => {
+        const exists = prev.some((x) => String(x.id) === String(c.id));
+        if (exists) return prev;
+        return [{ id: String(c.id), title: String(c.title ?? title).trim() }, ...prev].sort((a, b) =>
+          a.title.localeCompare(b.title, "ru", { sensitivity: "base" })
+        );
+      });
+
+      showToast("Категория добавлена");
+      setCatModalOpen(false);
+      setCatTitle("");
+    } catch (e: any) {
+      // title_exists приходит 409 из твоего роута
+      const msg = String(e?.message ?? "Не удалось добавить категорию");
+      setCatHint2(msg === "title_exists" ? "Такая категория уже есть" : msg);
+    } finally {
+      setCatSaving2(false);
+    }
+  }
+
+async function saveCategoryTitle(id: string) {
+  const title = (catEdits[id] ?? "").trim();
+  if (!title || catSaving2) return;
+
+  setCatSavingId(id);
+  setCatHint2(null);
+
+  try {
+    const res = await postJson<{
+      ok: boolean;
+      category: { id: string; title: string };
+    }>("/api/recipes/prepCategories/editPrepCategories", {
+      id,
+      title,
+    });
+
+    const c = res.category;
+
+    setCategories((prev) =>
+      prev.map((x) =>
+        x.id === c.id ? { ...x, title: c.title } : x
+      )
+    );
+
+    setItems((prev) =>
+      prev.map((p) =>
+        p.category_id === c.id
+          ? { ...p, category_title: c.title }
+          : p
+      )
+    );
+
+    showToast("Категория сохранена");
+  } catch (e: any) {
+    setCatHint2(e?.message ?? "Ошибка сохранения");
+  } finally {
+      setCatSavingId(null);
+
+  }
+}
+
+  useEffect(() => {
+    if (!catModalOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") closeCatModal();
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [catModalOpen, catSaving2]);
 
   // ===== LOAD LIST + CATEGORIES =====
   useEffect(() => {
@@ -172,10 +313,9 @@ export default function PrepsPage() {
 
         const [prepsRes, catsRes] = await Promise.all([
           fetchJson<{ ok: boolean; preps: any[] }>("/api/recipes/listPreps"),
-          fetchJson<{ ok: boolean; categories: any[] }>("/api/recipes/listPrepCategories").catch(() => ({
-            ok: false,
-            categories: [],
-          })),
+          fetchJson<{ ok: boolean; categories: any[] }>("/api/recipes/prepCategories/listPrepCategories").catch(
+            () => ({ ok: false, categories: [] })
+          ),
         ]);
 
         if (!alive) return;
@@ -185,7 +325,7 @@ export default function PrepsPage() {
           title: String(p.title ?? ""),
           counts: Number(p.counts ?? 0),
           unit: p.unit === "pieces" || p.unit === "portions" ? p.unit : null,
-          category_id: p.category_id != null ? String(p.category_id) : null, // <-- добавь
+          category_id: p.category_id != null ? String(p.category_id) : null,
           category_title: p.category_title != null ? String(p.category_title) : null,
         }));
 
@@ -240,6 +380,7 @@ export default function PrepsPage() {
       titleInputRef.current?.focus();
     });
   };
+
   function closeForm() {
     setShowForm(false);
     setCatOpen(false);
@@ -252,6 +393,7 @@ export default function PrepsPage() {
     setUnit("portions");
     setCategoryId("");
   }
+
   async function submitForm() {
     if (saving) return;
 
@@ -260,12 +402,12 @@ export default function PrepsPage() {
 
     if (isEditing) {
       await onSaveEdit();
-      closeForm(); // по галочке закрываем форму
+      closeForm();
     } else {
       await onAdd();
-      closeForm(); // по галочке закрываем форму
+      closeForm();
     }
-  }  
+  }
 
   function openEdit(p: Prep) {
     setHint(null);
@@ -287,9 +429,8 @@ export default function PrepsPage() {
     });
   }
 
-
   async function onSaveEdit() {
-    const id = editId; // <<< ВАЖНО
+    const id = editId;
     const title = newTitle.trim();
     if (!id || !title || saving) return;
 
@@ -317,9 +458,7 @@ export default function PrepsPage() {
 
       setItems((prev) =>
         prev.map((x) =>
-          x.id === id
-            ? { ...x, title, counts, unit, category_id: nextCatId, category_title: nextCatTitle }
-            : x
+          x.id === id ? { ...x, title, counts, unit, category_id: nextCatId, category_title: nextCatTitle } : x
         )
       );
 
@@ -371,16 +510,14 @@ export default function PrepsPage() {
           title: String(p.title ?? title),
           counts: Number(p.counts ?? counts),
           unit:
-            (p as any)?.unit === "pieces" || (p as any)?.unit === "portions"
-              ? (p as any).unit
-              : unit,
+            (p as any)?.unit === "pieces" || (p as any)?.unit === "portions" ? (p as any).unit : unit,
+          category_id: (p as any)?.category_id != null ? String((p as any).category_id) : catIdToSend,
           category_title: (p as any)?.category_title != null ? String((p as any).category_title) : catTitleLocal,
         },
         ...prev,
       ]);
 
       showToast("Добавлено");
-
       requestAnimationFrame(() => titleInputRef.current?.focus());
     } catch (e: any) {
       setHint(e?.message ?? "Не удалось добавить заготовку");
@@ -402,7 +539,9 @@ export default function PrepsPage() {
       if (!Number.isFinite(next)) throw new Error("Bad response");
       setItems((prev) => prev.map((x) => (x.id === id ? { ...x, counts: next } : x)));
     } catch (e: any) {
-      setItems((prev) => prev.map((x) => (x.id === id ? { ...x, counts: Math.max(0, (x.counts ?? 0) - 1) } : x)));
+      setItems((prev) =>
+        prev.map((x) => (x.id === id ? { ...x, counts: Math.max(0, (x.counts ?? 0) - 1) } : x))
+      );
       setHint(e?.message ?? "Не удалось обновить количество");
     } finally {
       setUpdatingIds((s) => {
@@ -419,7 +558,9 @@ export default function PrepsPage() {
     const cur = items.find((x) => x.id === id)?.counts ?? 0;
     if (cur <= 0) return;
 
-    setItems((prev) => prev.map((x) => (x.id === id ? { ...x, counts: Math.max(0, (x.counts ?? 0) - 1) } : x)));
+    setItems((prev) =>
+      prev.map((x) => (x.id === id ? { ...x, counts: Math.max(0, (x.counts ?? 0) - 1) } : x))
+    );
     setUpdatingIds((s) => new Set(s).add(id));
     setHint(null);
 
@@ -504,6 +645,7 @@ export default function PrepsPage() {
               </div>
             ) : null}
           </div>
+
           <button
             type="button"
             className={styles.EditBtn}
@@ -513,6 +655,7 @@ export default function PrepsPage() {
           >
             <IconEdit size={14} />
           </button>
+
           <button
             type="button"
             className={styles.trashBtn}
@@ -522,8 +665,6 @@ export default function PrepsPage() {
           >
             <IconTrash size={15} />
           </button>
-          
-          
         </div>
 
         <div className={styles.counterRow}>
@@ -545,7 +686,7 @@ export default function PrepsPage() {
           className={styles.bigCta}
           onClick={() => {
             if (showForm && !isEditing) {
-              closeForm(); // вторым кликом закрыть
+              closeForm();
               return;
             }
             focusAddForm();
@@ -559,11 +700,61 @@ export default function PrepsPage() {
           </div>
         </button>
 
-        {/* ===== ADD FORM ===== */}
-        <div
-          ref={formWrapRef}
-          className={`${styles.addFormWrap} ${showForm ? styles.addFormWrapOpen : ""}`}
-        >
+        {/* ===== TABS ===== */}
+        <nav className={styles.tabWrap} aria-label="Категории заготовок">
+          {/* IconPlus всегда -> ОТКРЫВАЕТ МОДАЛКУ добавления категории */}
+          <button
+            type="button"
+            className={styles.tabBadgeIcon}
+            title="Добавить категорию"
+            onClick={openCatModal}
+          >
+            <IconPlus size={12} />
+          </button>
+
+          {/* остальные табы только если есть категории */}
+           {/* IconEdit — только если есть хотя бы одна категория */}
+            {categories.length > 0 ? (
+             <button
+                type="button"
+                className={styles.tabBadgeIcon}
+                title="Редактировать категорию"
+                onClick={openCatEditModal}
+              >
+                <IconEdit size={12} />
+             </button>
+            ) : null}
+
+            {/* Фильтры */}
+            {categories.length > 0 ? (
+              <>
+                <Link
+                  href={pathname}
+                  className={`${styles.tabBadge} ${!activeCatId ? styles.tabBadgeActive : ""}`}
+                  title="Все"
+                >
+                  Все
+                </Link>
+
+                {categories.map((c) => {
+                  const active = activeCatId === c.id;
+                  return (
+                    <Link
+                      key={c.id}
+                      href={`${pathname}?cat=${encodeURIComponent(c.id)}`}
+                      className={`${styles.tabBadge} ${active ? styles.tabBadgeActive : ""}`}
+                      title={c.title}
+                    >
+                      {c.title}
+                    </Link>
+                  );
+                })}
+              </>
+            ) : null}
+          </nav>
+
+        {/* ===== ADD/EDIT PREP FORM ===== */}
+        <div ref={formWrapRef} className={`${styles.addFormWrap} ${showForm ? styles.addFormWrapOpen : ""}`}>
           <section className={`${styles.card} ${styles.addFormCard}`}>
             {hint ? <div className={styles.formHint}>{hint}</div> : null}
 
@@ -589,17 +780,15 @@ export default function PrepsPage() {
                     }}
                   />
 
-                <button
-                  type="button"
-                  className={`${styles.btnCircle} ${!canAdd ? styles.btnDisabled : ""}`}
-                  onClick={submitForm}
-                  disabled={!canAdd}
-                  title={saving ? "Сохраняю..." : isEditing ? "Сохранить" : "Добавить"}
-                >
-                  {isEditing ? "✓" : (
-                    <IconPlus size={18} className={saving ? styles.iconSpin : undefined} />
-                  )}
-                </button>
+                  <button
+                    type="button"
+                    className={`${styles.btnCircle} ${!canAdd ? styles.btnDisabled : ""}`}
+                    onClick={submitForm}
+                    disabled={!canAdd}
+                    title={saving ? "Сохраняю..." : isEditing ? "Сохранить" : "Добавить"}
+                  >
+                    {isEditing ? "✓" : <IconPlus size={18} className={saving ? styles.iconSpin : undefined} />}
+                  </button>
                 </div>
               </div>
 
@@ -670,9 +859,7 @@ export default function PrepsPage() {
 
                   <button
                     type="button"
-                    className={`${styles.chipBtn} ${styles.unitChip} ${
-                      unit === "portions" ? styles.chipBtnActive : ""
-                    }`}
+                    className={`${styles.chipBtn} ${styles.unitChip} ${unit === "portions" ? styles.chipBtnActive : ""}`}
                     onClick={() => setUnit("portions")}
                   >
                     Порции
@@ -680,9 +867,7 @@ export default function PrepsPage() {
 
                   <button
                     type="button"
-                    className={`${styles.chipBtn} ${styles.unitChip} ${
-                      unit === "pieces" ? styles.chipBtnActive : ""
-                    }`}
+                    className={`${styles.chipBtn} ${styles.unitChip} ${unit === "pieces" ? styles.chipBtnActive : ""}`}
                     onClick={() => setUnit("pieces")}
                   >
                     Штуки
@@ -692,7 +877,6 @@ export default function PrepsPage() {
             </div>
           </section>
         </div>
-
 
         {loading ? <div className={styles.recipesState}>Загружаю…</div> : null}
 
@@ -731,7 +915,118 @@ export default function PrepsPage() {
         </section>
 
         {toast ? <div className={styles.toast}>{toast}</div> : null}
+
       </PageFade>
+
+        {/* ===== MODAL: ADD CATEGORY ===== */}
+        {catModalOpen ? (
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-label="Добавить категорию"
+            className={styles.modalOverlay}
+            onMouseDown={(e) => {
+              if (e.target === e.currentTarget) closeCatModal();
+            }}
+          >
+            <div className={`${styles.card} ${styles.modalCard}`}>
+              <div className={styles.modalHead}>
+              <div className={styles.cardTitle}>
+                {catModalMode === "add" ? "Новая категория" : "Редактирование категорий"}
+              </div>
+
+                <button
+                  type="button"
+                  className={styles.sheetIconBtn}
+                  style={{fontSize: "13px"}}
+                  onClick={closeCatModal}
+                  disabled={catSaving2}
+                  title="Закрыть"
+                >
+                  ✕
+                </button>
+              </div>
+
+              {catHint2 ? <div className={`${styles.formHint} ${styles.modalHint}`}>{catHint2}</div> : null}
+
+              {catModalMode === "add" ? (
+                <div className={styles.modalRow}>
+                  <input
+                    ref={catInputRef}
+                    className={`${styles.input} ${styles.modalInput}`}
+                    value={catTitle}
+                    onChange={(e) => setCatTitle(e.target.value)}
+                    placeholder="Название категории"
+                    autoCorrect="on"
+                    autoCapitalize="sentences"
+                    spellCheck
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        addCategoryFromModal();
+                      }
+                    }}
+                  />
+
+                  <button
+                    type="button"
+                    className={`${styles.btnCircle} ${catSaving2 || !catTitle.trim() ? styles.btnDisabled : ""}`}
+                    onClick={addCategoryFromModal}
+                    disabled={catSaving2 || !catTitle.trim()}
+                    title={catSaving2 ? "Добавляю..." : "Добавить"}
+                  >
+                    <IconPlus size={18} className={catSaving2 ? styles.iconSpin : undefined} />
+                  </button>
+                </div>
+              ) : (
+                <div className={styles.modalEditList}>
+                  {categories.map((c, idx) => {
+                    const id = String(c.id);
+                    const value = catEdits[id] ?? "";
+
+                    return (
+                      <div key={id} className={styles.modalRow}>
+                        <input
+                          data-cat-edit={idx === 0 ? "1" : "0"}
+                          className={`${styles.input} ${styles.modalInput}`}
+                          value={value}
+                          onChange={(e) =>
+                            setCatEdits((prev) => ({ ...prev, [id]: e.target.value }))
+                          }
+                          placeholder="Название категории"
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") {
+                              e.preventDefault();
+                              saveCategoryTitle(id);
+                            }
+                          }}
+                        />
+
+                        <button
+                          type="button"
+                          className={`${styles.btnCircle} ${
+                            !value.trim() || catSavingId ? styles.btnDisabled : ""
+                          }`}
+                          onClick={() => saveCategoryTitle(id)}
+                          disabled={!value.trim() || catSavingId !== null}
+                          title="Сохранить"
+                        >
+                          <IconPlus
+                            size={18}
+                            className={catSavingId === id ? styles.iconSpin : undefined}
+                          />
+                        </button>
+                     </div>
+                    );
+                  })}
+                </div>
+              )}
+
+              
+            </div>
+          </div>
+        ) : null}       
+
 
       <RecMenu />
     </div>

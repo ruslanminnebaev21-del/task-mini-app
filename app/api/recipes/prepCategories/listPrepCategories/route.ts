@@ -1,4 +1,5 @@
-// app/api/recipes/listPrepCategories/route.ts
+// app/api/recipes/prepCategory/listPrepCategories/route.ts
+
 import { NextResponse } from "next/server";
 import jwt from "jsonwebtoken";
 import { cookies } from "next/headers";
@@ -12,8 +13,7 @@ async function getUidFromSession(): Promise<number | null> {
   try {
     const payload = jwt.verify(token, process.env.APP_JWT_SECRET!) as any;
     const uid = Number(payload?.uid);
-    if (!uid || Number.isNaN(uid)) return null;
-    return uid;
+    return Number.isFinite(uid) ? uid : null;
   } catch {
     return null;
   }
@@ -25,20 +25,23 @@ function cleanStr(v: any) {
 
 export async function GET() {
   const uid = await getUidFromSession();
-  if (!uid) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!uid) return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
 
   const { data, error } = await supabaseAdmin
-    .from("recipe_categories")
-    .select("id, title")
-    .eq("user_id", uid) // ✅ только категории текущего пользователя
+    .from("preps_categories")
+    .select("id, title, created_at")
+    .eq("user_id", uid)
     .order("title", { ascending: true });
 
   if (error) {
-    return NextResponse.json({ error: "Select failed", details: error.message }, { status: 500 });
+    return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
   }
 
   const categories = (data ?? [])
-    .map((c: any) => ({ id: String(c.id), title: cleanStr(c.title) }))
+    .map((c: any) => ({
+      id: String(c.id),
+      title: cleanStr(c.title),
+    }))
     .filter((c) => c.id && c.title);
 
   return NextResponse.json({ ok: true, categories }, { status: 200 });

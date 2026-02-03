@@ -661,6 +661,26 @@
   height: 16px;
   display: block;
 }
+.tabBadgeIcon {
+  display: inline-flex;
+  align-items: center;
+  width: 36px;
+  height: 36px;
+  justify-content: center; /* ← вот это */
+  border-radius: 16px;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  background: rgba(255, 255, 255, 0.62);
+  /*box-shadow: 0 10px 20px rgba(0, 0, 0, 0.06);*/
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  font-weight: 500;
+  font-size: 13px;
+  user-select: none;
+  white-space: nowrap;
+  height: 36px;
+  color: #111;
+  text-decoration: none;
+}
 
 /* цвет иконки в активном табе */
 .tabBadgeActive .tabIcon {
@@ -1445,12 +1465,14 @@ color: #2a3323;
   position: fixed;
   inset: 0;
   z-index: 50;
+
   background: rgba(0, 0, 0, 0.35);
-  backdrop-filter: blur(4px);
 
   display: flex;
-  align-items: center;
   justify-content: center;
+  align-items: flex-start; /* ⬅️ вместо center */
+
+  padding: 16px;
 }
 
 .modalBox {
@@ -2932,4 +2954,52 @@ color: #2a3323;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* ===== Modal: Add Category ===== */
+
+.modalOverlay {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  background: rgba(0, 0, 0, 0.35);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+}
+
+.modalCard {
+  width: min(520px, 100%);
+  border-radius: 18px;
+  padding: 14px;
+  background: #fff;
+
+  margin-top: -500px; /* ⬅️ регулируешь высоту от верха */
+}
+
+.modalHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.modalHint {
+  margin-top: 10px;
+}
+
+.modalRow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.modalInput {
+  flex: 1;
+}
+
+.modalNote {
+  margin-top: 10px;
 }
