@@ -37,7 +37,7 @@ export function useTelegramAuth() {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             credentials: "include",
-            body: JSON.stringify({ initData: "dev" }),
+            body: JSON.stringify({ initData: "dev", path: window.location.pathname }),
           });
 
           const j = await r.json().catch(() => ({} as any));
@@ -65,7 +65,7 @@ export function useTelegramAuth() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
-        body: JSON.stringify({ initData }),
+        body: JSON.stringify({ initData, path: window.location.pathname }),
       });
 
       const j = await r.json().catch(() => ({} as any));

@@ -1,3 +1,5 @@
+// app/recipes/page.tsx
+
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -5,6 +7,7 @@ import styles from "./recipes.module.css";
 import PageFade from "@/app/components/PageFade/PageFade";
 import { IconArrow, IconTrash, IconPlus, IconEdit } from "@/app/components/icons";
 import { useRouter } from "next/navigation";
+import { useTelegramAuth } from "@/app/hooks/useTelegramAuth";
 
 type Category = { id: string; title: string; order_index?: number | null };
 
@@ -48,6 +51,7 @@ async function postJson<T>(url: string, body: any): Promise<T> {
 }
 
 export default function RecipesMainPage() {
+  const { ready, hint } = useTelegramAuth();
   const router = useRouter();
 
   const [editMode, setEditMode] = useState(false);
@@ -83,6 +87,7 @@ export default function RecipesMainPage() {
   const pointerIdRef = useRef<number | null>(null);
 
   useEffect(() => {
+    if (!ready) return
     let alive = true;
 
     (async () => {
@@ -109,7 +114,7 @@ export default function RecipesMainPage() {
     return () => {
       alive = false;
     };
-  }, []);
+  }, [ready]);
 
   const rows: CategoryRow[] = useMemo(() => {
     const base = allCats.map((c) => ({
@@ -444,6 +449,7 @@ export default function RecipesMainPage() {
         <div className={styles.headerRow}>
           <h1 className={styles.h1}>Главная</h1>
         </div>
+        {hint ? <div className={styles.recipesError}>{hint}</div> : null}
 
         <button
           type="button"
