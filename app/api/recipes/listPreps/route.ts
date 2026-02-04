@@ -53,17 +53,19 @@ export async function GET(req: Request) {
     .from("recipes_preps")
     .select(
       `
-      id,
-      title,
-      counts,
-      unit,
-      prep_category_id,
-      created_at,
-      prep_category:prep_category_id (
         id,
-        title
-      )
-    `
+        title,
+        counts,
+        unit,
+        created_at,
+        preps_to_categories (
+          category_id,
+          category:category_id (
+            id,
+            title
+          )
+        )
+      `
     )
     .eq("user_id", uid);
 
@@ -78,15 +80,33 @@ export async function GET(req: Request) {
     return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
   }
 
-  const preps = (data ?? []).map((x: any) => ({
-    id: String(x.id),
-    title: String(x.title ?? ""),
-    counts: Number(x.counts ?? 0),
-    unit: normUnit(x.unit),
-    category_id: x.prep_category_id != null ? String(x.prep_category_id) : null,
-    category_title: x.prep_category?.title != null ? String(x.prep_category.title) : null,
-    created_at: x.created_at ?? null,
-  }));
+  const preps = (data ?? []).map((x: any) => {
+    const cats = Array.isArray(x.preps_to_categories) ? x.preps_to_categories : [];
+
+    const categories = cats
+      .map((r: any) => ({
+        id: r?.category?.id != null ? String(r.category.id) : (r?.category_id != null ? String(r.category_id) : ""),
+        title: r?.category?.title != null ? String(r.category.title) : "",
+      }))
+      .filter((c: any) => c.id && c.title);
+
+    // если где-то фронт ещё ждёт старые поля — оставим "первую" категорию
+    const first = categories[0] ?? null;
+
+    return {
+      id: String(x.id),
+      title: String(x.title ?? ""),
+      counts: Number(x.counts ?? 0),
+      unit: normUnit(x.unit),
+      created_at: x.created_at ?? null,
+
+      categories, // ✅ массив категорий
+
+      // ✅ совместимость (можешь потом убрать)
+      category_id: first ? String(first.id) : null,
+      category_title: first ? String(first.title) : null,
+    };
+  });
 
   return NextResponse.json({ ok: true, preps }, { status: 200 });
 }

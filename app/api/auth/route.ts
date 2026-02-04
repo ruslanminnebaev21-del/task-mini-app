@@ -1,3 +1,4 @@
+// task-mini-app/app/api/auth/route.ts
 import { NextResponse } from "next/server";
 import jwt from "jsonwebtoken";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
@@ -55,7 +56,13 @@ export async function POST(req: Request) {
     const initData = String(body?.initData || "");
     
 
-    const botToken = process.env.TELEGRAM_BOT_TOKEN;
+  const ref = req.headers.get("referer") || "";
+
+  // B = /recipes, A = всё остальное
+  const botToken = ref.includes("/recipes")
+    ? process.env.TELEGRAM_BOT_TOKEN_B
+    : process.env.TELEGRAM_BOT_TOKEN_A;
+
     if (!botToken) {
       return NextResponse.json({ ok: false, reason: "NO_BOT_TOKEN_IN_ENV" }, { status: 500 });
     }
@@ -99,6 +106,7 @@ export async function POST(req: Request) {
     const token = jwt.sign({ uid: user.id }, secret, { expiresIn: "30d" });
 
     const res = NextResponse.json({ ok: true });
+    res.headers.set("x-bot-variant", ref.includes("/recipes") ? "B" : "A");
 
 const cookieSecure = process.env.NODE_ENV === "production";
 

@@ -174,9 +174,13 @@
 }
 
 .tabBadgeActive {
-  /*border: 1px solid rgba(0, 0, 0, 0.16);
-  background: rgba(17, 17, 17, 0.92);
-  color: #fff;*/
+  border: 1px solid rgba(194, 220, 128, 0.55);
+  background: #c2dc80a1;
+  color: rgba(15, 23, 42, 0.92);
+
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.65) inset,
+    0 10px 22px rgba(194, 220, 128, 0.18);
 }
 
 .dot {
@@ -2857,6 +2861,14 @@ color: #2a3323;
   justify-content: center;  /* по горизонтали */
 
   text-align: center;
+
+   border: 1px solid rgba(194, 220, 128, 0.55);
+  background: rgba(194, 220, 128, 0.28);
+  color: rgba(15, 23, 42, 0.92);
+
+  /*box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.65) inset,
+    0 10px 22px rgba(194, 220, 128, 0.18);*/
 }
 .unitSelect {
   appearance: none;
@@ -2929,12 +2941,12 @@ color: #2a3323;
   text-align: left;
 }
 
-.unitCatItem:hover {
+/*.unitCatItem:hover {
   background: rgba(0,0,0,0.05);
-}
+}*/
 
 .unitCatItemActive {
-  border: 1px solid rgba(214, 112, 140, 0.45);
+  /*border: 1px solid rgba(214, 112, 140, 0.45);*/
   background: linear-gradient(
     135deg,
     #e88aa3,
@@ -3003,4 +3015,13 @@ color: #2a3323;
 
 .modalNote {
   margin-top: 10px;
+}
+.unitCatDone {
+  margin-top: 8px;
+  width: 100%;
+  border: 1px solid rgba(0,0,0,0.08);
+  border-radius: 12px;
+  background: rgba(255,255,255,0.7);
+  padding: 10px 12px;
+  text-align: center;
 }

@@ -13,11 +13,18 @@ import RecMenu from "@/app/components/RecMenu/RecMenu";
 
 type Unit = "portions" | "pieces";
 
+type PrepCategoryRef = { id: string; title: string };
+
 type Prep = {
   id: string;
   title: string;
   counts: number;
   unit?: Unit | null;
+
+  // новое
+  categories?: PrepCategoryRef[];
+
+  // можно оставить для совместимости (пока где-то используется)
   category_id?: string | null;
   category_title?: string | null;
 };
@@ -114,7 +121,7 @@ export default function PrepsPage() {
   // ===== CATEGORIES =====
   const [categories, setCategories] = useState<PrepCategory[]>([]);
   const [catLoading, setCatLoading] = useState(false);
-  const [categoryId, setCategoryId] = useState<string>(""); // "" = без категории
+  const [categoryIds, setCategoryIds] = useState<string[]>([]); // [] = без категорий
 
   const [catOpen, setCatOpen] = useState(false);
   const catWrapRef = useRef<HTMLDivElement | null>(null);
@@ -131,10 +138,12 @@ export default function PrepsPage() {
   const titleInputRef = useRef<HTMLInputElement | null>(null);
   const formWrapRef = useRef<HTMLDivElement | null>(null);
 
-  function scrollToForm() {
+  function scrollToForm(offset = 80) {
     const el = formWrapRef.current;
     if (!el) return;
-    el.scrollIntoView({ behavior: "smooth", block: "start" });
+
+    const top = el.getBoundingClientRect().top + window.scrollY - offset;
+    window.scrollTo({ top, behavior: "smooth" });
   }
 
   const pathname = usePathname();
@@ -143,7 +152,7 @@ export default function PrepsPage() {
 
   const filteredItems = useMemo(() => {
     if (!activeCatId) return items;
-    return items.filter((x) => String(x.category_id ?? "") === activeCatId);
+    return items.filter((x) => (x.categories ?? []).some((c) => String(c.id) === activeCatId));
   }, [items, activeCatId]);
 
   const inStock = useMemo(
@@ -166,9 +175,14 @@ export default function PrepsPage() {
   }, [categories]);
 
   const selectedCatTitle = useMemo(() => {
-    if (!categoryId) return "";
-    return categoryTitleById.get(categoryId) ?? "";
-  }, [categoryId, categoryTitleById]);
+    const n = categoryIds.length;
+    if (n === 0) return "";
+    if (n === 1) return categoryTitleById.get(categoryIds[0]) ?? "";
+
+    // 2+ категорий
+    return `${n} кат`;
+  }, [categoryIds, categoryTitleById]);
+
   type CatModalMode = "add" | "edit";
 
   const [catModalMode, setCatModalMode] = useState<CatModalMode>("add");
@@ -289,6 +303,41 @@ async function saveCategoryTitle(id: string) {
 
   }
 }
+async function deleteCategory(id: string) {
+  if (catSaving2) return;
+
+  const ok = window.confirm("Удалить категорию?");
+  if (!ok) return;
+
+  setCatSavingId(id);
+  setCatHint2(null);
+
+  try {
+    await postJson<{ ok: boolean }>("/api/recipes/prepCategories/delPrepCategories", {
+      id,
+    });
+
+    // убираем категорию из списка
+    setCategories((prev) => prev.filter((c) => c.id !== id));
+
+    // убираем категорию из заготовок
+    setItems((prev) =>
+      prev.map((p) => ({
+        ...p,
+        categories: (p.categories ?? []).filter((c) => c.id !== id),
+      }))
+    );
+
+    // если категория была выбрана в форме — убираем
+    setCategoryIds((prev) => prev.filter((cid) => cid !== id));
+
+    showToast("Категория удалена");
+  } catch (e: any) {
+    setCatHint2(e?.message ?? "Ошибка удаления");
+  } finally {
+    setCatSavingId(null);
+  }
+}
 
   useEffect(() => {
     if (!catModalOpen) return;
@@ -325,10 +374,20 @@ async function saveCategoryTitle(id: string) {
           title: String(p.title ?? ""),
           counts: Number(p.counts ?? 0),
           unit: p.unit === "pieces" || p.unit === "portions" ? p.unit : null,
+
+          categories: Array.isArray(p.categories)
+            ? p.categories
+                .map((c: any) => ({
+                  id: String(c.id),
+                  title: String(c.title ?? "").trim(),
+                }))
+                .filter((c: any) => c.id && c.title)
+            : [],
+
+          // на всякий (если где-то ещё используешь старые поля)
           category_id: p.category_id != null ? String(p.category_id) : null,
           category_title: p.category_title != null ? String(p.category_title) : null,
         }));
-
         const cats: PrepCategory[] = (catsRes?.categories ?? [])
           .map((c: any) => ({
             id: String(c.id),
@@ -371,12 +430,23 @@ async function saveCategoryTitle(id: string) {
   // ===== ACTIONS =====
   const focusAddForm = () => {
     setHint(null);
+
+    // режим добавления
     setIsEditing(false);
     setEditId(null);
 
+    // очистка формы
+    setNewTitle("");
+    setNewCount("");
+    setUnit("portions");
+    setCategoryIds([]);
+
+    // закрыть дропдаун категорий
+    setCatOpen(false);
+
+    // открыть форму + фокус
     setShowForm(true);
     requestAnimationFrame(() => {
-      scrollToForm();
       titleInputRef.current?.focus();
     });
   };
@@ -391,7 +461,7 @@ async function saveCategoryTitle(id: string) {
     setNewTitle("");
     setNewCount("");
     setUnit("portions");
-    setCategoryId("");
+    setCategoryIds([]);
   }
 
   async function submitForm() {
@@ -420,11 +490,11 @@ async function saveCategoryTitle(id: string) {
     setNewTitle(p.title ?? "");
     setNewCount(String(p.counts ?? 0));
     setUnit(p.unit === "pieces" || p.unit === "portions" ? p.unit : "portions");
-    setCategoryId(p.category_id ? String(p.category_id) : "");
+    setCategoryIds((p.categories ?? []).map((c) => String(c.id)));
     setCatOpen(false);
 
     requestAnimationFrame(() => {
-      scrollToForm();
+      scrollToForm(80); // 50-100px, я поставил 80
       titleInputRef.current?.focus();
     });
   }
@@ -435,8 +505,8 @@ async function saveCategoryTitle(id: string) {
     if (!id || !title || saving) return;
 
     const counts = Math.max(0, Number(onlyDigits(newCount) || "0"));
-    const nextCatId = categoryId ? categoryId : null;
-    const nextCatTitle = nextCatId ? (categoryTitleById.get(nextCatId) ?? null) : null;
+    const nextCatIds = categoryIds.slice();
+    
 
     setSaving(true);
     setHint(null);
@@ -450,7 +520,7 @@ async function saveCategoryTitle(id: string) {
         title,
         counts,
         unit,
-        category_id: nextCatId,
+        category_ids: nextCatIds,
       });
 
       const p = res?.prep;
@@ -458,7 +528,15 @@ async function saveCategoryTitle(id: string) {
 
       setItems((prev) =>
         prev.map((x) =>
-          x.id === id ? { ...x, title, counts, unit, category_id: nextCatId, category_title: nextCatTitle } : x
+          x.id === id
+            ? {
+                ...x,
+                title,
+                counts,
+                unit,
+                categories: nextCatIds.map((cid) => ({ id: cid, title: categoryTitleById.get(cid) ?? "" })).filter((c) => c.title),
+              }
+            : x
         )
       );
 
@@ -475,8 +553,8 @@ async function saveCategoryTitle(id: string) {
     if (!title || saving) return;
 
     const counts = Math.max(0, Number(onlyDigits(newCount) || "0"));
-    const catIdToSend = categoryId ? categoryId : null;
-    const catTitleLocal = categoryId ? (categoryTitleById.get(categoryId) ?? null) : null;
+    const catIdsToSend = categoryIds.slice();
+    
 
     setSaving(true);
     setHint(null);
@@ -498,7 +576,7 @@ async function saveCategoryTitle(id: string) {
         title,
         counts,
         unit,
-        category_id: catIdToSend,
+        category_ids: catIdsToSend,
       });
 
       const p = res?.prep;
@@ -509,10 +587,15 @@ async function saveCategoryTitle(id: string) {
           id: String(p.id),
           title: String(p.title ?? title),
           counts: Number(p.counts ?? counts),
-          unit:
-            (p as any)?.unit === "pieces" || (p as any)?.unit === "portions" ? (p as any).unit : unit,
-          category_id: (p as any)?.category_id != null ? String((p as any).category_id) : catIdToSend,
-          category_title: (p as any)?.category_title != null ? String((p as any).category_title) : catTitleLocal,
+          unit: (p as any)?.unit === "pieces" || (p as any)?.unit === "portions" ? (p as any).unit : unit,
+
+          categories: Array.isArray((p as any)?.categories)
+            ? (p as any).categories.map((c: any) => ({ id: String(c.id), title: String(c.title ?? "").trim() }))
+            : catIdsToSend.map((id) => ({ id, title: categoryTitleById.get(id) ?? "" })).filter((c) => c.title),
+
+          // совместимость
+          category_id: (p as any)?.category_id != null ? String((p as any).category_id) : null,
+          category_title: (p as any)?.category_title != null ? String((p as any).category_title) : null,
         },
         ...prev,
       ]);
@@ -631,7 +714,7 @@ async function saveCategoryTitle(id: string) {
   };
 
   const PrepListItem = ({ p }: { p: Prep }) => {
-    const cat = (p.category_title ?? "").trim();
+    const cats = (p.categories ?? []).filter((c) => (c.title ?? "").trim());
 
     return (
       <div className={styles.listItem}>
@@ -639,9 +722,11 @@ async function saveCategoryTitle(id: string) {
           <div className={styles.listItemMain}>
             <div className={styles.titleText}>{p.title || "Без названия"}</div>
 
-            {cat ? (
+            {cats.length ? (
               <div className={styles.metaRow}>
-                <span className={styles.chip}>{cat}</span>
+                {cats.map((c) => (
+                  <span key={c.id} className={styles.chip}>{c.title}</span>
+                ))}
               </div>
             ) : null}
           </div>
@@ -702,7 +787,7 @@ async function saveCategoryTitle(id: string) {
 
         {/* ===== TABS ===== */}
         <nav className={styles.tabWrap} aria-label="Категории заготовок">
-          {/* IconPlus всегда -> ОТКРЫВАЕТ МОДАЛКУ добавления категории */}
+          {/* + всегда */}
           <button
             type="button"
             className={styles.tabBadgeIcon}
@@ -712,46 +797,44 @@ async function saveCategoryTitle(id: string) {
             <IconPlus size={12} />
           </button>
 
-          {/* остальные табы только если есть категории */}
-           {/* IconEdit — только если есть хотя бы одна категория */}
-            {categories.length > 0 ? (
-             <button
-                type="button"
-                className={styles.tabBadgeIcon}
-                title="Редактировать категорию"
-                onClick={openCatEditModal}
-              >
-                <IconEdit size={12} />
-             </button>
-            ) : null}
+          {/* ✎ только если есть категории */}
+          {categories.length > 0 ? (
+            <button
+              type="button"
+              className={styles.tabBadgeIcon}
+              title="Редактировать категорию"
+              onClick={openCatEditModal}
+            >
+              <IconEdit size={12} />
+            </button>
+          ) : null}
 
-            {/* Фильтры */}
-            {categories.length > 0 ? (
-              <>
-                <Link
-                  href={pathname}
-                  className={`${styles.tabBadge} ${!activeCatId ? styles.tabBadgeActive : ""}`}
-                  title="Все"
-                >
-                  Все
-                </Link>
+          {/* Все всегда */}
+          <Link
+            href={pathname}
+            className={`${styles.tabBadge} ${!activeCatId ? styles.tabBadgeActive : ""}`}
+            title="Все"
+          >
+            Все
+          </Link>
 
-                {categories.map((c) => {
-                  const active = activeCatId === c.id;
-                  return (
-                    <Link
-                      key={c.id}
-                      href={`${pathname}?cat=${encodeURIComponent(c.id)}`}
-                      className={`${styles.tabBadge} ${active ? styles.tabBadgeActive : ""}`}
-                      title={c.title}
-                    >
-                      {c.title}
-                    </Link>
-                  );
-                })}
-              </>
-            ) : null}
-          </nav>
+          {/* Категории только если есть */}
+          {categories.length > 0
+            ? categories.map((c) => {
+                const active = activeCatId === c.id;
+                return (
+                  <Link
+                    key={c.id}
+                    href={`${pathname}?cat=${encodeURIComponent(c.id)}`}
+                    className={`${styles.tabBadge} ${active ? styles.tabBadgeActive : ""}`}
+                    title={c.title}
+                  >
+                    {c.title}
+                  </Link>
+                );
+              })
+            : null}
+        </nav>
 
         {/* ===== ADD/EDIT PREP FORM ===== */}
         <div ref={formWrapRef} className={`${styles.addFormWrap} ${showForm ? styles.addFormWrapOpen : ""}`}>
@@ -798,7 +881,7 @@ async function saveCategoryTitle(id: string) {
                     <button
                       type="button"
                       className={`${styles.chipBtn} ${styles.unitChip} ${
-                        categoryId ? styles.chipBtnActive : ""
+                        categoryIds.length ? styles.chipBtnActive : ""
                       } ${styles.unitCatBtn}`}
                       onClick={() => {
                         if (catLoading) return;
@@ -815,29 +898,35 @@ async function saveCategoryTitle(id: string) {
                     </button>
 
                     {catOpen ? (
-                      <div className={styles.unitCatMenu} role="listbox" aria-label="Категории">
+                      <div
+                        className={styles.unitCatMenu}
+                        role="listbox"
+                        aria-label="Категории"
+                        onMouseDown={(e) => e.stopPropagation()}
+                        onTouchStart={(e) => e.stopPropagation()}
+                      >
                         <button
                           type="button"
-                          className={`${styles.unitCatItem} ${!categoryId ? styles.unitCatItemActive : ""}`}
+                          className={`${styles.unitCatItem} ${categoryIds.length === 0 ? styles.unitCatItemActive : ""}`}
                           onClick={() => {
-                            setCategoryId("");
-                            setCatOpen(false);
+                            setCategoryIds([]);
+                            // меню не закрываем
                           }}
                         >
-                          <span className={styles.unitCatCheck}>{!categoryId ? "✓" : ""}</span>
-                          <span className={styles.unitCatItemText}>Без категории</span>
+                          <span className={styles.unitCatCheck}>{categoryIds.length === 0 ? "✓" : ""}</span>
+                          <span className={styles.unitCatItemText}>Без категорий</span>
                         </button>
 
                         {categories.map((c) => {
-                          const active = categoryId === c.id;
+                          const active = categoryIds.includes(c.id);
                           return (
                             <button
                               key={c.id}
                               type="button"
                               className={`${styles.unitCatItem} ${active ? styles.unitCatItemActive : ""}`}
                               onClick={() => {
-                                setCategoryId(c.id);
-                                setCatOpen(false);
+                                setCategoryIds((prev) => (prev.includes(c.id) ? prev.filter((x) => x !== c.id) : [...prev, c.id]));
+                                // меню не закрываем
                               }}
                             >
                               <span className={styles.unitCatCheck}>{active ? "✓" : ""}</span>
@@ -845,6 +934,8 @@ async function saveCategoryTitle(id: string) {
                             </button>
                           );
                         })}
+
+                        
                       </div>
                     ) : null}
                   </div>
@@ -986,6 +1077,15 @@ async function saveCategoryTitle(id: string) {
 
                     return (
                       <div key={id} className={styles.modalRow}>
+                        <button
+                          type="button"
+                          className={styles.trashBtn}
+                          onClick={() => deleteCategory(id)}
+                          disabled={catSavingId === id}
+                          title="Удалить категорию"
+                        >
+                          <IconTrash size={15} />
+                        </button>
                         <input
                           data-cat-edit={idx === 0 ? "1" : "0"}
                           className={`${styles.input} ${styles.modalInput}`}
