@@ -1,4 +1,5 @@
 // app/api/recipes/newPreps/route.ts
+
 import { NextResponse } from "next/server";
 import jwt from "jsonwebtoken";
 import { cookies } from "next/headers";
@@ -6,8 +7,8 @@ import { supabaseAdmin } from "@/lib/supabaseAdmin";
 
 type PrepUnit = "portions" | "pieces";
 
-// ⚠️ если у тебя таблица категорий называется иначе — поменяй тут
-const PREP_CATS_TABLE = "recipes_prep_categories";
+const PREP_CATS_TABLE = "preps_categories";
+const PREPS_TABLE = "recipes_preps";
 
 async function getUidFromSession(): Promise<number | null> {
   const c = await cookies();
@@ -17,8 +18,7 @@ async function getUidFromSession(): Promise<number | null> {
   try {
     const payload = jwt.verify(token, process.env.APP_JWT_SECRET!) as any;
     const uid = Number(payload?.uid);
-    if (!uid || Number.isNaN(uid)) return null;
-    return uid;
+    return Number.isFinite(uid) ? uid : null;
   } catch {
     return null;
   }
@@ -39,25 +39,28 @@ function cleanUnit(v: any): PrepUnit {
   return s === "pieces" ? "pieces" : "portions";
 }
 
-// ✅ GET: список категорий для селекта
+function toIdOrNull(v: any) {
+  const s = cleanStr(v);
+  return s ? s : null;
+}
+
+// ✅ GET: список категорий для селекта (если тебе это реально нужно в этом роуте)
 export async function GET() {
   const uid = await getUidFromSession();
-  if (!uid) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!uid) return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
 
-  // если у категорий есть user_id — фильтруем по uid
-  // если user_id нет (общие категории) — просто убери .eq("user_id", uid)
   const { data, error } = await supabaseAdmin
     .from(PREP_CATS_TABLE)
-    .select("id, title")
+    .select("id,title,created_at")
     .eq("user_id", uid)
     .order("title", { ascending: true });
 
   if (error) {
-    return NextResponse.json({ error: "Select failed", details: error.message }, { status: 500 });
+    return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
   }
 
   const categories = (data ?? [])
-    .map((c: any) => ({ id: String(c.id), title: cleanStr(c.title) }))
+    .map((c: any) => ({ id: String(c.id), title: cleanStr(c.title), created_at: c.created_at ?? null }))
     .filter((c: any) => c.id && c.title);
 
   return NextResponse.json({ ok: true, categories }, { status: 200 });
@@ -66,56 +69,71 @@ export async function GET() {
 // ✅ POST: создание заготовки
 export async function POST(req: Request) {
   const uid = await getUidFromSession();
-  if (!uid) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!uid) return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
 
-  let body: any = null;
-  try {
-    body = await req.json();
-  } catch {
-    return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
-  }
+  const body = await req.json().catch(() => ({}));
 
   const title = cleanStr(body?.title);
-  const countsRaw = body?.counts ?? body?.count ?? body?.portions;
-  const counts = cleanInt(countsRaw);
-
-  const category_id = cleanStr(body?.category_id) || null;
+  const counts = cleanInt(body?.counts ?? body?.count ?? body?.portions ?? 0);
   const unit = cleanUnit(body?.unit);
 
-  if (!title) return NextResponse.json({ error: "title_required" }, { status: 400 });
-  if (counts === null) return NextResponse.json({ error: "counts_required" }, { status: 400 });
-  if (counts < 0) return NextResponse.json({ error: "counts_must_be_non_negative" }, { status: 400 });
+  // ВАЖНО: в таблице recipes_preps поле prep_category_id
+  const prep_category_id = toIdOrNull(body?.category_id ?? body?.prep_category_id);
+
+  if (!title) return NextResponse.json({ ok: false, error: "title_required" }, { status: 400 });
+  if (counts === null) return NextResponse.json({ ok: false, error: "counts_required" }, { status: 400 });
+  if (counts < 0) return NextResponse.json({ ok: false, error: "bad_counts" }, { status: 400 });
+
+  // Если пришла категория, проверяем что она существует и принадлежит пользователю
+  let category_title: string | null = null;
+
+  if (prep_category_id) {
+    const { data: cat, error: catErr } = await supabaseAdmin
+      .from(PREP_CATS_TABLE)
+      .select("id,title")
+      .eq("id", prep_category_id)
+      .eq("user_id", uid)
+      .maybeSingle();
+
+    if (catErr) {
+      return NextResponse.json({ ok: false, error: catErr.message }, { status: 500 });
+    }
+    if (!cat?.id) {
+      return NextResponse.json({ ok: false, error: "bad_category" }, { status: 400 });
+    }
+    category_title = cleanStr(cat.title) || null;
+  }
 
   const { data, error } = await supabaseAdmin
-    .from("recipes_preps")
+    .from(PREPS_TABLE)
     .insert({
       title,
       counts,
       unit,
-      category_id,
+      prep_category_id,
       user_id: uid,
     })
-    .select("id, title, counts, unit, category_id, user_id, created_at")
+    .select("id,title,counts,unit,prep_category_id,user_id,created_at")
     .single();
 
-  if (error) {
-    return NextResponse.json({ error: "Insert failed", details: error.message }, { status: 500 });
-  }
-
-  let category_title: string | null = null;
-
-  if (category_id) {
-    const { data: cat, error: catErr } = await supabaseAdmin
-      .from(PREP_CATS_TABLE)
-      .select("title")
-      .eq("id", category_id)
-      .maybeSingle();
-
-    if (!catErr) category_title = cleanStr(cat?.title) || null;
+  if (error || !data) {
+    return NextResponse.json({ ok: false, error: error?.message ?? "insert_failed" }, { status: 500 });
   }
 
   return NextResponse.json(
-    { ok: true, prep: { ...data, category_title } },
+    {
+      ok: true,
+      prep: {
+        id: String(data.id),
+        title: String(data.title ?? title),
+        counts: Number(data.counts ?? counts),
+        unit: data.unit,
+        category_id: data.prep_category_id != null ? String(data.prep_category_id) : null,
+        category_title,
+        user_id: Number(data.user_id ?? uid),
+        created_at: data.created_at ?? null,
+      },
+    },
     { status: 200 }
   );
 }

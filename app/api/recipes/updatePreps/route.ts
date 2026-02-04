@@ -13,8 +13,7 @@ async function getUidFromSession(): Promise<number | null> {
   try {
     const payload = jwt.verify(token, process.env.APP_JWT_SECRET!) as any;
     const uid = Number(payload?.uid);
-    if (!uid || Number.isNaN(uid)) return null;
-    return uid;
+    return Number.isFinite(uid) ? uid : null;
   } catch {
     return null;
   }
@@ -28,91 +27,98 @@ function toIntOrNull(v: any) {
   if (v === null || v === undefined) return null;
   const s = String(v).trim();
   if (!s) return null;
-
   const n = Number(s);
   if (!Number.isFinite(n)) return null;
-
   return Math.trunc(n);
 }
 
 export async function POST(req: Request) {
   const uid = await getUidFromSession();
-  if (!uid) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!uid) return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
 
-  let body: any = null;
-  try {
-    body = await req.json();
-  } catch {
-    return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
-  }
+  const body = await req.json().catch(() => ({}));
 
   const id = cleanStr(body?.id);
   const counts = toIntOrNull(body?.counts);
   const delta = toIntOrNull(body?.delta);
 
-  if (!id) {
-    return NextResponse.json({ error: "id_required" }, { status: 400 });
-  }
-
-  // Разрешаем либо counts, либо delta (или оба, но приоритет counts)
+  if (!id) return NextResponse.json({ ok: false, error: "id_required" }, { status: 400 });
   if (counts === null && delta === null) {
-    return NextResponse.json({ error: "counts_or_delta_required" }, { status: 400 });
+    return NextResponse.json({ ok: false, error: "counts_or_delta_required" }, { status: 400 });
   }
 
-  // Если прислали counts — просто обновляем
+  // 1) Если пришёл counts — обновляем напрямую
   if (counts !== null) {
-    if (counts < 0) {
-      return NextResponse.json({ error: "counts_must_be_non_negative" }, { status: 400 });
-    }
+    if (counts < 0) return NextResponse.json({ ok: false, error: "bad_counts" }, { status: 400 });
 
     const { data, error } = await supabaseAdmin
       .from("recipes_preps")
       .update({ counts })
       .eq("id", id)
       .eq("user_id", uid)
-      .select("id, title, counts, unit, category_id, user_id, created_at")
-      .single();
+      // важно: поле категории = prep_category_id
+      .select("id,title,counts,unit,prep_category_id,created_at")
+      .maybeSingle();
 
     if (error) {
-      return NextResponse.json({ error: "Update failed", details: error.message }, { status: 500 });
+      return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
     }
-
-    // если не нашли запись (или не твоя)
     if (!data) {
-      return NextResponse.json({ error: "not_found" }, { status: 404 });
+      return NextResponse.json({ ok: false, error: "not_found" }, { status: 404 });
     }
 
-    return NextResponse.json({ ok: true, prep: data }, { status: 200 });
+    return NextResponse.json(
+      {
+        ok: true,
+        prep: {
+          id: String(data.id),
+          title: String((data as any).title ?? ""),
+          counts: Number((data as any).counts ?? counts),
+          unit: (data as any).unit ?? null,
+          category_id: (data as any).prep_category_id != null ? String((data as any).prep_category_id) : null,
+          created_at: (data as any).created_at ?? null,
+        },
+      },
+      { status: 200 }
+    );
   }
 
-  // Иначе работаем через delta: сначала читаем текущие counts
+  // 2) Иначе delta: читаем текущий counts и пишем новый
   const { data: cur, error: readErr } = await supabaseAdmin
     .from("recipes_preps")
-    .select("id, counts")
+    .select("id,counts")
     .eq("id", id)
     .eq("user_id", uid)
-    .single();
+    .maybeSingle();
 
-  if (readErr) {
-    return NextResponse.json({ error: "Select failed", details: readErr.message }, { status: 500 });
-  }
-  if (!cur) {
-    return NextResponse.json({ error: "not_found" }, { status: 404 });
-  }
+  if (readErr) return NextResponse.json({ ok: false, error: readErr.message }, { status: 500 });
+  if (!cur) return NextResponse.json({ ok: false, error: "not_found" }, { status: 404 });
 
-  const nextCounts = Math.max(0, Number(cur.counts ?? 0) + Number(delta ?? 0));
+  const nextCounts = Math.max(0, Number((cur as any).counts ?? 0) + Number(delta ?? 0));
 
   const { data, error } = await supabaseAdmin
     .from("recipes_preps")
     .update({ counts: nextCounts })
     .eq("id", id)
     .eq("user_id", uid)
-    .select("id, title, counts, unit, category_id, user_id, created_at")
-    .single();
+    .select("id,title,counts,unit,prep_category_id,created_at")
+    .maybeSingle();
 
-  if (error) {
-    return NextResponse.json({ error: "Update failed", details: error.message }, { status: 500 });
-  }
+  if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
+  if (!data) return NextResponse.json({ ok: false, error: "not_found" }, { status: 404 });
 
-  return NextResponse.json({ ok: true, prep: data }, { status: 200 });
+  return NextResponse.json(
+    {
+      ok: true,
+      prep: {
+        id: String(data.id),
+        title: String((data as any).title ?? ""),
+        counts: Number((data as any).counts ?? nextCounts),
+        unit: (data as any).unit ?? null,
+        category_id: (data as any).prep_category_id != null ? String((data as any).prep_category_id) : null,
+        created_at: (data as any).created_at ?? null,
+      },
+    },
+    { status: 200 }
+  );
 }
