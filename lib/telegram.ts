@@ -1,3 +1,5 @@
+// task-mini-app/lib/telegram.ts
+
 import crypto from "crypto";
 
 type TgUser = {
